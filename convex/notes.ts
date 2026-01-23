@@ -89,7 +89,8 @@ export const remove = mutation({
     }
 
     // Solo l'autore o un admin può eliminare
-    if (note.authorId !== user._id && user.role !== 'Admin') {
+    const userRoles = user.roles || []
+    if (note.authorId !== user._id && !userRoles.includes('Admin')) {
       throw new Error('Non autorizzato a eliminare questa nota')
     }
 

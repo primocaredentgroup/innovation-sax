@@ -2,17 +2,28 @@ import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
 
 // Enums come validators riutilizzabili
-export const roleValidator = v.union(
+// Ruolo singolo (per validazione)
+export const singleRoleValidator = v.union(
   v.literal('Requester'),
   v.literal('BusinessValidator'),
   v.literal('TechValidator'),
-  v.literal('InnovLead'),
   v.literal('Admin')
 )
 
+// Array di ruoli (utenti possono avere più ruoli)
+export const rolesValidator = v.array(singleRoleValidator)
+
+// Stati del KeyDev - flusso:
+// 1. Draft (Bozza) - stato iniziale
+// 2. MockupDone (Mockup Terminato) - quando viene aggiunto mockupRepoUrl
+// 3. Approved (Approvato) - dopo approvazione TechValidator
+// 4. Rejected (Rifiutato) - se TechValidator rifiuta (con motivo)
+// 5. FrontValidated (Front Validato) - dopo validazione BusinessValidator del dipartimento
+// 6. InProgress (In Corso) - quando un TechValidator diventa owner
+// 7. Done (Completato) - quando l'owner dichiara completato
 export const keydevStatusValidator = v.union(
   v.literal('Draft'),
-  v.literal('PendingBusinessApproval'),
+  v.literal('MockupDone'),
   v.literal('Approved'),
   v.literal('Rejected'),
   v.literal('FrontValidated'),
@@ -44,14 +55,13 @@ export default defineSchema({
     email: v.optional(v.string()),
     picture: v.optional(v.string()),
     sub: v.string(), // Auth0 user ID
-    role: v.optional(roleValidator),
+    roles: v.optional(rolesValidator), // Array di ruoli (utenti possono avere più ruoli)
     deptId: v.optional(v.id('departments')),
     githubLogin: v.optional(v.string()),
     githubAccessToken: v.optional(v.string())
   })
     .index('by_sub', ['sub'])
-    .index('by_dept', ['deptId'])
-    .index('by_role', ['role']),
+    .index('by_dept', ['deptId']),
 
   // Categories
   categories: defineTable({
@@ -74,13 +84,17 @@ export default defineSchema({
   keydevs: defineTable({
     title: v.string(),
     desc: v.string(),
-    monthRef: v.string(), // riferimento al mese (es. "2026-01")
+    monthRef: v.optional(v.string()), // riferimento al mese (es. "2026-01"), opzionale per bozze
     categoryId: v.id('categories'),
     deptId: v.id('departments'),
     requesterId: v.id('users'),
-    businessValidatorId: v.optional(v.id('users')),
-    techValidatorId: v.optional(v.id('users')),
+    businessValidatorId: v.optional(v.id('users')), // BusinessValidator che ha validato il front
+    techValidatorId: v.optional(v.id('users')), // TechValidator che ha approvato il mockup
+    ownerId: v.optional(v.id('users')), // TechValidator assegnatario (sviluppatore)
     status: keydevStatusValidator,
+    // Rejection info
+    rejectionReason: v.optional(v.string()), // Motivo del rifiuto da parte del TechValidator
+    rejectedById: v.optional(v.id('users')), // Chi ha rifiutato
     // Mockup repo (React-TS template)
     mockupRepoUrl: v.optional(v.string()),
     mockupTag: v.optional(v.string()), // "v0.9.0-business"
@@ -101,7 +115,9 @@ export default defineSchema({
     .index('by_dept_and_month', ['deptId', 'monthRef'])
     .index('by_status_and_month', ['status', 'monthRef'])
     .index('by_category_and_month', ['categoryId', 'monthRef'])
-    .index('by_requester', ['requesterId']),
+    .index('by_requester', ['requesterId'])
+    .index('by_status', ['status'])
+    .index('by_owner', ['ownerId']),
 
   // Notes (commenti, task, improvement)
   notes: defineTable({

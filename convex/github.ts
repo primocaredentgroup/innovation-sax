@@ -136,7 +136,8 @@ export const markPRMerged = internalMutation({
       throw new Error('Utente non trovato')
     }
 
-    if (user.role !== 'BusinessValidator' && user.role !== 'Admin') {
+    const userRoles = user.roles || []
+    if (!userRoles.includes('BusinessValidator') && !userRoles.includes('Admin')) {
       throw new Error('Solo BusinessValidator o Admin possono fare il merge')
     }
 

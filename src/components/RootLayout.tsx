@@ -10,6 +10,7 @@ export default function RootLayout() {
   const { user, loginWithRedirect, logout } = useAuth0()
   const getOrCreateUser = useMutation(api.users.getOrCreateUser)
   const currentUser = useQuery(api.users.getCurrentUser)
+  const isAdmin = useQuery(api.users.isCurrentUserAdmin)
 
   const currentMonth = useMemo(() => {
     const now = new Date()
@@ -23,64 +24,78 @@ export default function RootLayout() {
   }, [isAuthenticated, getOrCreateUser])
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 p-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <aside className="fixed left-0 top-0 h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-4">
         <div className="mb-8">
-          <h1 className="text-xl font-bold text-gray-900">Innovation Sucks</h1>
-          <p className="text-sm text-gray-500">KeyDev Management</p>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Innovation Sucks</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">KeyDev Management</p>
         </div>
 
         <nav className="space-y-1">
           <Link
             to="/"
-            className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 [&.active]:bg-blue-50 [&.active]:text-blue-700"
+            className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
           >
             Dashboard
           </Link>
           <Link
             to="/keydevs"
             search={{ month: currentMonth }}
-            className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 [&.active]:bg-blue-50 [&.active]:text-blue-700"
+            className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
           >
             KeyDevs
           </Link>
           <Link
-            to="/planning"
-            className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 [&.active]:bg-blue-50 [&.active]:text-blue-700"
-          >
-            Planning
-          </Link>
-          <Link
             to="/core-apps"
-            className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 [&.active]:bg-blue-50 [&.active]:text-blue-700"
+            className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
           >
             Core Apps
           </Link>
           <Link
             to="/profile"
-            className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 [&.active]:bg-blue-50 [&.active]:text-blue-700"
+            className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
           >
             Profilo
           </Link>
-          {currentUser?.role === 'Admin' && (
-            <Link
-              to="/admin/rejected"
-              className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 [&.active]:bg-blue-50 [&.active]:text-blue-700"
-            >
-              PR Rifiutate
-            </Link>
+          {isAdmin === true && (
+            <>
+              <Link
+                to="/admin"
+                className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
+              >
+                Amministrazione
+              </Link>
+              <Link
+                to="/admin/planning"
+                className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
+              >
+                Planning
+              </Link>
+              <Link
+                to="/admin/users"
+                className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
+              >
+                Gestione Utenti
+              </Link>
+              <Link
+                to="/admin/rejected"
+                className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
+              >
+                PR Rifiutate
+              </Link>
+            </>
           )}
         </nav>
 
         <div className="absolute bottom-4 left-4 right-4">
           <AuthLoading>
-            <div className="text-sm text-gray-500">Caricamento...</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Caricamento...</div>
           </AuthLoading>
 
           <Unauthenticated>
             <button
               onClick={() => loginWithRedirect()}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="w-full px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
             >
               Accedi
             </button>
@@ -92,12 +107,12 @@ export default function RootLayout() {
                 <img src={user.picture} alt="Avatar" className="w-8 h-8 rounded-full" />
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
-                <p className="text-xs text-gray-500 truncate">{currentUser?.role || 'Requester'}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{user?.name}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{currentUser?.roles?.join(', ') || 'Requester'}</p>
               </div>
               <button
                 onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-                className="text-sm text-gray-500 hover:text-gray-700"
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
               >
                 Esci
               </button>

@@ -71,3 +71,17 @@ export const update = mutation({
     return null
   }
 })
+
+/**
+ * Elimina un dipartimento.
+ */
+export const remove = mutation({
+  args: {
+    id: v.id('departments')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.id)
+    return null
+  }
+})

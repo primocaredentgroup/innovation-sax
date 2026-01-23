@@ -65,3 +65,17 @@ export const update = mutation({
     return null
   }
 })
+
+/**
+ * Elimina una categoria.
+ */
+export const remove = mutation({
+  args: {
+    id: v.id('categories')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.id)
+    return null
+  }
+})

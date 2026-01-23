@@ -12,6 +12,8 @@ import CoreAppsListPage from './pages/CoreAppsList'
 import CoreAppDetailPage from './pages/CoreAppDetail'
 import ProfilePage from './pages/Profile'
 import AdminRejectedPage from './pages/AdminRejected'
+import UsersManagementPage from './pages/UsersManagement'
+import AdminPage from './pages/Admin'
 
 // Define routes
 const rootRoute = createRootRoute({
@@ -38,7 +40,7 @@ const keydevDetailRoute = createRoute({
 
 const planningRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/planning',
+  path: '/admin/planning',
   component: PlanningPage
 })
 
@@ -66,6 +68,18 @@ const adminRejectedRoute = createRoute({
   component: AdminRejectedPage
 })
 
+const usersManagementRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/users',
+  component: UsersManagementPage
+})
+
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin',
+  component: AdminPage
+})
+
 // Create route tree
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -75,7 +89,9 @@ const routeTree = rootRoute.addChildren([
   coreAppsRoute,
   coreAppDetailRoute,
   profileRoute,
-  adminRejectedRoute
+  adminRejectedRoute,
+  usersManagementRoute,
+  adminRoute
 ])
 
 // Create router

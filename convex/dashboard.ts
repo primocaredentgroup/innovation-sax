@@ -5,6 +5,7 @@ import { keydevStatusValidator } from './schema'
 /**
  * Calcola l'OKR score per un mese.
  * Score = (KeyDev Done / Budget Totale) * 100
+ * Include anche le bozze senza mese associato.
  */
 export const getOKRScore = query({
   args: { monthRef: v.string() },
@@ -31,10 +32,20 @@ export const getOKRScore = query({
     const totalBudget = month?.totalKeyDev ?? 0
 
     // Ottieni tutti i KeyDev del mese
-    const keydevs = await ctx.db
+    const keydevsByMonth = await ctx.db
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
+
+    // Ottieni tutte le bozze senza mese associato (che compaiono in tutti i mesi)
+    const allDrafts = await ctx.db
+      .query('keydevs')
+      .withIndex('by_status', (q) => q.eq('status', 'Draft'))
+      .collect()
+    const draftsWithoutMonth = allDrafts.filter((kd) => !kd.monthRef)
+
+    // Combina i risultati
+    const keydevs = [...keydevsByMonth, ...draftsWithoutMonth]
 
     const doneCount = keydevs.filter((kd) => kd.status === 'Done').length
     const score = totalBudget > 0 ? (doneCount / totalBudget) * 100 : 0
@@ -62,6 +73,7 @@ export const getOKRScore = query({
 
 /**
  * Ottiene i KeyDev in ritardo (mese passato, non Done).
+ * Esclude le bozze senza mese associato.
  */
 export const getDelayedKeyDevs = query({
   args: { currentMonth: v.string() },
@@ -69,7 +81,7 @@ export const getDelayedKeyDevs = query({
     v.object({
       _id: v.id('keydevs'),
       title: v.string(),
-      monthRef: v.string(),
+      monthRef: v.optional(v.string()),
       status: keydevStatusValidator,
       deptId: v.id('departments'),
       categoryId: v.id('categories')
@@ -79,7 +91,7 @@ export const getDelayedKeyDevs = query({
     const allKeyDevs = await ctx.db.query('keydevs').collect()
 
     return allKeyDevs
-      .filter((kd) => kd.monthRef < args.currentMonth && kd.status !== 'Done')
+      .filter((kd) => kd.monthRef && kd.monthRef < args.currentMonth && kd.status !== 'Done')
       .map((kd) => ({
         _id: kd._id,
         title: kd.title,
@@ -93,6 +105,7 @@ export const getDelayedKeyDevs = query({
 
 /**
  * Statistiche mensili per la dashboard.
+ * Include anche le bozze senza mese associato.
  */
 export const getMonthlyStats = query({
   args: { monthRef: v.string() },
@@ -113,10 +126,21 @@ export const getMonthlyStats = query({
     )
   }),
   handler: async (ctx, args) => {
-    const keydevs = await ctx.db
+    // Ottieni tutti i KeyDev del mese
+    const keydevsByMonth = await ctx.db
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
+
+    // Ottieni tutte le bozze senza mese associato (che compaiono in tutti i mesi)
+    const allDrafts = await ctx.db
+      .query('keydevs')
+      .withIndex('by_status', (q) => q.eq('status', 'Draft'))
+      .collect()
+    const draftsWithoutMonth = allDrafts.filter((kd) => !kd.monthRef)
+
+    // Combina i risultati
+    const keydevs = [...keydevsByMonth, ...draftsWithoutMonth]
 
     const departments = await ctx.db.query('departments').collect()
 

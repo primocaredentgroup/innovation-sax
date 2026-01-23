@@ -21,6 +21,7 @@ import type * as http from "../http.js";
 import type * as keydevs from "../keydevs.js";
 import type * as months from "../months.js";
 import type * as notes from "../notes.js";
+import type * as seed from "../seed.js";
 import type * as users from "../users.js";
 
 import type {
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   keydevs: typeof keydevs;
   months: typeof months;
   notes: typeof notes;
+  seed: typeof seed;
   users: typeof users;
 }>;
 
