@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Link, useParams, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
+import { oembed } from '@loomhq/loom-embed'
 
 // Helper per calcolare il numero della settimana ISO
 function getISOWeek(date: Date): { year: number; week: number } {
@@ -80,6 +81,74 @@ function generateWeekOptions(): Array<{ value: string; label: string }> {
   return options.sort((a, b) => a.value.localeCompare(b.value))
 }
 
+// Componente per l'embed Loom
+function LoomEmbed({ url }: { url: string }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null)
+
+  // Reset state quando l'URL cambia
+  const needsLoad = url !== loadedUrl
+
+  useEffect(() => {
+    if (!containerRef.current || !url || !needsLoad) return
+
+    let isCancelled = false
+
+    oembed(url, { width: 640 })
+      .then((result) => {
+        if (isCancelled) return
+        if (containerRef.current && result.html) {
+          containerRef.current.innerHTML = result.html
+        }
+        setLoading(false)
+        setError(null)
+        setLoadedUrl(url)
+      })
+      .catch((err) => {
+        if (isCancelled) return
+        console.error('Loom embed error:', err)
+        setError('Impossibile caricare il video Loom')
+        setLoading(false)
+        setLoadedUrl(url)
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [url, needsLoad])
+
+  if (error) {
+    return (
+      <div className="aspect-video bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-500 dark:text-gray-400 mb-2">{error}</p>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Apri in Loom
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="aspect-video bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
+      {loading && (
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="text-gray-500 dark:text-gray-400">Caricamento video...</div>
+        </div>
+      )}
+      <div ref={containerRef} className={`w-full h-full ${loading ? 'hidden' : ''}`} />
+    </div>
+  )
+}
+
 export default function CoreAppUpdateNewPage() {
   const { slug } = useParams({ strict: false }) as { slug: string }
   const navigate = useNavigate()
@@ -89,6 +158,7 @@ export default function CoreAppUpdateNewPage() {
   
   const [selectedWeek, setSelectedWeek] = useState(getCurrentWeekRef())
   const [notes, setNotes] = useState('')
+  const [loomUrl, setLoomUrl] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Genera le opzioni delle settimane
@@ -110,7 +180,8 @@ export default function CoreAppUpdateNewPage() {
         coreAppId: coreApp._id,
         weekRef: selectedWeek,
         title: autoTitle,
-        notes: notes.trim() || undefined
+        notes: notes.trim() || undefined,
+        loomUrl: loomUrl.trim() || undefined
       })
       navigate({ to: '/core-apps/$slug', params: { slug } })
     } catch (error) {
@@ -178,6 +249,29 @@ export default function CoreAppUpdateNewPage() {
               Il titolo viene generato automaticamente in base alla settimana selezionata e al nome del prodotto Core
             </p>
           </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              URL Video Loom
+            </label>
+            <input
+              type="url"
+              value={loomUrl}
+              onChange={(e) => setLoomUrl(e.target.value)}
+              placeholder="https://www.loom.com/share/..."
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+            />
+          </div>
+
+          {/* Preview Loom */}
+          {loomUrl && loomUrl.includes('loom.com') && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Anteprima
+              </label>
+              <LoomEmbed url={loomUrl} />
+            </div>
+          )}
           
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

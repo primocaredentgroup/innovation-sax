@@ -9,6 +9,7 @@ const blockingLabelReturnValidator = v.object({
   labelId: v.id('labels'),
   label: v.object({
     _id: v.id('labels'),
+    _creationTime: v.number(),
     value: v.string(),
     label: v.string()
   }),

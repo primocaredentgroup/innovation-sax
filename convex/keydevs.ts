@@ -414,6 +414,14 @@ export const updateStatus = mutation({
       }
     }
 
+    // Validazioni obbligatorie che si applicano anche agli admin
+    if (args.status === 'FrontValidated') {
+      // Verifica che sia stato specificato il commit validato (obbligatorio anche per admin)
+      if (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '') {
+        throw new Error('Devi specificare il commit del mockup validato')
+      }
+    }
+
     // Applica gli aggiornamenti specifici per ogni stato
     if (args.status === 'Approved') {
       const now = Date.now()
@@ -469,7 +477,11 @@ export const updateStatus = mutation({
       }
       
       // Salva il commit validato (obbligatorio)
-      updates.validatedMockupCommit = args.validatedMockupCommit!.trim()
+      // La validazione garantisce che validatedMockupCommit esista e non sia vuoto
+      if (!args.validatedMockupCommit) {
+        throw new Error('validatedMockupCommit è obbligatorio per FrontValidated')
+      }
+      updates.validatedMockupCommit = args.validatedMockupCommit.trim()
       
       const now = Date.now()
       updates.frontValidatedAt = now
