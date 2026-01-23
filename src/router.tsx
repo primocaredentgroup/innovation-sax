@@ -11,6 +11,7 @@ import PlanningPage from './pages/Planning'
 import CoreAppsListPage from './pages/CoreAppsList'
 import CoreAppDetailPage from './pages/CoreAppDetail'
 import CoreAppNewPage from './pages/CoreAppNew'
+import CoreAppUpdateNewPage from './pages/CoreAppUpdateNew'
 import ProfilePage from './pages/Profile'
 import AdminRejectedPage from './pages/AdminRejected'
 import UsersManagementPage from './pages/UsersManagement'
@@ -57,6 +58,12 @@ const coreAppDetailRoute = createRoute({
   component: CoreAppDetailPage
 })
 
+const coreAppUpdateNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/core-apps/$slug/updates/new',
+  component: CoreAppUpdateNewPage
+})
+
 const coreAppNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/core-apps/new',
@@ -95,6 +102,7 @@ const routeTree = rootRoute.addChildren([
   planningRoute,
   coreAppsRoute,
   coreAppDetailRoute,
+  coreAppUpdateNewRoute,
   coreAppNewRoute,
   profileRoute,
   adminRejectedRoute,

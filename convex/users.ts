@@ -85,9 +85,7 @@ export const getCurrentUser = query({
       picture: v.optional(v.string()),
       sub: v.string(),
       roles: v.optional(rolesValidator),
-      deptId: v.optional(v.id('departments')),
-      githubLogin: v.optional(v.string()),
-      githubAccessToken: v.optional(v.string())
+      deptId: v.optional(v.id('departments'))
     }),
     v.null()
   ),
@@ -281,9 +279,7 @@ export const listUsers = query({
       picture: v.optional(v.string()),
       sub: v.string(),
       roles: v.optional(rolesValidator),
-      deptId: v.optional(v.id('departments')),
-      githubLogin: v.optional(v.string()),
-      githubAccessToken: v.optional(v.string())
+      deptId: v.optional(v.id('departments'))
     })
   ),
   handler: async (ctx) => {

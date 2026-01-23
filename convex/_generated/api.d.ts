@@ -15,8 +15,6 @@ import type * as coreAppUpdates from "../coreAppUpdates.js";
 import type * as coreApps from "../coreApps.js";
 import type * as dashboard from "../dashboard.js";
 import type * as departments from "../departments.js";
-import type * as github from "../github.js";
-import type * as githubActions from "../githubActions.js";
 import type * as http from "../http.js";
 import type * as keydevs from "../keydevs.js";
 import type * as months from "../months.js";
@@ -37,8 +35,6 @@ declare const fullApi: ApiFromModules<{
   coreApps: typeof coreApps;
   dashboard: typeof dashboard;
   departments: typeof departments;
-  github: typeof github;
-  githubActions: typeof githubActions;
   http: typeof http;
   keydevs: typeof keydevs;
   months: typeof months;

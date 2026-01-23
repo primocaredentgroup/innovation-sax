@@ -15,6 +15,7 @@ const coreAppReturnValidator = v.object({
   description: v.optional(v.string()),
   percentComplete: v.number(),
   repoUrl: v.optional(v.string()),
+  hubMilestonesUrl: v.optional(v.string()),
   status: coreAppStatusValidator
 })
 
@@ -50,7 +51,7 @@ export const getBySlug = query({
     return await ctx.db
       .query('coreApps')
       .withIndex('by_slug', (q) => q.eq('slug', args.slug))
-      .unique()
+      .first()
   }
 })
 
@@ -82,7 +83,7 @@ export const create = mutation({
     const existing = await ctx.db
       .query('coreApps')
       .withIndex('by_slug', (q) => q.eq('slug', slug))
-      .unique()
+      .first()
 
     if (existing) {
       throw new Error(`Slug "${slug}" già in uso`)
@@ -110,6 +111,7 @@ export const update = mutation({
     description: v.optional(v.string()),
     percentComplete: v.optional(v.number()),
     repoUrl: v.optional(v.string()),
+    hubMilestonesUrl: v.optional(v.string()),
     status: v.optional(coreAppStatusValidator)
   },
   returns: v.null(),
@@ -121,7 +123,7 @@ export const update = mutation({
       const existing = await ctx.db
         .query('coreApps')
         .withIndex('by_slug', (q) => q.eq('slug', updates.slug!))
-        .unique()
+        .first()
 
       if (existing && existing._id !== id) {
         throw new Error(`Slug "${updates.slug}" già in uso`)

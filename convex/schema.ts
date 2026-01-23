@@ -56,9 +56,7 @@ export default defineSchema({
     picture: v.optional(v.string()),
     sub: v.string(), // Auth0 user ID
     roles: v.optional(rolesValidator), // Array di ruoli (utenti possono avere più ruoli)
-    deptId: v.optional(v.id('departments')),
-    githubLogin: v.optional(v.string()),
-    githubAccessToken: v.optional(v.string())
+    deptId: v.optional(v.id('departments'))
   })
     .index('by_sub', ['sub'])
     .index('by_dept', ['deptId']),
@@ -98,7 +96,7 @@ export default defineSchema({
     rejectedById: v.optional(v.id('users')), // Chi ha rifiutato
     // Mockup repo (React-TS template)
     mockupRepoUrl: v.optional(v.string()),
-    mockupTag: v.optional(v.string()), // "v0.9.0-business"
+    validatedMockupCommit: v.optional(v.string()), // Commit validato dal BusinessValidator
     // Real development repo
     repoUrl: v.optional(v.string()),
     repoTag: v.optional(v.string()),
@@ -107,10 +105,7 @@ export default defineSchema({
     frontValidatedAt: v.optional(v.number()),
     releasedAt: v.optional(v.number()),
     // Progress
-    donePerc: v.optional(v.number()),
-    // GitHub PR for business approval
-    prNumber: v.optional(v.number()),
-    prMerged: v.optional(v.boolean())
+    donePerc: v.optional(v.number())
   })
     .index('by_month', ['monthRef'])
     .index('by_dept_and_month', ['deptId', 'monthRef'])
@@ -158,6 +153,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     percentComplete: v.number(), // 0-100
     repoUrl: v.optional(v.string()),
+    hubMilestonesUrl: v.optional(v.string()), // URL per collegare la percentuale a milestone in altro applicativo
     status: v.union(
       v.literal('Planning'),
       v.literal('InProgress'),
@@ -169,7 +165,7 @@ export default defineSchema({
   coreAppUpdates: defineTable({
     coreAppId: v.id('coreApps'),
     weekRef: v.string(), // formato "2026-W04"
-    loomUrl: v.string(),
+    loomUrl: v.optional(v.string()),
     title: v.optional(v.string()),
     notes: v.optional(v.string()),
     createdAt: v.number()

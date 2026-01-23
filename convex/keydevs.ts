@@ -2,6 +2,7 @@ import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
 import { keydevStatusValidator } from './schema'
 import { hasRole, isAdmin } from './users'
+import type { Doc } from './_generated/dataModel'
 
 // Tipo per i ruoli
 type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
@@ -23,15 +24,13 @@ const keydevReturnValidator = v.object({
   rejectionReason: v.optional(v.string()),
   rejectedById: v.optional(v.id('users')),
   mockupRepoUrl: v.optional(v.string()),
-  mockupTag: v.optional(v.string()),
+  validatedMockupCommit: v.optional(v.string()),
   repoUrl: v.optional(v.string()),
   repoTag: v.optional(v.string()),
   approvedAt: v.optional(v.number()),
   frontValidatedAt: v.optional(v.number()),
   releasedAt: v.optional(v.number()),
-  donePerc: v.optional(v.number()),
-  prNumber: v.optional(v.number()),
-  prMerged: v.optional(v.boolean())
+  donePerc: v.optional(v.number())
 })
 
 /**
@@ -58,6 +57,53 @@ export const listByMonth = query({
     
     // Combina i risultati
     return [...keydevsByMonth, ...draftsToInclude]
+  }
+})
+
+/**
+ * Lista KeyDevs in stati che non richiedono filtro per mese.
+ * Stati: MockupDone, Rejected, Approved (non hanno ancora monthRef assegnato).
+ */
+export const listWithoutMonthFilter = query({
+  args: {},
+  returns: v.array(keydevReturnValidator),
+  handler: async (ctx) => {
+    // Stati che non richiedono filtro per mese
+    const statuses = ['MockupDone', 'Rejected', 'Approved'] as const
+    
+    const results: Array<Doc<'keydevs'>> = []
+    
+    for (const status of statuses) {
+      const keydevs = await ctx.db
+        .query('keydevs')
+        .withIndex('by_status', (q) => q.eq('status', status))
+        .collect()
+      results.push(...keydevs)
+    }
+    
+    return results
+  }
+})
+
+/**
+ * Ottiene i contatori degli status per gli stati senza filtro mese.
+ */
+export const getStatusCountsWithoutMonth = query({
+  args: {},
+  returns: v.record(v.string(), v.number()),
+  handler: async (ctx) => {
+    const statuses = ['MockupDone', 'Rejected', 'Approved'] as const
+    const counts: Record<string, number> = {}
+    
+    for (const status of statuses) {
+      const keydevs = await ctx.db
+        .query('keydevs')
+        .withIndex('by_status', (q) => q.eq('status', status))
+        .collect()
+      counts[status] = keydevs.length
+    }
+    
+    return counts
   }
 })
 
@@ -251,7 +297,9 @@ export const updateStatus = mutation({
   args: {
     id: v.id('keydevs'),
     status: keydevStatusValidator,
-    rejectionReason: v.optional(v.string())
+    rejectionReason: v.optional(v.string()),
+    monthRef: v.optional(v.string()), // Richiesto per FrontValidated
+    validatedMockupCommit: v.optional(v.string()) // Commit validato per FrontValidated
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -329,6 +377,10 @@ export const updateStatus = mutation({
           if (user.deptId !== keydev.deptId) {
             throw new Error('Solo il BusinessValidator del dipartimento associato può validare')
           }
+          // Verifica che sia stato specificato un mese
+          if (!args.monthRef) {
+            throw new Error('Devi specificare il mese di riferimento per la validazione')
+          }
           break
 
         case 'InProgress':
@@ -360,8 +412,6 @@ export const updateStatus = mutation({
     if (args.status === 'Approved') {
       updates.approvedAt = Date.now()
       updates.techValidatorId = user._id
-      updates.prMerged = true
-      updates.mockupTag = 'v0.9.0-business'
       // Pulisci eventuali dati di rifiuto precedenti
       updates.rejectionReason = undefined
       updates.rejectedById = undefined
@@ -373,6 +423,48 @@ export const updateStatus = mutation({
     }
 
     if (args.status === 'FrontValidated') {
+      // Verifica budget disponibile per il mese specificato
+      if (args.monthRef) {
+        const budgetAlloc = await ctx.db
+          .query('budgetKeyDev')
+          .withIndex('by_month_dept_category', (q) =>
+            q
+              .eq('monthRef', args.monthRef!)
+              .eq('deptId', keydev.deptId)
+              .eq('categoryId', keydev.categoryId)
+          )
+          .first()
+        
+        if (!budgetAlloc || budgetAlloc.maxAlloc <= 0) {
+          throw new Error(`Nessun budget disponibile per il mese ${args.monthRef}. Contatta l'amministratore per allocare il budget.`)
+        }
+        
+        // Conta i keydevs già validati per questo mese/dept/category
+        const existingKeydevs = await ctx.db
+          .query('keydevs')
+          .withIndex('by_dept_and_month', (q) =>
+            q.eq('deptId', keydev.deptId).eq('monthRef', args.monthRef!)
+          )
+          .collect()
+        
+        const validatedCount = existingKeydevs.filter(
+          (kd) => 
+            kd.categoryId === keydev.categoryId && 
+            ['FrontValidated', 'InProgress', 'Done'].includes(kd.status)
+        ).length
+        
+        if (validatedCount >= budgetAlloc.maxAlloc) {
+          throw new Error(`Budget esaurito per il mese ${args.monthRef}. Già ${validatedCount}/${budgetAlloc.maxAlloc} KeyDevs validati per questa categoria/dipartimento.`)
+        }
+        
+        updates.monthRef = args.monthRef
+      }
+      
+      // Salva il commit validato
+      if (args.validatedMockupCommit) {
+        updates.validatedMockupCommit = args.validatedMockupCommit
+      }
+      
       updates.frontValidatedAt = Date.now()
       updates.businessValidatorId = user._id
     }
@@ -494,8 +586,7 @@ export const markAsDone = mutation({
 export const linkMockupRepo = mutation({
   args: {
     id: v.id('keydevs'),
-    mockupRepoUrl: v.string(),
-    prNumber: v.optional(v.number())
+    mockupRepoUrl: v.string()
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -513,10 +604,6 @@ export const linkMockupRepo = mutation({
       updates.status = 'MockupDone'
     }
     
-    if (args.prNumber) {
-      updates.prNumber = args.prNumber
-      updates.prMerged = false
-    }
     await ctx.db.patch(args.id, updates)
     return null
   }

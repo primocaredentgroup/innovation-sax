@@ -37,7 +37,7 @@ const statusLabels: Record<string, string> = {
 
 // Descrizioni del flusso per ogni stato
 const statusDescriptions: Record<string, string> = {
-  Draft: 'Crea o aggiungi il mockupRepoUrl per passare a "Mockup Terminato"',
+  Draft: 'Aggiungi il mockupRepoUrl per passare a "Mockup Terminato"',
   MockupDone: 'In attesa di approvazione da parte di un TechValidator',
   Approved: 'In attesa di validazione frontend da parte del BusinessValidator del dipartimento',
   Rejected: 'Rifiutato dal TechValidator - vedere motivo',
@@ -75,7 +75,7 @@ export default function KeyDevDetailPage() {
   const updateStatus = useMutation(api.keydevs.updateStatus)
   const takeOwnership = useMutation(api.keydevs.takeOwnership)
   const markAsDone = useMutation(api.keydevs.markAsDone)
-  const createMockupRepo = useMutation(api.github.createMockupRepo)
+  const linkMockupRepo = useMutation(api.keydevs.linkMockupRepo)
   const addNote = useMutation(api.notes.create)
 
   const currentMonth = useMemo(() => {
@@ -87,9 +87,37 @@ export default function KeyDevDetailPage() {
   const [noteType, setNoteType] = useState<'Comment' | 'Task' | 'Improvement'>('Comment')
   const [rejectionReason, setRejectionReason] = useState('')
   const [showRejectForm, setShowRejectForm] = useState(false)
+  const [mockupRepoUrlInput, setMockupRepoUrlInput] = useState('')
+  const [validationMonth, setValidationMonth] = useState(currentMonth)
+  const [validationCommit, setValidationCommit] = useState('')
+  const [validationError, setValidationError] = useState('')
+
+  // Query per il budget disponibile per la validazione
+  const budgetForValidation = useQuery(
+    api.budget.getByMonthDeptCategory,
+    keydev && keydev.status === 'Approved' 
+      ? { monthRef: validationMonth, deptId: keydev.deptId, categoryId: keydev.categoryId }
+      : 'skip'
+  )
+
+  // Genera opzioni mese per validazione
+  const monthOptions = useMemo(() => {
+    const options = []
+    const now = new Date()
+    for (let i = 0; i <= 6; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
+      const ref = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      const label = date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+      options.push({ value: ref, label })
+    }
+    return options
+  }, [])
 
   // Use keydev data or defaults for form - key resets the form when keydev changes
   const formKey = keydev?._id || 'new'
+
+  // Valore derivato per l'input: usa il valore inserito dall'utente o quello del keydev
+  const mockupRepoUrl = mockupRepoUrlInput || keydev?.mockupRepoUrl || ''
 
   // Ruoli e permessi utente corrente
   const userRoles = currentUser?.roles as Role[] | undefined
@@ -132,9 +160,13 @@ export default function KeyDevDetailPage() {
     }
   }
 
-  const handleCreateMockupRepo = async () => {
-    if (!keydev) return
-    await createMockupRepo({ keyDevId: keydev._id })
+  const handleLinkMockupRepo = async () => {
+    if (!keydev || !mockupRepoUrl.trim()) return
+    await linkMockupRepo({ 
+      id: keydev._id, 
+      mockupRepoUrl: mockupRepoUrl.trim() 
+    })
+    setMockupRepoUrlInput('')
   }
 
   const handleAddNote = async () => {
@@ -323,18 +355,28 @@ export default function KeyDevDetailPage() {
 
               {/* Azioni disponibili in base allo stato */}
               <div className="space-y-4">
-                {/* Draft: Mostra creazione mockup repo */}
-                {keydev.status === 'Draft' && !keydev.mockupRepoUrl && (
+                {/* Draft: Mostra input per inserire/modificare URL mockup repo */}
+                {keydev.status === 'Draft' && (
                   <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">
-                      Crea il repository del mockup React-TypeScript per questo KeyDev.
-                    </p>
-                    <button
-                      onClick={handleCreateMockupRepo}
-                      className="px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-md hover:bg-gray-800 dark:hover:bg-gray-600"
-                    >
-                      Crea Mockup Repository
-                    </button>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Repository URL
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={mockupRepoUrl}
+                        onChange={(e) => setMockupRepoUrlInput(e.target.value)}
+                        placeholder="https://github.com/..."
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                      />
+                      <button
+                        onClick={handleLinkMockupRepo}
+                        disabled={!mockupRepoUrl.trim()}
+                        className="px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-md hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50"
+                      >
+                        Salva
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -398,13 +440,94 @@ export default function KeyDevDetailPage() {
                   <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                     <p className="text-sm text-green-800 dark:text-green-300 mb-4">
                       Come BusinessValidator del dipartimento, puoi validare il frontend.
+                      Seleziona il mese di riferimento per l'allocazione del budget e inserisci il commit validato.
                     </p>
-                    <button
-                      onClick={() => updateStatus({ id: keydev._id, status: 'FrontValidated' })}
-                      className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
-                    >
-                      Valida Frontend
-                    </button>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Mese di riferimento
+                        </label>
+                        <select
+                          value={validationMonth}
+                          onChange={(e) => {
+                            setValidationMonth(e.target.value)
+                            setValidationError('')
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                        >
+                          {monthOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Commit Validato
+                        </label>
+                        <input
+                          type="text"
+                          value={validationCommit}
+                          onChange={(e) => setValidationCommit(e.target.value)}
+                          placeholder="es. abc1234 o hash completo del commit"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 font-mono text-sm"
+                        />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Inserisci l'hash del commit del mockup che stai validando
+                        </p>
+                      </div>
+                      
+                      {/* Info budget */}
+                      <div className={`p-3 rounded-lg ${
+                        budgetForValidation && budgetForValidation.maxAlloc > 0
+                          ? 'bg-green-100 dark:bg-green-900/30'
+                          : 'bg-red-100 dark:bg-red-900/30'
+                      }`}>
+                        {budgetForValidation ? (
+                          <p className={`text-sm ${
+                            budgetForValidation.maxAlloc > 0
+                              ? 'text-green-800 dark:text-green-300'
+                              : 'text-red-800 dark:text-red-300'
+                          }`}>
+                            Budget disponibile: <strong>{budgetForValidation.maxAlloc}</strong> KeyDevs per questa categoria/dipartimento nel mese selezionato
+                          </p>
+                        ) : (
+                          <p className="text-sm text-red-800 dark:text-red-300">
+                            Nessun budget allocato per questa combinazione mese/dipartimento/categoria.
+                            Contatta l'amministratore.
+                          </p>
+                        )}
+                      </div>
+                      
+                      {validationError && (
+                        <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                          <p className="text-sm text-red-800 dark:text-red-300">{validationError}</p>
+                        </div>
+                      )}
+                      
+                      <button
+                        onClick={async () => {
+                          try {
+                            setValidationError('')
+                            await updateStatus({ 
+                              id: keydev._id, 
+                              status: 'FrontValidated',
+                              monthRef: validationMonth,
+                              validatedMockupCommit: validationCommit.trim() || undefined
+                            })
+                          } catch (err) {
+                            setValidationError(err instanceof Error ? err.message : 'Errore durante la validazione')
+                          }
+                        }}
+                        disabled={!budgetForValidation || budgetForValidation.maxAlloc <= 0}
+                        className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Valida Frontend per {monthOptions.find(m => m.value === validationMonth)?.label}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -492,29 +615,14 @@ export default function KeyDevDetailPage() {
                   </div>
                 </div>
 
-                {keydev.mockupTag && (
+                {keydev.validatedMockupCommit && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Tag
+                      Commit Validato
                     </label>
-                    <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200">
-                      {keydev.mockupTag}
+                    <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono">
+                      {keydev.validatedMockupCommit}
                     </span>
-                  </div>
-                )}
-
-                {keydev.prNumber && (
-                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <span className="font-medium text-gray-900 dark:text-gray-100">PR #{keydev.prNumber}</span>
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        keydev.prMerged
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                          : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
-                      }`}>
-                        {keydev.prMerged ? 'Merged' : 'In Review'}
-                      </span>
-                    </div>
                   </div>
                 )}
               </div>
@@ -614,6 +722,21 @@ export default function KeyDevDetailPage() {
                     {users?.find((u) => u._id === keydev.requesterId)?.name || 'N/A'}
                   </dd>
                 </div>
+                {keydev.mockupRepoUrl && (
+                  <div>
+                    <dt className="text-sm text-gray-500 dark:text-gray-400">RepoMockup</dt>
+                    <dd className="font-medium text-gray-900 dark:text-gray-100">
+                      <a
+                        href={keydev.mockupRepoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        {keydev.mockupRepoUrl}
+                      </a>
+                    </dd>
+                  </div>
+                )}
               </dl>
             </div>
 

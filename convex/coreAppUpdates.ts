@@ -6,7 +6,7 @@ const coreAppUpdateReturnValidator = v.object({
   _creationTime: v.number(),
   coreAppId: v.id('coreApps'),
   weekRef: v.string(),
-  loomUrl: v.string(),
+  loomUrl: v.optional(v.string()),
   title: v.optional(v.string()),
   notes: v.optional(v.string()),
   createdAt: v.number()
@@ -48,7 +48,7 @@ export const create = mutation({
   args: {
     coreAppId: v.id('coreApps'),
     weekRef: v.string(),
-    loomUrl: v.string(),
+    loomUrl: v.optional(v.string()),
     title: v.optional(v.string()),
     notes: v.optional(v.string())
   },

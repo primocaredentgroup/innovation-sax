@@ -16,12 +16,18 @@ const statusColors: Record<string, string> = {
 const statusLabels: Record<string, string> = {
   Draft: 'Bozza',
   MockupDone: 'Mockup Terminato',
-  Approved: 'Approvato',
   Rejected: 'Rifiutato',
+  Approved: 'Approvato',
   FrontValidated: 'Front Validato',
   InProgress: 'In Corso',
   Done: 'Completato'
 }
+
+// Stati che non hanno filtro per mese (appaiono sempre)
+const statusesWithoutMonthFilter = ['MockupDone', 'Rejected', 'Approved']
+
+// Ordine degli stati per la visualizzazione
+const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done']
 
 export default function KeyDevsListPage() {
   const search = useSearch({ strict: false }) as {
@@ -39,10 +45,46 @@ export default function KeyDevsListPage() {
 
   const selectedMonth = search.month || currentMonth
 
-  const keydevs = useQuery(api.keydevs.listByMonth, { monthRef: selectedMonth })
-  const statusCounts = useQuery(api.keydevs.getStatusCounts, { monthRef: selectedMonth })
+  // Query per keydevs filtrati per mese (Draft, FrontValidated, InProgress, Done)
+  const keydevsByMonth = useQuery(api.keydevs.listByMonth, { monthRef: selectedMonth })
+  // Query per keydevs senza filtro mese (MockupDone, Rejected, Approved)
+  const keydevsWithoutMonth = useQuery(api.keydevs.listWithoutMonthFilter)
+  // Contatori per mese
+  const statusCountsByMonth = useQuery(api.keydevs.getStatusCounts, { monthRef: selectedMonth })
+  // Contatori senza filtro mese
+  const statusCountsWithoutMonth = useQuery(api.keydevs.getStatusCountsWithoutMonth)
+  
   const departments = useQuery(api.departments.list)
   const categories = useQuery(api.categories.list)
+  
+  // Combina i contatori
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    // Contatori per stati con filtro mese
+    if (statusCountsByMonth) {
+      for (const [status, count] of Object.entries(statusCountsByMonth)) {
+        if (!statusesWithoutMonthFilter.includes(status)) {
+          counts[status] = count
+        }
+      }
+    }
+    // Contatori per stati senza filtro mese
+    if (statusCountsWithoutMonth) {
+      for (const [status, count] of Object.entries(statusCountsWithoutMonth)) {
+        counts[status] = count
+      }
+    }
+    return counts
+  }, [statusCountsByMonth, statusCountsWithoutMonth])
+  
+  // Combina i keydevs
+  const keydevs = useMemo(() => {
+    const byMonthFiltered = (keydevsByMonth || []).filter(
+      (kd) => !statusesWithoutMonthFilter.includes(kd.status)
+    )
+    const withoutMonth = keydevsWithoutMonth || []
+    return [...byMonthFiltered, ...withoutMonth]
+  }, [keydevsByMonth, keydevsWithoutMonth])
 
   // Normalizza gli status selezionati (può essere stringa o array)
   const selectedStatuses = useMemo(() => {
@@ -172,9 +214,11 @@ export default function KeyDevsListPage() {
             Filtra per Stato
           </label>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(statusLabels).map(([key, label]) => {
+            {statusOrder.map((key) => {
+              const label = statusLabels[key]
               const isSelected = selectedStatuses.includes(key)
               const count = statusCounts?.[key] || 0
+              const hasNoMonthFilter = statusesWithoutMonthFilter.includes(key)
               return (
                 <button
                   key={key}
@@ -184,8 +228,10 @@ export default function KeyDevsListPage() {
                       ? `${statusColors[key]} ring-2 ring-offset-2 ring-gray-600 dark:ring-gray-400 shadow-md font-semibold`
                       : `${statusColors[key]} opacity-70 hover:opacity-100`
                   }`}
+                  title={hasNoMonthFilter ? 'Questo stato non è filtrato per mese' : undefined}
                 >
                   {label}
+                  {hasNoMonthFilter && <span className="ml-1 text-xs opacity-60">*</span>}
                   {count > 0 && (
                     <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
                       isSelected ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900' : 'bg-gray-700 dark:bg-gray-300 text-white dark:text-gray-900'
@@ -197,6 +243,9 @@ export default function KeyDevsListPage() {
               )
             })}
           </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            * Stati non filtrati per mese
+          </p>
           {selectedStatuses.length > 0 && (
             <button
               onClick={() => updateSearch({ status: undefined })}
@@ -268,13 +317,9 @@ export default function KeyDevsListPage() {
                           Mockup
                         </span>
                       )}
-                      {kd.prNumber && (
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            kd.prMerged ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
-                          }`}
-                        >
-                          PR #{kd.prNumber} {kd.prMerged ? '✓' : '○'}
+                      {kd.validatedMockupCommit && (
+                        <span className="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 font-mono">
+                          {kd.validatedMockupCommit.substring(0, 7)}
                         </span>
                       )}
                     </div>

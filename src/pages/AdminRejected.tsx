@@ -81,8 +81,10 @@ export default function AdminRejectedPage() {
                             >
                               {kd.mockupRepoUrl}
                             </a>
-                            {kd.prNumber && (
-                              <span className="text-gray-500 dark:text-gray-400">PR #{kd.prNumber} (chiusa)</span>
+                            {kd.validatedMockupCommit && (
+                              <span className="text-gray-500 dark:text-gray-400 font-mono text-xs">
+                                Commit: {kd.validatedMockupCommit.substring(0, 7)}
+                              </span>
                             )}
                           </div>
                         </div>
