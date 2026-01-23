@@ -1,0 +1,78 @@
+import { Link } from '@tanstack/react-router'
+import { useQuery } from 'convex/react'
+import { api } from '../../convex/_generated/api'
+
+const statusColors: Record<string, string> = {
+  Planning: 'bg-gray-100 text-gray-800',
+  InProgress: 'bg-blue-100 text-blue-800',
+  Completed: 'bg-green-100 text-green-800'
+}
+
+const statusLabels: Record<string, string> = {
+  Planning: 'In Pianificazione',
+  InProgress: 'In Corso',
+  Completed: 'Completato'
+}
+
+export default function CoreAppsListPage() {
+  const coreApps = useQuery(api.coreApps.list)
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Core Apps</h1>
+      </div>
+
+      <div className="grid gap-4">
+        {coreApps?.map((app) => (
+          <Link
+            key={app._id}
+            to="/core-apps/$id"
+            params={{ id: app._id }}
+            className="block bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-semibold text-gray-900">{app.name}</h3>
+                  <span className={`px-2 py-1 text-xs rounded-full ${statusColors[app.status]}`}>
+                    {statusLabels[app.status]}
+                  </span>
+                </div>
+                {app.description && (
+                  <p className="text-gray-600 mt-2">{app.description}</p>
+                )}
+                {app.repoUrl && (
+                  <p className="text-sm text-blue-600 mt-2">{app.repoUrl}</p>
+                )}
+              </div>
+              <div className="ml-6 text-right">
+                <div className="text-2xl font-bold text-gray-900">
+                  {app.percentComplete}%
+                </div>
+                <div className="w-32 bg-gray-200 rounded-full h-2 mt-2">
+                  <div
+                    className={`h-2 rounded-full ${
+                      app.percentComplete === 100
+                        ? 'bg-green-500'
+                        : app.percentComplete > 50
+                          ? 'bg-blue-500'
+                          : 'bg-yellow-500'
+                    }`}
+                    style={{ width: `${app.percentComplete}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </Link>
+        ))}
+
+        {coreApps?.length === 0 && (
+          <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+            Nessuna Core App presente
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
