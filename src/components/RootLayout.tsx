@@ -77,12 +77,6 @@ export default function RootLayout() {
               >
                 Gestione Utenti
               </Link>
-              <Link
-                to="/admin/rejected"
-                className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
-              >
-                PR Rifiutate
-              </Link>
             </>
           )}
         </nav>

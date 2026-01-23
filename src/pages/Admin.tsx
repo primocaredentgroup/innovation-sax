@@ -3,12 +3,13 @@ import { api } from '../../convex/_generated/api'
 import { useState, useMemo } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 
+type Tab = 'categories' | 'departments' | 'budget' | 'blockingLabels'
+
 export default function AdminPage() {
   const currentUser = useQuery(api.users.getCurrentUser)
   const categories = useQuery(api.categories.list)
   const departments = useQuery(api.departments.list)
   const months = useQuery(api.months.list)
-
   const createCategory = useMutation(api.categories.create)
   const updateCategory = useMutation(api.categories.update)
   const removeCategory = useMutation(api.categories.remove)
@@ -16,10 +17,16 @@ export default function AdminPage() {
   const updateDepartment = useMutation(api.departments.update)
   const removeDepartment = useMutation(api.departments.remove)
   const upsertMonth = useMutation(api.months.upsert)
+  const labels = useQuery(api.labels.list)
+  const createLabel = useMutation(api.labels.create)
+  const updateLabel = useMutation(api.labels.update)
+  const removeLabel = useMutation(api.labels.remove)
 
+  const [activeTab, setActiveTab] = useState<Tab>('categories')
   const [editingCategory, setEditingCategory] = useState<Id<'categories'> | null>(null)
   const [editingDepartment, setEditingDepartment] = useState<Id<'departments'> | null>(null)
   const [editingMonth, setEditingMonth] = useState<string | null>(null)
+  const [editingLabel, setEditingLabel] = useState<Id<'labels'> | null>(null)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newDepartmentName, setNewDepartmentName] = useState('')
   const [newDepartmentCategories, setNewDepartmentCategories] = useState<Id<'categories'>[]>([])
@@ -28,6 +35,10 @@ export default function AdminPage() {
   const [editCategoryName, setEditCategoryName] = useState('')
   const [editDepartmentName, setEditDepartmentName] = useState('')
   const [editDepartmentCategories, setEditDepartmentCategories] = useState<Id<'categories'>[]>([])
+  const [newLabelValue, setNewLabelValue] = useState('')
+  const [newLabelLabel, setNewLabelLabel] = useState('')
+  const [editLabelValue, setEditLabelValue] = useState('')
+  const [editLabelLabel, setEditLabelLabel] = useState('')
 
   // Genera opzioni mesi per i prossimi 12 mesi
   const monthOptions = useMemo(() => {
@@ -126,15 +137,109 @@ export default function AdminPage() {
     setNewMonthBudget(currentBudget)
   }
 
+  // Gestione Labels
+  const handleCreateLabel = async () => {
+    if (!newLabelValue.trim() || !newLabelLabel.trim()) return
+    try {
+      await createLabel({ value: newLabelValue.trim(), label: newLabelLabel.trim() })
+      setNewLabelValue('')
+      setNewLabelLabel('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nella creazione della label')
+    }
+  }
+
+  const handleUpdateLabel = async (id: Id<'labels'>) => {
+    if (!editLabelValue.trim() || !editLabelLabel.trim()) return
+    try {
+      await updateLabel({ id, value: editLabelValue.trim(), label: editLabelLabel.trim() })
+      setEditingLabel(null)
+      setEditLabelValue('')
+      setEditLabelLabel('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nell\'aggiornamento della label')
+    }
+  }
+
+  const handleStartEditLabel = (id: Id<'labels'>, currentValue: string, currentLabel: string) => {
+    setEditingLabel(id)
+    setEditLabelValue(currentValue)
+    setEditLabelLabel(currentLabel)
+  }
+
+  const handleCancelEditLabel = () => {
+    setEditingLabel(null)
+    setEditLabelValue('')
+    setEditLabelLabel('')
+  }
+
+  const handleRemoveLabel = async (id: Id<'labels'>) => {
+    if (!confirm('Sei sicuro di voler eliminare questa label? Non sarà possibile eliminarla se è ancora in uso da blocking labels.')) return
+    try {
+      await removeLabel({ id })
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nell\'eliminazione della label')
+    }
+  }
+
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Amministrazione</h1>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Gestisci categorie, dipartimenti e budget totale</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Gestisci categorie, dipartimenti, budget totale e blocking labels</p>
       </div>
 
-      {/* Categorie */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('categories')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'categories'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Categorie
+          </button>
+          <button
+            onClick={() => setActiveTab('departments')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'departments'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Dipartimenti
+          </button>
+          <button
+            onClick={() => setActiveTab('budget')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'budget'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Budget Mensile
+          </button>
+          <button
+            onClick={() => setActiveTab('blockingLabels')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'blockingLabels'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Blocking Labels
+          </button>
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'categories' && (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+        {/* Categorie */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Categorie</h2>
         </div>
@@ -228,9 +333,11 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Dipartimenti */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+      {activeTab === 'departments' && (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+        {/* Dipartimenti */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Dipartimenti</h2>
         </div>
@@ -381,9 +488,11 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Budget Totale Mensile */}
+      {activeTab === 'budget' && (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+        {/* Budget Totale Mensile */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Budget Totale Mensile</h2>
         </div>
@@ -475,6 +584,132 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+      )}
+
+      {activeTab === 'blockingLabels' && (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Tipologie di Blocking Labels</h2>
+        </div>
+        <div className="p-6">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Gestisci le tipologie di blocking labels disponibili nel sistema.
+          </p>
+          
+          <div className="mb-4 space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newLabelValue}
+                onChange={(e) => setNewLabelValue(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleCreateLabel()}
+                placeholder="Valore (es. Improvement, Bug)"
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
+              <input
+                type="text"
+                value={newLabelLabel}
+                onChange={(e) => setNewLabelLabel(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleCreateLabel()}
+                placeholder="Etichetta (es. Miglioramento, Bug)"
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
+              <button
+                onClick={handleCreateLabel}
+                className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+              >
+                Aggiungi
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Valore</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Etichetta</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-gray-100">Azioni</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {labels?.map((label) => {
+                  const isEditing = editingLabel === label._id
+                  const displayValue = isEditing ? editLabelValue : label.value
+                  const displayLabel = isEditing ? editLabelLabel : label.label
+
+                  return (
+                    <tr key={label._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-4 py-3 text-sm font-mono text-gray-900 dark:text-gray-100">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editLabelValue}
+                            onChange={(e) => setEditLabelValue(e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                            autoFocus
+                          />
+                        ) : (
+                          displayValue
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editLabelLabel}
+                            onChange={(e) => setEditLabelLabel(e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                          />
+                        ) : (
+                          displayLabel
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {isEditing ? (
+                          <div className="flex gap-2 justify-center">
+                            <button
+                              onClick={() => handleUpdateLabel(label._id)}
+                              className="px-3 py-1 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                            >
+                              Salva
+                            </button>
+                            <button
+                              onClick={handleCancelEditLabel}
+                              className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                            >
+                              Annulla
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2 justify-center">
+                            <button
+                              onClick={() => handleStartEditLabel(label._id, label.value, label.label)}
+                              className="px-3 py-1 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                            >
+                              Modifica
+                            </button>
+                            <button
+                              onClick={() => handleRemoveLabel(label._id)}
+                              className="px-3 py-1 text-sm bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600"
+                            >
+                              Elimina
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {labels?.length === 0 && (
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400">Nessuna label presente</div>
+            )}
+          </div>
+        </div>
+      </div>
+      )}
     </div>
   )
 }

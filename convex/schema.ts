@@ -37,12 +37,6 @@ export const noteTypeValidator = v.union(
   v.literal('Improvement')
 )
 
-export const blockingLabelValidator = v.union(
-  v.literal('Improvement'),
-  v.literal('Bug'),
-  v.literal('TechDebt')
-)
-
 export const blockingLabelStatusValidator = v.union(
   v.literal('Open'),
   v.literal('Closed')
@@ -65,6 +59,12 @@ export default defineSchema({
   categories: defineTable({
     name: v.string()
   }),
+
+  // Labels (tipologie di blocking labels)
+  labels: defineTable({
+    value: v.string(), // Valore tecnico/identificativo (es. "Improvement", "Bug", "TechDebt")
+    label: v.string() // Etichetta visualizzata (es. "Miglioramento", "Bug", "Debito Tecnico")
+  }).index('by_value', ['value']),
 
   // Departments
   departments: defineTable({
@@ -103,6 +103,8 @@ export default defineSchema({
     // Timestamps
     approvedAt: v.optional(v.number()),
     frontValidatedAt: v.optional(v.number()),
+    techValidatedAt: v.optional(v.number()), // Quando TechValidator approva (MockupDone → Approved)
+    businessValidatedAt: v.optional(v.number()), // Quando BusinessValidator valida (Approved → FrontValidated)
     releasedAt: v.optional(v.number()),
     // Progress
     donePerc: v.optional(v.number())
@@ -130,11 +132,12 @@ export default defineSchema({
   // Blocking Labels
   blockingLabels: defineTable({
     keyDevId: v.id('keydevs'),
-    label: blockingLabelValidator,
+    labelId: v.id('labels'),
     status: blockingLabelStatusValidator
   })
     .index('by_keydev', ['keyDevId'])
-    .index('by_status', ['status']),
+    .index('by_status', ['status'])
+    .index('by_label', ['labelId']),
 
   // Budget allocation per Dept/Category/Month
   budgetKeyDev: defineTable({

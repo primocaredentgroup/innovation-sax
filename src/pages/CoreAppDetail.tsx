@@ -345,6 +345,7 @@ export default function CoreAppDetailPage() {
   // Stati per l'editing della percentuale e dell'URL
   const [isEditingPercent, setIsEditingPercent] = useState(false)
   const [isEditingHubUrl, setIsEditingHubUrl] = useState(false)
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false)
   const [tempPercent, setTempPercent] = useState<number>(0)
   const [tempHubUrl, setTempHubUrl] = useState<string>('')
 
@@ -417,6 +418,15 @@ export default function CoreAppDetailPage() {
     setIsEditingHubUrl(false)
   }, [coreApp, tempHubUrl, updateCoreApp])
 
+  const handleStatusChange = useCallback(async (newStatus: 'Planning' | 'InProgress' | 'Completed') => {
+    if (!coreApp) return
+    await updateCoreApp({
+      id: coreApp._id,
+      status: newStatus
+    })
+    setIsStatusDropdownOpen(false)
+  }, [coreApp, updateCoreApp])
+
   if (!coreApp) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -432,9 +442,40 @@ export default function CoreAppDetailPage() {
           ← Torna alla lista
         </Link>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{coreApp.name}</h1>
-        <span className={`px-3 py-1 rounded-full text-sm ${statusColors[coreApp.status]}`}>
-          {statusLabels[coreApp.status]}
-        </span>
+        <div className="relative">
+          <button
+            onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+            className={`px-3 py-1 rounded-full text-sm ${statusColors[coreApp.status]} hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-2`}
+          >
+            {statusLabels[coreApp.status]}
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {isStatusDropdownOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setIsStatusDropdownOpen(false)}
+              />
+              <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 z-20 min-w-[180px]">
+                {(['Planning', 'InProgress', 'Completed'] as const).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => handleStatusChange(status)}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg ${
+                      coreApp.status === status
+                        ? `${statusColors[status]} font-medium`
+                        : 'text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {statusLabels[status]}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-6">

@@ -69,6 +69,7 @@ export default function KeyDevDetailPage() {
     api.blockingLabels.listByKeyDev,
     isNew || !keydev ? 'skip' : { keyDevId: keydev._id }
   )
+  const availableLabels = useQuery(api.labels.list)
 
   const createKeyDev = useMutation(api.keydevs.create)
   const updateKeyDev = useMutation(api.keydevs.update)
@@ -77,6 +78,8 @@ export default function KeyDevDetailPage() {
   const markAsDone = useMutation(api.keydevs.markAsDone)
   const linkMockupRepo = useMutation(api.keydevs.linkMockupRepo)
   const addNote = useMutation(api.notes.create)
+  const createBlockingLabel = useMutation(api.blockingLabels.create)
+  const removeBlockingLabel = useMutation(api.blockingLabels.remove)
 
   const currentMonth = useMemo(() => {
     const now = new Date()
@@ -84,7 +87,6 @@ export default function KeyDevDetailPage() {
   }, [])
 
   const [newNote, setNewNote] = useState('')
-  const [noteType, setNoteType] = useState<'Comment' | 'Task' | 'Improvement'>('Comment')
   const [rejectionReason, setRejectionReason] = useState('')
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [mockupRepoUrlInput, setMockupRepoUrlInput] = useState('')
@@ -174,9 +176,26 @@ export default function KeyDevDetailPage() {
     await addNote({
       keyDevId: keydev._id,
       body: newNote,
-      type: noteType
+      type: 'Comment'
     })
     setNewNote('')
+  }
+
+  const handleAddBlockingLabel = async (labelId: Id<'labels'>) => {
+    if (isNew || !keydev) return
+    try {
+      await createBlockingLabel({
+        keyDevId: keydev._id,
+        labelId
+      })
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nell\'aggiunta della blocking label')
+    }
+  }
+
+  const handleRemoveBlockingLabel = async (id: Id<'blockingLabels'>) => {
+    if (!confirm('Sei sicuro di voler rimuovere questa blocking label?')) return
+    await removeBlockingLabel({ id })
   }
 
   // Handler per rifiutare con motivo
@@ -466,17 +485,29 @@ export default function KeyDevDetailPage() {
                       
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Commit Validato
+                          Commit Validato <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
                           value={validationCommit}
                           onChange={(e) => setValidationCommit(e.target.value)}
                           placeholder="es. abc1234 o hash completo del commit"
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 font-mono text-sm"
+                          className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 font-mono text-sm ${
+                            !validationCommit.trim() 
+                              ? 'border-red-300 dark:border-red-600' 
+                              : 'border-gray-300 dark:border-gray-600'
+                          }`}
+                          required
                         />
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Inserisci l'hash del commit del mockup che stai validando
+                        <p className={`mt-1 text-xs ${
+                          !validationCommit.trim() 
+                            ? 'text-red-500 dark:text-red-400' 
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}>
+                          {!validationCommit.trim() 
+                            ? 'Obbligatorio: inserisci l\'hash del commit del mockup che stai validando'
+                            : 'Inserisci l\'hash del commit del mockup che stai validando'
+                          }
                         </p>
                       </div>
                       
@@ -512,17 +543,21 @@ export default function KeyDevDetailPage() {
                         onClick={async () => {
                           try {
                             setValidationError('')
+                            if (!validationCommit.trim()) {
+                              setValidationError('Devi specificare il commit del mockup validato')
+                              return
+                            }
                             await updateStatus({ 
                               id: keydev._id, 
                               status: 'FrontValidated',
                               monthRef: validationMonth,
-                              validatedMockupCommit: validationCommit.trim() || undefined
+                              validatedMockupCommit: validationCommit.trim()
                             })
                           } catch (err) {
                             setValidationError(err instanceof Error ? err.message : 'Errore durante la validazione')
                           }
                         }}
-                        disabled={!budgetForValidation || budgetForValidation.maxAlloc <= 0}
+                        disabled={!budgetForValidation || budgetForValidation.maxAlloc <= 0 || !validationCommit.trim()}
                         className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Valida Frontend per {monthOptions.find(m => m.value === validationMonth)?.label}
@@ -638,13 +673,6 @@ export default function KeyDevDetailPage() {
                 {notes?.map((note) => (
                   <div key={note._id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        note.type === 'Comment' ? 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200' :
-                        note.type === 'Task' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' :
-                        'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
-                      }`}>
-                        {note.type}
-                      </span>
                       <span className="text-sm text-gray-500 dark:text-gray-400">
                         {users?.find((u) => u._id === note.authorId)?.name || 'Utente'}
                       </span>
@@ -657,22 +685,11 @@ export default function KeyDevDetailPage() {
                 ))}
 
                 <div className="border-t dark:border-gray-700 pt-4">
-                  <div className="flex gap-2 mb-2">
-                    <select
-                      value={noteType}
-                      onChange={(e) => setNoteType(e.target.value as typeof noteType)}
-                      className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
-                    >
-                      <option value="Comment">Commento</option>
-                      <option value="Task">Task</option>
-                      <option value="Improvement">Miglioramento</option>
-                    </select>
-                  </div>
                   <div className="flex gap-2">
                     <textarea
                       value={newNote}
                       onChange={(e) => setNewNote(e.target.value)}
-                      placeholder="Aggiungi una nota..."
+                      placeholder="Aggiungi un commento..."
                       rows={2}
                       className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
                     />
@@ -750,9 +767,15 @@ export default function KeyDevDetailPage() {
                     <dd className="font-medium text-gray-900 dark:text-gray-100">
                       {users?.find((u) => u._id === keydev.techValidatorId)?.name || 'N/A'}
                     </dd>
-                    {keydev.approvedAt && (
+                    {(keydev.techValidatedAt || keydev.approvedAt) && (
                       <dd className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(keydev.approvedAt).toLocaleDateString('it-IT')}
+                        {new Date(keydev.techValidatedAt || keydev.approvedAt!).toLocaleDateString('it-IT', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </dd>
                     )}
                   </div>
@@ -763,9 +786,15 @@ export default function KeyDevDetailPage() {
                     <dd className="font-medium text-gray-900 dark:text-gray-100">
                       {users?.find((u) => u._id === keydev.businessValidatorId)?.name || 'N/A'}
                     </dd>
-                    {keydev.frontValidatedAt && (
+                    {(keydev.businessValidatedAt || keydev.frontValidatedAt) && (
                       <dd className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(keydev.frontValidatedAt).toLocaleDateString('it-IT')}
+                        {new Date(keydev.businessValidatedAt || keydev.frontValidatedAt!).toLocaleDateString('it-IT', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </dd>
                     )}
                   </div>
@@ -794,6 +823,37 @@ export default function KeyDevDetailPage() {
 
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Label Bloccanti</h3>
+              
+              {/* Mostra tutti i label possibili come pulsanti cliccabili */}
+              <div className="mb-4">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Aggiungi blocking label:</p>
+                <div className="flex flex-wrap gap-2">
+                  {availableLabels?.map((label) => {
+                    const existingOpen = blockingLabels?.find((bl) => bl.labelId === label._id && bl.status === 'Open')
+                    const existingClosed = blockingLabels?.find((bl) => bl.labelId === label._id && bl.status === 'Closed')
+                    return (
+                      <button
+                        key={label._id}
+                        onClick={() => handleAddBlockingLabel(label._id)}
+                        disabled={!!existingOpen}
+                        className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                          existingOpen
+                            ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 cursor-not-allowed'
+                            : existingClosed
+                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'
+                        }`}
+                        title={existingOpen ? 'Label già presente (aperta)' : existingClosed ? 'Label già presente (chiusa) - clicca per aggiungerne una nuova' : 'Clicca per aggiungere questa blocking label'}
+                      >
+                        {label.label}
+                        {existingOpen && ' ✓'}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Lista delle blocking labels esistenti */}
               {blockingLabels && blockingLabels.length > 0 ? (
                 <div className="space-y-2">
                   {blockingLabels.map((bl) => (
@@ -804,16 +864,25 @@ export default function KeyDevDetailPage() {
                       }`}
                     >
                       <span className={bl.status === 'Closed' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}>
-                        {bl.label}
+                        {bl.label.label}
                       </span>
-                      <span className={`text-xs ${bl.status === 'Open' ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                        {bl.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs ${bl.status === 'Open' ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                          {bl.status === 'Open' ? 'Aperto' : 'Chiuso'}
+                        </span>
+                        <button
+                          onClick={() => handleRemoveBlockingLabel(bl._id)}
+                          className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 px-2 py-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30"
+                          title="Rimuovi blocking label"
+                        >
+                          ×
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400">Nessuna label bloccante</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Nessuna label bloccante presente</p>
               )}
             </div>
           </div>

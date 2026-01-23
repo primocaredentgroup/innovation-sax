@@ -17,6 +17,7 @@ import type * as dashboard from "../dashboard.js";
 import type * as departments from "../departments.js";
 import type * as http from "../http.js";
 import type * as keydevs from "../keydevs.js";
+import type * as labels from "../labels.js";
 import type * as months from "../months.js";
 import type * as notes from "../notes.js";
 import type * as users from "../users.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   departments: typeof departments;
   http: typeof http;
   keydevs: typeof keydevs;
+  labels: typeof labels;
   months: typeof months;
   notes: typeof notes;
   users: typeof users;

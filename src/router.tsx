@@ -13,7 +13,6 @@ import CoreAppDetailPage from './pages/CoreAppDetail'
 import CoreAppNewPage from './pages/CoreAppNew'
 import CoreAppUpdateNewPage from './pages/CoreAppUpdateNew'
 import ProfilePage from './pages/Profile'
-import AdminRejectedPage from './pages/AdminRejected'
 import UsersManagementPage from './pages/UsersManagement'
 import AdminPage from './pages/Admin'
 
@@ -76,12 +75,6 @@ const profileRoute = createRoute({
   component: ProfilePage
 })
 
-const adminRejectedRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/admin/rejected',
-  component: AdminRejectedPage
-})
-
 const usersManagementRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/users',
@@ -105,7 +98,6 @@ const routeTree = rootRoute.addChildren([
   coreAppUpdateNewRoute,
   coreAppNewRoute,
   profileRoute,
-  adminRejectedRoute,
   usersManagementRoute,
   adminRoute
 ])

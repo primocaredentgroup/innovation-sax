@@ -2,6 +2,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useMemo } from 'react'
+import type { Id } from '../../convex/_generated/dataModel'
 
 const statusColors: Record<string, string> = {
   Draft: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
@@ -35,6 +36,7 @@ export default function KeyDevsListPage() {
     dept?: string
     category?: string
     status?: string | string[]
+    hasBlockingLabels?: string
   }
   const navigate = useNavigate()
 
@@ -56,6 +58,7 @@ export default function KeyDevsListPage() {
   
   const departments = useQuery(api.departments.list)
   const categories = useQuery(api.categories.list)
+  const allBlockingLabels = useQuery(api.blockingLabels.list)
   
   // Combina i contatori
   const statusCounts = useMemo(() => {
@@ -93,6 +96,20 @@ export default function KeyDevsListPage() {
     return [search.status]
   }, [search.status])
 
+  // Crea una mappa dei blockingLabels per keydev
+  const blockingLabelsByKeyDev = useMemo(() => {
+    const map = new Map<Id<'keydevs'>, Array<{ labelId: Id<'labels'>; label: { value: string; label: string }; status: 'Open' | 'Closed' }>>()
+    if (allBlockingLabels) {
+      for (const bl of allBlockingLabels) {
+        if (!map.has(bl.keyDevId)) {
+          map.set(bl.keyDevId, [])
+        }
+        map.get(bl.keyDevId)!.push({ labelId: bl.labelId, label: bl.label, status: bl.status })
+      }
+    }
+    return map
+  }, [allBlockingLabels])
+
   // Filter keydevs based on search params
   const filteredKeyDevs = useMemo(() => {
     if (!keydevs) return []
@@ -107,9 +124,20 @@ export default function KeyDevsListPage() {
     if (selectedStatuses.length > 0) {
       result = result.filter((kd) => selectedStatuses.includes(kd.status))
     }
+    if (search.hasBlockingLabels === 'open') {
+      result = result.filter((kd) => {
+        const labels = blockingLabelsByKeyDev.get(kd._id) || []
+        return labels.some((l) => l.status === 'Open')
+      })
+    } else if (search.hasBlockingLabels === 'any') {
+      result = result.filter((kd) => {
+        const labels = blockingLabelsByKeyDev.get(kd._id) || []
+        return labels.length > 0
+      })
+    }
 
     return result
-  }, [keydevs, search.dept, search.category, selectedStatuses])
+  }, [keydevs, search.dept, search.category, selectedStatuses, search.hasBlockingLabels, blockingLabelsByKeyDev])
 
   // Generate month options
   const monthOptions = useMemo(() => {
@@ -155,7 +183,7 @@ export default function KeyDevsListPage() {
 
       {/* Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6 space-y-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Mese (obbligatorio)
@@ -204,6 +232,20 @@ export default function KeyDevsListPage() {
                   {c.name}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Filtra per Blocking Labels
+            </label>
+            <select
+              value={search.hasBlockingLabels || ''}
+              onChange={(e) => updateSearch({ hasBlockingLabels: e.target.value || undefined })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+            >
+              <option value="">Tutti</option>
+              <option value="open">Con blocking labels aperte</option>
+              <option value="any">Con qualsiasi blocking label</option>
             </select>
           </div>
         </div>
@@ -268,7 +310,7 @@ export default function KeyDevsListPage() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Categoria</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Completamento</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Info</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Blocchi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -312,16 +354,37 @@ export default function KeyDevsListPage() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex flex-wrap gap-2">
-                      {kd.mockupRepoUrl && (
-                        <span className="px-2 py-1 text-xs rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
-                          Mockup
-                        </span>
-                      )}
-                      {kd.validatedMockupCommit && (
-                        <span className="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 font-mono">
-                          {kd.validatedMockupCommit.substring(0, 7)}
-                        </span>
-                      )}
+                      {(() => {
+                        const labels = blockingLabelsByKeyDev.get(kd._id) || []
+                        const openLabels = labels.filter((l) => l.status === 'Open')
+                        const closedLabels = labels.filter((l) => l.status === 'Closed')
+                        
+                        return (
+                          <>
+                            {openLabels.map((bl) => (
+                              <span
+                                key={`open-${bl.labelId}`}
+                                className="px-2 py-1 text-xs rounded-full bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"
+                                title={`${bl.label.label} (Aperto)`}
+                              >
+                                {bl.label.label}
+                              </span>
+                            ))}
+                            {closedLabels.map((bl) => (
+                              <span
+                                key={`closed-${bl.labelId}`}
+                                className="px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 line-through"
+                                title={`${bl.label.label} (Chiuso)`}
+                              >
+                                {bl.label.label}
+                              </span>
+                            ))}
+                            {labels.length === 0 && (
+                              <span className="text-gray-400 dark:text-gray-500 text-xs">-</span>
+                            )}
+                          </>
+                        )
+                      })()}
                     </div>
                   </td>
                 </tr>

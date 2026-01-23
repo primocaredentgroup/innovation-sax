@@ -29,6 +29,8 @@ const keydevReturnValidator = v.object({
   repoTag: v.optional(v.string()),
   approvedAt: v.optional(v.number()),
   frontValidatedAt: v.optional(v.number()),
+  techValidatedAt: v.optional(v.number()),
+  businessValidatedAt: v.optional(v.number()),
   releasedAt: v.optional(v.number()),
   donePerc: v.optional(v.number())
 })
@@ -381,6 +383,10 @@ export const updateStatus = mutation({
           if (!args.monthRef) {
             throw new Error('Devi specificare il mese di riferimento per la validazione')
           }
+          // Verifica che sia stato specificato il commit validato (obbligatorio)
+          if (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '') {
+            throw new Error('Devi specificare il commit del mockup validato')
+          }
           break
 
         case 'InProgress':
@@ -410,7 +416,9 @@ export const updateStatus = mutation({
 
     // Applica gli aggiornamenti specifici per ogni stato
     if (args.status === 'Approved') {
-      updates.approvedAt = Date.now()
+      const now = Date.now()
+      updates.approvedAt = now
+      updates.techValidatedAt = now // Traccia timestamp validazione tecnica
       updates.techValidatorId = user._id
       // Pulisci eventuali dati di rifiuto precedenti
       updates.rejectionReason = undefined
@@ -460,12 +468,12 @@ export const updateStatus = mutation({
         updates.monthRef = args.monthRef
       }
       
-      // Salva il commit validato
-      if (args.validatedMockupCommit) {
-        updates.validatedMockupCommit = args.validatedMockupCommit
-      }
+      // Salva il commit validato (obbligatorio)
+      updates.validatedMockupCommit = args.validatedMockupCommit!.trim()
       
-      updates.frontValidatedAt = Date.now()
+      const now = Date.now()
+      updates.frontValidatedAt = now
+      updates.businessValidatedAt = now // Traccia timestamp validazione business
       updates.businessValidatorId = user._id
     }
 
