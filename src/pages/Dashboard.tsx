@@ -338,7 +338,7 @@ export default function DashboardPage() {
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
-            KeyDev Passati ({pastKeyDevsCount})
+            Sviluppi Chiave Passati ({pastKeyDevsCount})
           </button>
           {hasDelayedKeyDevs && (
             <button
@@ -349,7 +349,7 @@ export default function DashboardPage() {
                   : 'border-transparent text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300'
               }`}
             >
-              KeyDev in Ritardo ({delayedKeyDevs.length})
+              Sviluppi Chiave in Ritardo ({delayedKeyDevs.length})
             </button>
           )}
         </div>
@@ -392,7 +392,7 @@ export default function DashboardPage() {
           {/* Grafico KeyDev per Stato con divisione per categoria */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-              KeyDev per Stato e Categoria - {selectedMonth}
+              Sviluppi Chiave per Stato e Categoria - {selectedMonth}
             </h2>
             {keyDevsByCategory ? (
               <div className="space-y-6">
@@ -443,7 +443,7 @@ export default function DashboardPage() {
                 })}
                 {keyDevsByCategory.byCategory.length === 0 && (
                   <div className="text-gray-500 dark:text-gray-400 text-center py-4">
-                    Nessun KeyDev con status Front Validato o superiore per questo mese
+                    Nessuno Sviluppo Chiave con status Front Validato o superiore per questo mese
                   </div>
                 )}
               </div>
@@ -479,7 +479,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-gray-500 dark:text-gray-400">Nessuna categoria con KeyDev questo mese</div>
+              <div className="text-gray-500 dark:text-gray-400">Nessuna categoria con Sviluppi Chiave questo mese</div>
             )}
           </div>
 
@@ -577,7 +577,7 @@ export default function DashboardPage() {
       {activeTab === 'pastKeyDevs' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-            KeyDev Passati
+            Sviluppi Chiave Passati
           </h2>
           {pastKeyDevs && pastKeyDevs.length > 0 ? (
             <div className="space-y-3">
@@ -606,7 +606,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="text-gray-500 dark:text-gray-400 text-center py-4">
-              Nessun KeyDev passato completato
+              Nessuno Sviluppo Chiave passato completato
             </div>
           )}
         </div>
@@ -616,7 +616,7 @@ export default function DashboardPage() {
       {activeTab === 'delayed' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-            KeyDev in Ritardo
+            Sviluppi Chiave in Ritardo
           </h2>
           {delayedKeyDevs && delayedKeyDevs.length > 0 ? (
             <div className="space-y-3">
@@ -642,7 +642,7 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <div className="text-green-600 dark:text-green-400">Nessun KeyDev in ritardo</div>
+            <div className="text-green-600 dark:text-green-400">Nessuno Sviluppo Chiave in ritardo</div>
           )}
         </div>
       )}

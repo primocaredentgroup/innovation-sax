@@ -36,7 +36,7 @@ export default function KeyDevsListPage() {
     dept?: string
     category?: string
     status?: string | string[]
-    hasBlockingLabels?: string
+    blockingLabel?: string
   }
   const navigate = useNavigate()
 
@@ -110,8 +110,8 @@ export default function KeyDevsListPage() {
     return map
   }, [allBlockingLabels])
 
-  // Filter keydevs based on search params
-  const filteredKeyDevs = useMemo(() => {
+  // Applica i filtri base (mese, dept, category, status) per calcolare i contatori
+  const baseFilteredKeyDevs = useMemo(() => {
     if (!keydevs) return []
     let result = keydevs
 
@@ -124,20 +124,48 @@ export default function KeyDevsListPage() {
     if (selectedStatuses.length > 0) {
       result = result.filter((kd) => selectedStatuses.includes(kd.status))
     }
-    if (search.hasBlockingLabels === 'open') {
+
+    return result
+  }, [keydevs, search.dept, search.category, selectedStatuses])
+
+  // Calcola i contatori per ogni label di blocking basati sui keydevs filtrati
+  const blockingLabelCounts = useMemo(() => {
+    const counts = new Map<Id<'labels'>, { label: { value: string; label: string }; count: number }>()
+    if (allBlockingLabels && baseFilteredKeyDevs.length > 0) {
+      // Raggruppa per labelId
+      const labelMap = new Map<Id<'labels'>, { label: { value: string; label: string }; keyDevIds: Set<Id<'keydevs'>> }>()
+      
+      for (const bl of allBlockingLabels) {
+        if (!labelMap.has(bl.labelId)) {
+          labelMap.set(bl.labelId, { label: bl.label, keyDevIds: new Set() })
+        }
+        labelMap.get(bl.labelId)!.keyDevIds.add(bl.keyDevId)
+      }
+      
+      // Conta solo i keydevs che sono nella lista filtrata corrente
+      for (const [labelId, data] of labelMap.entries()) {
+        const matchingKeyDevs = baseFilteredKeyDevs.filter(kd => data.keyDevIds.has(kd._id))
+        if (matchingKeyDevs.length > 0) {
+          counts.set(labelId, { label: data.label, count: matchingKeyDevs.length })
+        }
+      }
+    }
+    return counts
+  }, [allBlockingLabels, baseFilteredKeyDevs])
+
+  // Filter keydevs based on search params (usa baseFilteredKeyDevs e aggiunge il filtro blockingLabel)
+  const filteredKeyDevs = useMemo(() => {
+    let result = baseFilteredKeyDevs
+
+    if (search.blockingLabel) {
       result = result.filter((kd) => {
         const labels = blockingLabelsByKeyDev.get(kd._id) || []
-        return labels.some((l) => l.status === 'Open')
-      })
-    } else if (search.hasBlockingLabels === 'any') {
-      result = result.filter((kd) => {
-        const labels = blockingLabelsByKeyDev.get(kd._id) || []
-        return labels.length > 0
+        return labels.some((l) => l.labelId === search.blockingLabel)
       })
     }
 
     return result
-  }, [keydevs, search.dept, search.category, selectedStatuses, search.hasBlockingLabels, blockingLabelsByKeyDev])
+  }, [baseFilteredKeyDevs, search.blockingLabel, blockingLabelsByKeyDev])
 
   // Generate month options
   const monthOptions = useMemo(() => {
@@ -168,22 +196,53 @@ export default function KeyDevsListPage() {
     updateSearch({ status: newStatuses.length > 0 ? newStatuses : undefined })
   }
 
+  const selectedCategory = search.category || null
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">KeyDevs</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Sviluppi Chiave</h1>
         <Link
           to="/keydevs/$id"
           params={{ id: 'new' }}
           className="px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-medium rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors border border-blue-600 dark:border-blue-500"
         >
-          + Nuovo KeyDev
+          + Nuovo Sviluppo Chiave
         </Link>
+      </div>
+
+      {/* Category Tabs */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex overflow-x-auto">
+          <button
+            onClick={() => updateSearch({ category: undefined })}
+            className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              selectedCategory === null
+                ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+            }`}
+          >
+            Tutte
+          </button>
+          {categories?.map((category) => (
+            <button
+              key={category._id}
+              onClick={() => updateSearch({ category: category._id })}
+              className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                selectedCategory === category._id
+                  ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6 space-y-4">
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Mese (obbligatorio)
@@ -219,33 +278,21 @@ export default function KeyDevsListPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Categoria
+              Filtra per Blocking Label
             </label>
             <select
-              value={search.category || ''}
-              onChange={(e) => updateSearch({ category: e.target.value || undefined })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-            >
-              <option value="">Tutte</option>
-              {categories?.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Filtra per Blocking Labels
-            </label>
-            <select
-              value={search.hasBlockingLabels || ''}
-              onChange={(e) => updateSearch({ hasBlockingLabels: e.target.value || undefined })}
+              value={search.blockingLabel || ''}
+              onChange={(e) => updateSearch({ blockingLabel: e.target.value || undefined })}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
             >
               <option value="">Tutti</option>
-              <option value="open">Con blocking labels aperte</option>
-              <option value="any">Con qualsiasi blocking label</option>
+              {Array.from(blockingLabelCounts.entries())
+                .sort((a, b) => a[1].label.label.localeCompare(b[1].label.label))
+                .map(([labelId, data]) => (
+                  <option key={labelId} value={labelId}>
+                    {data.label.label} ({data.count})
+                  </option>
+                ))}
             </select>
           </div>
         </div>
@@ -395,7 +442,7 @@ export default function KeyDevsListPage() {
 
         {filteredKeyDevs.length === 0 && (
           <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-            Nessun KeyDev trovato per i filtri selezionati
+            Nessuno Sviluppo Chiave trovato per i filtri selezionati
           </div>
         )}
       </div>

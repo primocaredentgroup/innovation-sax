@@ -51,7 +51,7 @@ export default function CoreAppNewPage() {
       // Imposta l'id creato per attivare la query e la navigazione
       setCreatedId(id)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Errore durante la creazione della Core App')
+      setError(err instanceof Error ? err.message : 'Errore durante la creazione dell\'Applicazione Core')
       setIsSubmitting(false)
     }
   }
@@ -65,7 +65,7 @@ export default function CoreAppNewPage() {
         >
           ← Torna alla lista
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Nuova Core App</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Nuova Applicazione Core</h1>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -127,7 +127,7 @@ export default function CoreAppNewPage() {
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              placeholder="Descrizione della Core App..."
+              placeholder="Descrizione dell'Applicazione Core..."
             />
           </div>
 
@@ -154,7 +154,7 @@ export default function CoreAppNewPage() {
               disabled={isSubmitting}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isSubmitting ? 'Creazione...' : 'Crea Core App'}
+              {isSubmitting ? 'Creazione...' : 'Crea Applicazione Core'}
             </button>
             <Link
               to="/core-apps"

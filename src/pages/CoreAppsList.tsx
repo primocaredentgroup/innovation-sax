@@ -20,12 +20,12 @@ export default function CoreAppsListPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Core Apps</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Applicazioni Core</h1>
         <Link
           to="/core-apps/new"
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
         >
-          + Nuova Core App
+          + Nuova Applicazione Core
         </Link>
       </div>
 
@@ -75,7 +75,7 @@ export default function CoreAppsListPage() {
 
         {coreApps?.length === 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center text-gray-500 dark:text-gray-400">
-            Nessuna Core App presente
+            Nessuna Applicazione Core presente
           </div>
         )}
       </div>

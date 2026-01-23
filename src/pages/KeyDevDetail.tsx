@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 
 // Tipo per i ruoli
@@ -93,6 +93,46 @@ export default function KeyDevDetailPage() {
   const [validationMonth, setValidationMonth] = useState(currentMonth)
   const [validationCommit, setValidationCommit] = useState('')
   const [validationError, setValidationError] = useState('')
+  
+  // Calcola i valori iniziali per dipartimento e categoria in base all'utente
+  const getInitialDeptId = () => {
+    if (isNew && currentUser?.deptId && departments) {
+      const userDept = departments.find(d => d._id === currentUser.deptId)
+      return userDept?._id || ''
+    }
+    return ''
+  }
+
+  const getInitialCategoryId = (deptId: string) => {
+    if (isNew && deptId && categories && departments) {
+      const userDept = departments.find(d => d._id === deptId)
+      if (userDept && userDept.categoryIds.length > 0) {
+        return userDept.categoryIds[0]
+      }
+    }
+    return ''
+  }
+
+  // Stati per il form di creazione con inizializzazione lazy
+  const [selectedDeptId, setSelectedDeptId] = useState<string>(() => getInitialDeptId())
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(() => getInitialCategoryId(getInitialDeptId()))
+  
+  // Aggiorna gli stati quando cambiano i dati dell'utente o dipartimenti/categorie
+  // Questo è necessario per sincronizzare lo stato del form con i dati esterni (utente, dipartimenti, categorie)
+  useEffect(() => {
+    if (isNew) {
+      const newDeptId = getInitialDeptId()
+      const newCategoryId = getInitialCategoryId(newDeptId)
+      // Aggiorna solo se i valori sono diversi per evitare render inutili
+      if (newDeptId && newDeptId !== selectedDeptId) {
+        setSelectedDeptId(newDeptId)
+      }
+      if (newCategoryId && newCategoryId !== selectedCategoryId) {
+        setSelectedCategoryId(newCategoryId)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, currentUser?.deptId, departments, categories])
 
   // Query per il budget disponibile per la validazione
   const budgetForValidation = useQuery(
@@ -121,6 +161,18 @@ export default function KeyDevDetailPage() {
   // Valore derivato per l'input: usa il valore inserito dall'utente o quello del keydev
   const mockupRepoUrl = mockupRepoUrlInput || keydev?.mockupRepoUrl || ''
 
+
+  // Filtra le categorie in base al dipartimento selezionato
+  const availableCategories = useMemo(() => {
+    if (!categories || !selectedDeptId) return []
+    const selectedDept = departments?.find(d => d._id === selectedDeptId)
+    if (!selectedDept) return []
+    return categories.filter(c => selectedDept.categoryIds.includes(c._id))
+  }, [categories, selectedDeptId, departments])
+
+  // Verifica se il form è valido (dipartimento e categoria selezionati)
+  const isFormValid = selectedDeptId !== '' && selectedCategoryId !== '' && availableCategories.some(c => c._id === selectedCategoryId)
+
   // Ruoli e permessi utente corrente
   const userRoles = currentUser?.roles as Role[] | undefined
   const userIsAdmin = isAdmin(userRoles)
@@ -138,16 +190,14 @@ export default function KeyDevDetailPage() {
     const formData = new FormData(e.currentTarget)
     const title = formData.get('title') as string
     const desc = formData.get('desc') as string
-    const monthRefValue = formData.get('monthRef') as string
-    const monthRef = monthRefValue && monthRefValue.trim() !== '' ? monthRefValue : undefined
-    const categoryId = formData.get('categoryId') as string
-    const deptId = formData.get('deptId') as string
+    const categoryId = isNew ? selectedCategoryId : (formData.get('categoryId') as string)
+    const deptId = isNew ? selectedDeptId : (formData.get('deptId') as string)
 
     if (isNew) {
+      if (!isFormValid) return
       const result = await createKeyDev({
         title,
         desc,
-        monthRef,
         categoryId: categoryId as Id<'categories'>,
         deptId: deptId as Id<'departments'>
       })
@@ -241,7 +291,7 @@ export default function KeyDevDetailPage() {
           ← Torna alla lista
         </Link>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {isNew ? 'Nuovo KeyDev' : keydev?.title}
+          {isNew ? 'Nuovo Sviluppo Chiave' : keydev?.title}
         </h1>
         {!isNew && keydev && (
           <>
@@ -285,23 +335,16 @@ export default function KeyDevDetailPage() {
               </div>
 
               {isNew && (
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Mese <span className="text-gray-400 dark:text-gray-500 text-xs">(opzionale per bozze)</span>
-                    </label>
-                    <input
-                      type="month"
-                      name="monthRef"
-                      defaultValue=""
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                    />
-                  </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dipartimento</label>
                     <select
                       name="deptId"
-                      defaultValue=""
+                      value={selectedDeptId}
+                      onChange={(e) => {
+                        setSelectedDeptId(e.target.value)
+                        setSelectedCategoryId('') // Reset categoria quando cambia dipartimento
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
                       required
                     >
@@ -315,12 +358,14 @@ export default function KeyDevDetailPage() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categoria</label>
                     <select
                       name="categoryId"
-                      defaultValue=""
+                      value={selectedCategoryId}
+                      onChange={(e) => setSelectedCategoryId(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
                       required
+                      disabled={!selectedDeptId || availableCategories.length === 0}
                     >
-                      <option value="">Seleziona...</option>
-                      {categories?.map((c) => (
+                      <option value="">{selectedDeptId && availableCategories.length === 0 ? 'Nessuna categoria disponibile' : 'Seleziona...'}</option>
+                      {availableCategories.map((c) => (
                         <option key={c._id} value={c._id}>{c.name}</option>
                       ))}
                     </select>
@@ -331,9 +376,14 @@ export default function KeyDevDetailPage() {
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                  disabled={isNew && !isFormValid}
+                  className={`px-4 py-2 rounded-md ${
+                    isNew && !isFormValid
+                      ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 dark:text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
+                  }`}
                 >
-                  {isNew ? 'Crea KeyDev' : 'Salva Modifiche'}
+                  {isNew ? 'Crea Sviluppo Chiave' : 'Salva Modifiche'}
                 </button>
               </div>
             </div>
@@ -523,7 +573,7 @@ export default function KeyDevDetailPage() {
                               ? 'text-green-800 dark:text-green-300'
                               : 'text-red-800 dark:text-red-300'
                           }`}>
-                            Budget disponibile: <strong>{budgetForValidation.maxAlloc}</strong> KeyDevs per questa categoria/dipartimento nel mese selezionato
+                            Budget disponibile: <strong>{budgetForValidation.maxAlloc}</strong> Sviluppi Chiave per questa categoria/dipartimento nel mese selezionato
                           </p>
                         ) : (
                           <p className="text-sm text-red-800 dark:text-red-300">
@@ -570,7 +620,7 @@ export default function KeyDevDetailPage() {
                 {keydev.status === 'FrontValidated' && (userIsTechValidator || userIsAdmin) && (
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <p className="text-sm text-blue-800 dark:text-blue-300 mb-4">
-                      Come TechValidator, puoi prendere in carico questo KeyDev e iniziare lo sviluppo.
+                      Come TechValidator, puoi prendere in carico questo Sviluppo Chiave e iniziare lo sviluppo.
                     </p>
                     <button
                       onClick={handleTakeOwnership}
@@ -585,7 +635,7 @@ export default function KeyDevDetailPage() {
                 {keydev.status === 'InProgress' && (isOwner || userIsAdmin) && (
                   <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
                     <p className="text-sm text-purple-800 dark:text-purple-300 mb-4">
-                      {isOwner ? 'Sei l\'owner di questo KeyDev. ' : ''}
+                      {isOwner ? 'Sei l\'owner di questo Sviluppo Chiave. ' : ''}
                       Puoi dichiararlo completato quando lo sviluppo è terminato.
                     </p>
                     <button
@@ -601,7 +651,7 @@ export default function KeyDevDetailPage() {
                 {keydev.status === 'Done' && (
                   <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
                     <p className="text-sm text-emerald-800 dark:text-emerald-300">
-                      Questo KeyDev è stato completato con successo!
+                      Questo Sviluppo Chiave è stato completato con successo!
                     </p>
                   </div>
                 )}

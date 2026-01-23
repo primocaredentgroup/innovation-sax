@@ -1,16 +1,20 @@
-import { Outlet, Link } from '@tanstack/react-router'
+import { Outlet, Link, useNavigate, useLocation } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
-import { useConvexAuth, Authenticated, Unauthenticated, AuthLoading, useMutation, useQuery } from 'convex/react'
+import { useConvexAuth, Authenticated, useMutation, useQuery } from 'convex/react'
 import { useAuth0 } from '@auth0/auth0-react'
 import { useEffect, useMemo } from 'react'
 import { api } from '../../convex/_generated/api'
+import DarkModeToggle from './DarkModeToggle'
 
 export default function RootLayout() {
-  const { isAuthenticated } = useConvexAuth()
-  const { user, loginWithRedirect, logout } = useAuth0()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  const { user, logout } = useAuth0()
   const getOrCreateUser = useMutation(api.users.getOrCreateUser)
   const currentUser = useQuery(api.users.getCurrentUser)
   const isAdmin = useQuery(api.users.isCurrentUserAdmin)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const isLoginPage = location.pathname === '/login'
 
   const currentMonth = useMemo(() => {
     const now = new Date()
@@ -20,15 +24,46 @@ export default function RootLayout() {
   useEffect(() => {
     if (isAuthenticated) {
       getOrCreateUser()
+      // Se l'utente è autenticato e sta sulla pagina di login, reindirizzalo alla home
+      if (isLoginPage) {
+        navigate({ to: '/' })
+      }
+    } else if (!isLoading && !isAuthenticated && !isLoginPage) {
+      // Se l'utente non è autenticato e non sta già sulla pagina di login, reindirizzalo
+      navigate({ to: '/login' })
     }
-  }, [isAuthenticated, getOrCreateUser])
+  }, [isAuthenticated, isLoading, isLoginPage, getOrCreateUser, navigate])
+
+  // Se siamo sulla pagina di login, mostra solo il contenuto senza sidebar
+  if (isLoginPage) {
+    return (
+      <>
+        <Outlet />
+        {import.meta.env.DEV && <TanStackRouterDevtools />}
+      </>
+    )
+  }
+
+  // Mostra solo il loading se stiamo ancora caricando l'autenticazione
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="text-sm text-gray-500 dark:text-gray-400">Caricamento...</div>
+      </div>
+    )
+  }
+
+  // Se non è autenticato, non mostrare nulla (sarà reindirizzato)
+  if (!isAuthenticated) {
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <aside className="fixed left-0 top-0 h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-4">
         <div className="mb-8">
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Innovation Sucks</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">KeyDev Management</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Gestione Sviluppi Chiave</p>
         </div>
 
         <nav className="space-y-1">
@@ -43,13 +78,13 @@ export default function RootLayout() {
             search={{ month: currentMonth }}
             className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
           >
-            KeyDevs
+            Sviluppi Chiave
           </Link>
           <Link
             to="/core-apps"
             className="block px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400"
           >
-            Core Apps
+            Applicazioni Core
           </Link>
           <Link
             to="/profile"
@@ -82,19 +117,9 @@ export default function RootLayout() {
         </nav>
 
         <div className="absolute bottom-4 left-4 right-4">
-          <AuthLoading>
-            <div className="text-sm text-gray-500 dark:text-gray-400">Caricamento...</div>
-          </AuthLoading>
-
-          <Unauthenticated>
-            <button
-              onClick={() => loginWithRedirect()}
-              className="w-full px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
-            >
-              Accedi
-            </button>
-          </Unauthenticated>
-
+          <div className="mb-4 flex justify-center">
+            <DarkModeToggle />
+          </div>
           <Authenticated>
             <div className="flex items-center gap-3">
               {user?.picture && (
