@@ -145,7 +145,7 @@ export const markPRMerged = internalMutation({
       prMerged: true,
       status: 'Approved',
       approvedAt: Date.now(),
-      businessValidatorId: user._id,
+      techValidatorId: user._id,
       mockupTag: 'v0.9.0-business'
     })
 

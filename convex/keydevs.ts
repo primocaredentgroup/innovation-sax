@@ -9,6 +9,7 @@ type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
 const keydevReturnValidator = v.object({
   _id: v.id('keydevs'),
   _creationTime: v.number(),
+  readableId: v.string(),
   title: v.string(),
   desc: v.string(),
   monthRef: v.optional(v.string()),
@@ -68,6 +69,20 @@ export const getById = query({
   returns: v.union(keydevReturnValidator, v.null()),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id)
+  }
+})
+
+/**
+ * Ottiene un KeyDev per readableId.
+ */
+export const getByReadableId = query({
+  args: { readableId: v.string() },
+  returns: v.union(keydevReturnValidator, v.null()),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('keydevs')
+      .withIndex('by_readableId', (q) => q.eq('readableId', args.readableId))
+      .first()
   }
 })
 
@@ -145,7 +160,10 @@ export const create = mutation({
     categoryId: v.id('categories'),
     deptId: v.id('departments')
   },
-  returns: v.id('keydevs'),
+  returns: v.object({
+    id: v.id('keydevs'),
+    readableId: v.string()
+  }),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
@@ -161,7 +179,31 @@ export const create = mutation({
       throw new Error('Utente non trovato')
     }
 
-    return await ctx.db.insert('keydevs', {
+    // Genera il readableId incrementale
+    // Ottieni tutti i keydevs ordinati per readableId
+    const allKeyDevs = await ctx.db
+      .query('keydevs')
+      .withIndex('by_readableId')
+      .collect()
+    
+    // Trova il numero più alto
+    let maxNumber = 0
+    for (const kd of allKeyDevs) {
+      const match = kd.readableId.match(/^KD-(\d+)$/)
+      if (match) {
+        const num = parseInt(match[1], 10)
+        if (num > maxNumber) {
+          maxNumber = num
+        }
+      }
+    }
+    
+    // Genera il prossimo ID
+    const nextNumber = maxNumber + 1
+    const readableId = `KD-${String(nextNumber).padStart(3, '0')}`
+
+    const id = await ctx.db.insert('keydevs', {
+      readableId,
       title: args.title,
       desc: args.desc,
       monthRef: args.monthRef, // Può essere undefined per le bozze
@@ -170,6 +212,8 @@ export const create = mutation({
       requesterId: user._id,
       status: 'Draft'
     })
+
+    return { id, readableId }
   }
 })
 

@@ -82,6 +82,7 @@ export default defineSchema({
 
   // KeyDevs - entità principale
   keydevs: defineTable({
+    readableId: v.string(), // ID incrementale leggibile (es. "KD-001", "KD-002")
     title: v.string(),
     desc: v.string(),
     monthRef: v.optional(v.string()), // riferimento al mese (es. "2026-01"), opzionale per bozze
@@ -117,7 +118,8 @@ export default defineSchema({
     .index('by_category_and_month', ['categoryId', 'monthRef'])
     .index('by_requester', ['requesterId'])
     .index('by_status', ['status'])
-    .index('by_owner', ['ownerId']),
+    .index('by_owner', ['ownerId'])
+    .index('by_readableId', ['readableId']),
 
   // Notes (commenti, task, improvement)
   notes: defineTable({
@@ -152,6 +154,7 @@ export default defineSchema({
   // Core Apps
   coreApps: defineTable({
     name: v.string(),
+    slug: v.string(), // URL-friendly identifier
     description: v.optional(v.string()),
     percentComplete: v.number(), // 0-100
     repoUrl: v.optional(v.string()),
@@ -160,7 +163,7 @@ export default defineSchema({
       v.literal('InProgress'),
       v.literal('Completed')
     )
-  }),
+  }).index('by_slug', ['slug']),
 
   // Core App Weekly Updates (Loom videos)
   coreAppUpdates: defineTable({

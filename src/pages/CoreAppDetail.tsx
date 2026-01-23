@@ -1,7 +1,6 @@
 import { Link, useParams } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
-import type { Id } from '../../convex/_generated/dataModel'
 
 const statusColors: Record<string, string> = {
   Planning: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
@@ -16,12 +15,16 @@ const statusLabels: Record<string, string> = {
 }
 
 export default function CoreAppDetailPage() {
-  const { id } = useParams({ strict: false }) as { id: string }
+  const params = useParams({ strict: false }) as { slug?: string }
+  const slug = params.slug
 
-  const coreApp = useQuery(api.coreApps.getById, { id: id as Id<'coreApps'> })
-  const updates = useQuery(api.coreAppUpdates.listByCoreApp, {
-    coreAppId: id as Id<'coreApps'>
-  })
+  const coreApp = useQuery(api.coreApps.getBySlug, slug ? { slug } : 'skip')
+  
+  // Ottieni l'id dalla core app per le query degli aggiornamenti
+  const updates = useQuery(
+    api.coreAppUpdates.listByCoreApp,
+    coreApp ? { coreAppId: coreApp._id } : 'skip'
+  )
 
   if (!coreApp) {
     return (

@@ -226,10 +226,15 @@ export default function KeyDevsListPage() {
               {filteredKeyDevs.map((kd) => (
                 <tr
                   key={kd._id}
-                  onClick={() => navigate({ to: '/keydevs/$id', params: { id: kd._id } })}
+                  onClick={() => navigate({ to: '/keydevs/$id', params: { id: kd.readableId } })}
                   className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
                 >
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{kd.title}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 dark:text-gray-400 font-mono text-xs">{kd.readableId}</span>
+                      <span>{kd.title}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 text-xs rounded-full ${statusColors[kd.status]}`}>
                       {statusLabels[kd.status]}

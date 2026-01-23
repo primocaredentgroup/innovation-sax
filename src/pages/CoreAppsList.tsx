@@ -21,14 +21,20 @@ export default function CoreAppsListPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Core Apps</h1>
+        <Link
+          to="/core-apps/new"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+        >
+          + Nuova Core App
+        </Link>
       </div>
 
       <div className="grid gap-4">
         {coreApps?.map((app) => (
           <Link
             key={app._id}
-            to="/core-apps/$id"
-            params={{ id: app._id }}
+            to="/core-apps/$slug"
+            params={{ slug: app.slug }}
             className="block bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow"
           >
             <div className="flex items-start justify-between">

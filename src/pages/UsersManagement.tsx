@@ -23,10 +23,8 @@ export default function UsersManagementPage() {
 
   const updateUserRoles = useMutation(api.users.updateUserRoles)
   const updateUserDepartment = useMutation(api.users.updateUserDepartment)
-  const seedDatabase = useMutation(api.seed.seedDatabase)
 
   const [editingUser, setEditingUser] = useState<Id<'users'> | null>(null)
-  const [isSeeding, setIsSeeding] = useState(false)
   const [selectedDeptId, setSelectedDeptId] = useState<Id<'departments'> | ''>('')
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([])
 
@@ -75,32 +73,10 @@ export default function UsersManagementPage() {
     setSelectedRoles([])
   }
 
-  const handleSeedDatabase = async () => {
-    if (!confirm('Sei sicuro di voler eseguire il seed del database? Questo aggiungerà dati di esempio.')) {
-      return
-    }
-    setIsSeeding(true)
-    try {
-      await seedDatabase()
-      alert('Seed completato con successo! Ricarica la pagina per vedere i nuovi dati.')
-    } catch (error) {
-      alert(`Errore durante il seed: ${error}`)
-    } finally {
-      setIsSeeding(false)
-    }
-  }
-
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Gestione Utenti</h1>
-        <button
-          onClick={handleSeedDatabase}
-          disabled={isSeeding}
-          className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-        >
-          {isSeeding ? 'Caricamento...' : 'Esegui Seed Data'}
-        </button>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
@@ -232,7 +208,7 @@ export default function UsersManagementPage() {
 
         {users?.length === 0 && (
           <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-            Nessun utente presente. Esegui il seed-data per popolare il database.
+            Nessun utente presente.
           </div>
         )}
       </div>

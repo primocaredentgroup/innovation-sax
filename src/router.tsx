@@ -10,6 +10,7 @@ import KeyDevDetailPage from './pages/KeyDevDetail'
 import PlanningPage from './pages/Planning'
 import CoreAppsListPage from './pages/CoreAppsList'
 import CoreAppDetailPage from './pages/CoreAppDetail'
+import CoreAppNewPage from './pages/CoreAppNew'
 import ProfilePage from './pages/Profile'
 import AdminRejectedPage from './pages/AdminRejected'
 import UsersManagementPage from './pages/UsersManagement'
@@ -52,8 +53,14 @@ const coreAppsRoute = createRoute({
 
 const coreAppDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/core-apps/$id',
+  path: '/core-apps/$slug',
   component: CoreAppDetailPage
+})
+
+const coreAppNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/core-apps/new',
+  component: CoreAppNewPage
 })
 
 const profileRoute = createRoute({
@@ -88,6 +95,7 @@ const routeTree = rootRoute.addChildren([
   planningRoute,
   coreAppsRoute,
   coreAppDetailRoute,
+  coreAppNewRoute,
   profileRoute,
   adminRejectedRoute,
   usersManagementRoute,

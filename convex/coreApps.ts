@@ -11,6 +11,7 @@ const coreAppReturnValidator = v.object({
   _id: v.id('coreApps'),
   _creationTime: v.number(),
   name: v.string(),
+  slug: v.string(),
   description: v.optional(v.string()),
   percentComplete: v.number(),
   repoUrl: v.optional(v.string()),
@@ -40,18 +41,56 @@ export const getById = query({
 })
 
 /**
+ * Ottiene una Core App per slug.
+ */
+export const getBySlug = query({
+  args: { slug: v.string() },
+  returns: v.union(coreAppReturnValidator, v.null()),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('coreApps')
+      .withIndex('by_slug', (q) => q.eq('slug', args.slug))
+      .unique()
+  }
+})
+
+/**
+ * Genera uno slug URL-friendly da una stringa.
+ */
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+/**
  * Crea una nuova Core App.
  */
 export const create = mutation({
   args: {
     name: v.string(),
+    slug: v.optional(v.string()),
     description: v.optional(v.string()),
     repoUrl: v.optional(v.string())
   },
   returns: v.id('coreApps'),
   handler: async (ctx, args) => {
+    const slug = args.slug || generateSlug(args.name)
+
+    // Verifica che lo slug sia unico
+    const existing = await ctx.db
+      .query('coreApps')
+      .withIndex('by_slug', (q) => q.eq('slug', slug))
+      .unique()
+
+    if (existing) {
+      throw new Error(`Slug "${slug}" già in uso`)
+    }
+
     return await ctx.db.insert('coreApps', {
       name: args.name,
+      slug,
       description: args.description,
       percentComplete: 0,
       repoUrl: args.repoUrl,
@@ -67,6 +106,7 @@ export const update = mutation({
   args: {
     id: v.id('coreApps'),
     name: v.optional(v.string()),
+    slug: v.optional(v.string()),
     description: v.optional(v.string()),
     percentComplete: v.optional(v.number()),
     repoUrl: v.optional(v.string()),
@@ -75,6 +115,19 @@ export const update = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const { id, ...updates } = args
+
+    // Se si sta aggiornando lo slug, verifica che sia unico
+    if (updates.slug) {
+      const existing = await ctx.db
+        .query('coreApps')
+        .withIndex('by_slug', (q) => q.eq('slug', updates.slug!))
+        .unique()
+
+      if (existing && existing._id !== id) {
+        throw new Error(`Slug "${updates.slug}" già in uso`)
+      }
+    }
+
     await ctx.db.patch(id, updates)
     return null
   }
