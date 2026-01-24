@@ -1,4 +1,5 @@
 import { createRouter, createRootRoute, createRoute } from '@tanstack/react-router'
+import { z } from 'zod'
 
 // Import layout
 import RootLayout from './components/RootLayout'
@@ -31,7 +32,14 @@ const indexRoute = createRoute({
 const keydevsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/keydevs',
-  component: KeyDevsListPage
+  component: KeyDevsListPage,
+  validateSearch: z.object({
+    month: z.string().optional(),
+    dept: z.string().optional(),
+    team: z.string().optional(),
+    status: z.union([z.string(), z.array(z.string())]).optional(),
+    blockingLabel: z.string().optional()
+  })
 })
 
 const keydevDetailRoute = createRoute({

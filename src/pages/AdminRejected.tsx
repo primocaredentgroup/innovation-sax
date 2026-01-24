@@ -7,7 +7,7 @@ export default function AdminRejectedPage() {
   const currentUser = useQuery(api.users.getCurrentUser)
   const rejectedKeyDevs = useQuery(api.keydevs.listRejected)
   const departments = useQuery(api.departments.list)
-  const categories = useQuery(api.categories.list)
+  const teams = useQuery(api.teams.list)
   const users = useQuery(api.users.listUsers)
 
   const isAdmin = currentUser?.roles?.includes('Admin')
@@ -57,9 +57,9 @@ export default function AdminRejectedPage() {
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-500 dark:text-gray-400">Categoria:</span>
+                          <span className="text-gray-500 dark:text-gray-400">Team:</span>
                           <span className="ml-2 font-medium">
-                            {categories?.find((c) => c._id === kd.categoryId)?.name || 'N/A'}
+                            {teams?.find((t) => t._id === kd.teamId)?.name || 'N/A'}
                           </span>
                         </div>
                         <div>

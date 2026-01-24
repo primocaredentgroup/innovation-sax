@@ -163,8 +163,8 @@ function LoomDialog({
   )
 }
 
-// Colori per le categorie (ciclo attraverso una palette)
-const categoryColors = [
+// Colori per i team (ciclo attraverso una palette)
+const teamColors = [
   'bg-blue-500 dark:bg-blue-600',
   'bg-purple-500 dark:bg-purple-600',
   'bg-pink-500 dark:bg-pink-600',
@@ -196,7 +196,7 @@ export default function DashboardPage() {
   const okrData = useQuery(api.dashboard.getOKRScore, { monthRef: selectedMonth })
   const delayedKeyDevs = useQuery(api.dashboard.getDelayedKeyDevs, { currentMonth })
   const pastKeyDevs = useQuery(api.dashboard.getPastKeyDevs, { currentMonth })
-  const keyDevsByCategory = useQuery(api.dashboard.getKeyDevsByCategoryAndStatus, { monthRef: selectedMonth })
+  const keyDevsByTeam = useQuery(api.dashboard.getKeyDevsByTeamAndStatus, { monthRef: selectedMonth })
   const updatesByWeek = useQuery(api.dashboard.getUpdatesByWeek, { monthRef: selectedMonth })
   
   // Calcola il counter per Weekly Loom (totale update con loomUrl)
@@ -389,32 +389,32 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Grafico KeyDev per Stato con divisione per categoria */}
+          {/* Grafico KeyDev per Stato con divisione per team */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
               Sviluppi Chiave per Stato - {selectedMonth}
             </h2>
-            {keyDevsByCategory ? (
+            {keyDevsByTeam ? (
               <div className="space-y-6">
-                {keyDevsByCategory.byCategory.map((cat, catIndex) => {
-                  const categoryTotal = cat.byStatus.reduce((sum, item) => sum + item.count, 0)
-                  if (categoryTotal === 0) return null
+                {keyDevsByTeam.byTeam.map((team, teamIndex) => {
+                  const teamTotal = team.byStatus.reduce((sum, item) => sum + item.count, 0)
+                  if (teamTotal === 0) return null
                   
-                  const colorClass = categoryColors[catIndex % categoryColors.length]
+                  const colorClass = teamColors[teamIndex % teamColors.length]
                   
                   return (
-                    <div key={cat.categoryId} className="space-y-3">
+                    <div key={team.teamId} className="space-y-3">
                       <div className="flex items-center justify-between">
                         <h3 className="font-medium text-gray-900 dark:text-gray-100">
-                          {cat.categoryName}
+                          {team.teamName}
                         </h3>
                         <span className="text-sm text-gray-500 dark:text-gray-400">
-                          Totale: {categoryTotal}
+                          Totale: {teamTotal}
                         </span>
                       </div>
                       <div className="space-y-2">
-                        {cat.byStatus.map((item) => {
-                          const percentage = categoryTotal > 0 ? (item.count / categoryTotal) * 100 : 0
+                        {team.byStatus.map((item) => {
+                          const percentage = teamTotal > 0 ? (item.count / teamTotal) * 100 : 0
                           
                           return (
                             <div key={item.status}>
@@ -441,7 +441,7 @@ export default function DashboardPage() {
                     </div>
                   )
                 })}
-                {keyDevsByCategory.byCategory.length === 0 && (
+                {keyDevsByTeam.byTeam.length === 0 && (
                   <div className="text-gray-500 dark:text-gray-400 text-center py-4">
                     Nessuno Sviluppo Chiave con status Front Validato o superiore per questo mese
                   </div>
@@ -452,26 +452,26 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Monthly Progress by Category */}
+          {/* Monthly Progress by Team */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-              Completati per Categoria - {selectedMonth}
+              Completati per Team - {selectedMonth}
             </h2>
-            {okrData?.byCategory && okrData.byCategory.length > 0 ? (
+            {okrData?.byTeam && okrData.byTeam.length > 0 ? (
               <div className="space-y-4">
-                {okrData.byCategory.map((cat) => (
-                  <div key={cat.categoryId}>
+                {okrData.byTeam.map((team) => (
+                  <div key={team.teamId}>
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="font-medium text-gray-900 dark:text-gray-100">{cat.categoryName}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{team.teamName}</span>
                       <span className="text-gray-500 dark:text-gray-400">
-                        {cat.done}/{cat.total}
+                        {team.done}/{team.total}
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
                         className="bg-green-500 dark:bg-green-600 h-2 rounded-full transition-all"
                         style={{
-                          width: `${cat.total > 0 ? (cat.done / cat.total) * 100 : 0}%`
+                          width: `${team.total > 0 ? (team.done / team.total) * 100 : 0}%`
                         }}
                       />
                     </div>
@@ -479,7 +479,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-gray-500 dark:text-gray-400">Nessuna categoria con Sviluppi Chiave questo mese</div>
+              <div className="text-gray-500 dark:text-gray-400">Nessun team con Sviluppi Chiave questo mese</div>
             )}
           </div>
 

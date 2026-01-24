@@ -55,8 +55,8 @@ export default defineSchema({
     .index('by_sub', ['sub'])
     .index('by_dept', ['deptId']),
 
-  // Categories
-  categories: defineTable({
+  // Teams (ex Categories - rappresentano i team aziendali)
+  teams: defineTable({
     name: v.string()
   }),
 
@@ -69,7 +69,7 @@ export default defineSchema({
   // Departments
   departments: defineTable({
     name: v.string(),
-    categoryIds: v.array(v.id('categories'))
+    teamIds: v.array(v.id('teams'))
   }),
 
   // Months (riferimento mese e budget totale)
@@ -84,7 +84,7 @@ export default defineSchema({
     title: v.string(),
     desc: v.string(),
     monthRef: v.optional(v.string()), // riferimento al mese (es. "2026-01"), opzionale per bozze
-    categoryId: v.id('categories'),
+    teamId: v.id('teams'),
     deptId: v.id('departments'),
     requesterId: v.id('users'),
     businessValidatorId: v.optional(v.id('users')), // BusinessValidator che ha validato il front
@@ -110,7 +110,7 @@ export default defineSchema({
     .index('by_month', ['monthRef'])
     .index('by_dept_and_month', ['deptId', 'monthRef'])
     .index('by_status_and_month', ['status', 'monthRef'])
-    .index('by_category_and_month', ['categoryId', 'monthRef'])
+    .index('by_team_and_month', ['teamId', 'monthRef'])
     .index('by_requester', ['requesterId'])
     .index('by_status', ['status'])
     .index('by_owner', ['ownerId'])
@@ -137,15 +137,15 @@ export default defineSchema({
     .index('by_status', ['status'])
     .index('by_label', ['labelId']),
 
-  // Budget allocation per Dept/Category/Month
+  // Budget allocation per Dept/Team/Month
   budgetKeyDev: defineTable({
     monthRef: v.string(),
     deptId: v.id('departments'),
-    categoryId: v.id('categories'),
+    teamId: v.id('teams'),
     maxAlloc: v.number()
   })
     .index('by_month', ['monthRef'])
-    .index('by_month_dept_category', ['monthRef', 'deptId', 'categoryId']),
+    .index('by_month_dept_team', ['monthRef', 'deptId', 'teamId']),
 
   // Core Apps
   coreApps: defineTable({

@@ -16,7 +16,7 @@ export default function PlanningPage() {
   const [editValue, setEditValue] = useState('')
 
   const departments = useQuery(api.departments.list)
-  const categories = useQuery(api.categories.list)
+  const teams = useQuery(api.teams.list)
   const budgetAllocations = useQuery(api.budget.getByMonth, { monthRef: selectedMonth })
   const monthData = useQuery(api.months.getByRef, { monthRef: selectedMonth })
 
@@ -34,9 +34,9 @@ export default function PlanningPage() {
     return options
   }, [])
 
-  const getAllocation = (deptId: Id<'departments'>, categoryId: Id<'categories'>) => {
+  const getAllocation = (deptId: Id<'departments'>, teamId: Id<'teams'>) => {
     const alloc = budgetAllocations?.find(
-      (b) => b.deptId === deptId && b.categoryId === categoryId
+      (b) => b.deptId === deptId && b.teamId === teamId
     )
     return alloc?.maxAlloc ?? 0
   }
@@ -44,18 +44,18 @@ export default function PlanningPage() {
   // Calcola il totale allocato sommando i valori come vengono visualizzati nella tabella
   // Questo evita problemi con eventuali duplicati nel database
   const totalAllocated = useMemo(() => {
-    if (!departments || !categories) return 0
+    if (!departments || !teams) return 0
     
     let total = 0
     for (const dept of departments) {
-      for (const cat of categories) {
-        total += getAllocation(dept._id, cat._id)
+      for (const team of teams) {
+        total += getAllocation(dept._id, team._id)
       }
     }
     
     return total
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [budgetAllocations, departments, categories])
+  }, [budgetAllocations, departments, teams])
   
   const totalBudget = monthData?.totalKeyDev ?? 0
 
@@ -68,18 +68,18 @@ export default function PlanningPage() {
     )
   }
 
-  const handleCellClick = (deptId: Id<'departments'>, categoryId: Id<'categories'>) => {
-    const key = `${deptId}-${categoryId}`
+  const handleCellClick = (deptId: Id<'departments'>, teamId: Id<'teams'>) => {
+    const key = `${deptId}-${teamId}`
     setEditingCell(key)
-    setEditValue(String(getAllocation(deptId, categoryId)))
+    setEditValue(String(getAllocation(deptId, teamId)))
   }
 
-  const handleCellSave = async (deptId: Id<'departments'>, categoryId: Id<'categories'>) => {
+  const handleCellSave = async (deptId: Id<'departments'>, teamId: Id<'teams'>) => {
     const value = parseInt(editValue) || 0
     await updateBudget({
       monthRef: selectedMonth,
       deptId,
-      categoryId,
+      teamId,
       maxAlloc: value
     })
     setEditingCell(null)
@@ -136,11 +136,11 @@ export default function PlanningPage() {
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700 border-b">
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  Dipartimento / Categoria
+                  Dipartimento / Team
                 </th>
-                {categories?.map((cat) => (
-                  <th key={cat._id} className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    {cat.name}
+                {teams?.map((team) => (
+                  <th key={team._id} className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {team.name}
                   </th>
                 ))}
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-700">
@@ -150,8 +150,8 @@ export default function PlanningPage() {
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {departments?.map((dept) => {
-                const deptTotal = categories?.reduce(
-                  (sum, cat) => sum + getAllocation(dept._id, cat._id),
+                const deptTotal = teams?.reduce(
+                  (sum, team) => sum + getAllocation(dept._id, team._id),
                   0
                 ) ?? 0
 
@@ -160,22 +160,22 @@ export default function PlanningPage() {
                     <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                       {dept.name}
                     </td>
-                    {categories?.map((cat) => {
-                      const key = `${dept._id}-${cat._id}`
+                    {teams?.map((team) => {
+                      const key = `${dept._id}-${team._id}`
                       const isEditing = editingCell === key
-                      const value = getAllocation(dept._id, cat._id)
+                      const value = getAllocation(dept._id, team._id)
 
                       return (
-                        <td key={cat._id} className="px-4 py-3 text-center">
+                        <td key={team._id} className="px-4 py-3 text-center">
                           {isEditing ? (
                             <input
                               type="number"
                               min="0"
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={() => handleCellSave(dept._id, cat._id)}
+                              onBlur={() => handleCellSave(dept._id, team._id)}
                               onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleCellSave(dept._id, cat._id)
+                                if (e.key === 'Enter') handleCellSave(dept._id, team._id)
                                 if (e.key === 'Escape') setEditingCell(null)
                               }}
                               className="w-16 px-2 py-1 text-center border border-blue-500 dark:border-blue-400 rounded focus:outline-none"
@@ -183,7 +183,7 @@ export default function PlanningPage() {
                             />
                           ) : (
                             <button
-                              onClick={() => handleCellClick(dept._id, cat._id)}
+                              onClick={() => handleCellClick(dept._id, team._id)}
                               className={`w-12 h-8 rounded text-sm ${
                                 value > 0
                                   ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/50'
@@ -206,14 +206,14 @@ export default function PlanningPage() {
             <tfoot>
               <tr className="bg-gray-100 dark:bg-gray-700">
                 <td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Totale</td>
-                {categories?.map((cat) => {
-                  const catTotal = departments?.reduce(
-                    (sum, dept) => sum + getAllocation(dept._id, cat._id),
+                {teams?.map((team) => {
+                  const teamTotal = departments?.reduce(
+                    (sum, dept) => sum + getAllocation(dept._id, team._id),
                     0
                   ) ?? 0
                   return (
-                    <td key={cat._id} className="px-4 py-3 text-center text-sm font-semibold">
-                      {catTotal}
+                    <td key={team._id} className="px-4 py-3 text-center text-sm font-semibold">
+                      {teamTotal}
                     </td>
                   )
                 })}

@@ -30,16 +30,20 @@ export default function LoginPage() {
               <h1 className="text-3xl font-bold text-white">Innovation</h1>
             </div>
             <h2 className="text-5xl font-bold text-red-500 transform -rotate-2" style={{ fontFamily: 'cursive' }}>
-              SUCKS!
+              SAX!
             </h2>
           </div>
           
-          <p className="text-gray-300 text-lg leading-relaxed">
-            La pagina dedicata a tutto quello che ci hanno detto... e su cui <strong className="text-white">avevano ragione.</strong>
-          </p>
-          <p className="text-gray-300 text-lg leading-relaxed">
-            Talmente ragione da metterglielo online senza trovare giustificazioni, come <span className="underline">bacheca degli errori</span> da cui imparare.
-          </p>
+          <div className="flex items-center gap-4 mb-4">
+            <img 
+              src="/sax.png" 
+              alt="Sax" 
+              className="w-16 h-16 object-contain"
+            />
+            <p className="text-gray-300 text-lg leading-relaxed">
+              La musica è cambiata, vieni ad ascoltarla
+            </p>
+          </div>
         </div>
 
         {/* Sezione destra - Pulsante di login */}

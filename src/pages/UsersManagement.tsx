@@ -18,7 +18,7 @@ const allRoles: Role[] = ['Requester', 'BusinessValidator', 'TechValidator', 'Ad
 export default function UsersManagementPage() {
   const users = useQuery(api.users.listUsers)
   const departments = useQuery(api.departments.list)
-  const categories = useQuery(api.categories.list)
+  const teams = useQuery(api.teams.list)
   const currentUser = useQuery(api.users.getCurrentUser)
 
   const updateUserRoles = useMutation(api.users.updateUserRoles)
@@ -89,15 +89,15 @@ export default function UsersManagementPage() {
                   <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Email</th>
                   <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Ruolo</th>
                   <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Categorie</th>
+                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Team</th>
                   <th className="px-3 lg:px-4 py-2 lg:py-3 text-center text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Azioni</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {users?.map((user) => {
                   const userDept = departments?.find((d) => d._id === user.deptId)
-                  const userCategories = userDept
-                    ? categories?.filter((c) => userDept.categoryIds.includes(c._id))
+                  const userTeams = userDept
+                    ? teams?.filter((t) => userDept.teamIds.includes(t._id))
                     : []
                   const isEditing = editingUser === user._id
 
@@ -160,14 +160,14 @@ export default function UsersManagementPage() {
                         )}
                       </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm">
-                        {userCategories && userCategories.length > 0 ? (
+                        {userTeams && userTeams.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            {userCategories.map((cat) => (
+                            {userTeams.map((team) => (
                               <span
-                                key={cat._id}
+                                key={team._id}
                                 className="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
                               >
-                                {cat.name}
+                                {team.name}
                               </span>
                             ))}
                           </div>

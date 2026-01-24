@@ -3,16 +3,16 @@ import { api } from '../../convex/_generated/api'
 import { useState, useMemo } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 
-type Tab = 'categories' | 'departments' | 'budget' | 'blockingLabels'
+type Tab = 'teams' | 'departments' | 'budget' | 'blockingLabels'
 
 export default function AdminPage() {
   const currentUser = useQuery(api.users.getCurrentUser)
-  const categories = useQuery(api.categories.list)
+  const teams = useQuery(api.teams.list)
   const departments = useQuery(api.departments.list)
   const months = useQuery(api.months.list)
-  const createCategory = useMutation(api.categories.create)
-  const updateCategory = useMutation(api.categories.update)
-  const removeCategory = useMutation(api.categories.remove)
+  const createTeam = useMutation(api.teams.create)
+  const updateTeam = useMutation(api.teams.update)
+  const removeTeam = useMutation(api.teams.remove)
   const createDepartment = useMutation(api.departments.create)
   const updateDepartment = useMutation(api.departments.update)
   const removeDepartment = useMutation(api.departments.remove)
@@ -22,19 +22,19 @@ export default function AdminPage() {
   const updateLabel = useMutation(api.labels.update)
   const removeLabel = useMutation(api.labels.remove)
 
-  const [activeTab, setActiveTab] = useState<Tab>('categories')
-  const [editingCategory, setEditingCategory] = useState<Id<'categories'> | null>(null)
+  const [activeTab, setActiveTab] = useState<Tab>('teams')
+  const [editingTeam, setEditingTeam] = useState<Id<'teams'> | null>(null)
   const [editingDepartment, setEditingDepartment] = useState<Id<'departments'> | null>(null)
   const [editingMonth, setEditingMonth] = useState<string | null>(null)
   const [editingLabel, setEditingLabel] = useState<Id<'labels'> | null>(null)
-  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newTeamName, setNewTeamName] = useState('')
   const [newDepartmentName, setNewDepartmentName] = useState('')
-  const [newDepartmentCategories, setNewDepartmentCategories] = useState<Id<'categories'>[]>([])
+  const [newDepartmentTeams, setNewDepartmentTeams] = useState<Id<'teams'>[]>([])
   const [newMonthRef, setNewMonthRef] = useState('')
   const [newMonthBudget, setNewMonthBudget] = useState(0)
-  const [editCategoryName, setEditCategoryName] = useState('')
+  const [editTeamName, setEditTeamName] = useState('')
   const [editDepartmentName, setEditDepartmentName] = useState('')
-  const [editDepartmentCategories, setEditDepartmentCategories] = useState<Id<'categories'>[]>([])
+  const [editDepartmentTeams, setEditDepartmentTeams] = useState<Id<'teams'>[]>([])
   const [newLabelValue, setNewLabelValue] = useState('')
   const [newLabelLabel, setNewLabelLabel] = useState('')
   const [editLabelValue, setEditLabelValue] = useState('')
@@ -62,59 +62,59 @@ export default function AdminPage() {
     )
   }
 
-  // Gestione Categorie
-  const handleCreateCategory = async () => {
-    if (!newCategoryName.trim()) return
-    await createCategory({ name: newCategoryName.trim() })
-    setNewCategoryName('')
+  // Gestione Team
+  const handleCreateTeam = async () => {
+    if (!newTeamName.trim()) return
+    await createTeam({ name: newTeamName.trim() })
+    setNewTeamName('')
   }
 
-  const handleUpdateCategory = async (id: Id<'categories'>) => {
-    await updateCategory({ id, name: editCategoryName })
-    setEditingCategory(null)
-    setEditCategoryName('')
+  const handleUpdateTeam = async (id: Id<'teams'>) => {
+    await updateTeam({ id, name: editTeamName })
+    setEditingTeam(null)
+    setEditTeamName('')
   }
 
-  const handleStartEditCategory = (id: Id<'categories'>, currentName: string) => {
-    setEditingCategory(id)
-    setEditCategoryName(currentName)
+  const handleStartEditTeam = (id: Id<'teams'>, currentName: string) => {
+    setEditingTeam(id)
+    setEditTeamName(currentName)
   }
 
-  const handleCancelEditCategory = () => {
-    setEditingCategory(null)
-    setEditCategoryName('')
+  const handleCancelEditTeam = () => {
+    setEditingTeam(null)
+    setEditTeamName('')
   }
 
-  const handleRemoveCategory = async (id: Id<'categories'>) => {
-    if (!confirm('Sei sicuro di voler eliminare questa categoria?')) return
-    await removeCategory({ id })
+  const handleRemoveTeam = async (id: Id<'teams'>) => {
+    if (!confirm('Sei sicuro di voler eliminare questo team?')) return
+    await removeTeam({ id })
   }
 
   // Gestione Dipartimenti
   const handleCreateDepartment = async () => {
     if (!newDepartmentName.trim()) return
-    await createDepartment({ name: newDepartmentName.trim(), categoryIds: newDepartmentCategories })
+    await createDepartment({ name: newDepartmentName.trim(), teamIds: newDepartmentTeams })
     setNewDepartmentName('')
-    setNewDepartmentCategories([])
+    setNewDepartmentTeams([])
   }
 
   const handleUpdateDepartment = async (id: Id<'departments'>) => {
-    await updateDepartment({ id, name: editDepartmentName, categoryIds: editDepartmentCategories })
+    await updateDepartment({ id, name: editDepartmentName, teamIds: editDepartmentTeams })
     setEditingDepartment(null)
     setEditDepartmentName('')
-    setEditDepartmentCategories([])
+    setEditDepartmentTeams([])
   }
 
-  const handleStartEditDepartment = (id: Id<'departments'>, currentName: string, currentCategories: Id<'categories'>[]) => {
+  const handleStartEditDepartment = (id: Id<'departments'>, currentName: string, currentTeams: Id<'teams'>[]) => {
     setEditingDepartment(id)
     setEditDepartmentName(currentName)
-    setEditDepartmentCategories(currentCategories)
+    setEditDepartmentTeams(currentTeams)
   }
 
   const handleCancelEditDepartment = () => {
     setEditingDepartment(null)
     setEditDepartmentName('')
-    setEditDepartmentCategories([])
+    setEditDepartmentTeams([])
   }
 
   const handleRemoveDepartment = async (id: Id<'departments'>) => {
@@ -187,21 +187,21 @@ export default function AdminPage() {
     <div className="w-full max-w-full">
       <div className="mb-4 lg:mb-6">
         <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100">Amministrazione</h1>
-        <p className="text-xs lg:text-sm text-gray-600 dark:text-gray-400 mt-1">Gestisci categorie, dipartimenti, budget totale e blocking labels</p>
+        <p className="text-xs lg:text-sm text-gray-600 dark:text-gray-400 mt-1">Gestisci team, dipartimenti, budget totale e blocking labels</p>
       </div>
 
       {/* Tab Navigation */}
       <div className="border-b border-gray-200 dark:border-gray-700 mb-4 lg:mb-6 overflow-x-auto">
         <nav className="-mb-px flex space-x-4 lg:space-x-8 min-w-max lg:min-w-0">
           <button
-            onClick={() => setActiveTab('categories')}
+            onClick={() => setActiveTab('teams')}
             className={`py-3 lg:py-4 px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap ${
-              activeTab === 'categories'
+              activeTab === 'teams'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
             }`}
           >
-            Categorie
+            Team
           </button>
           <button
             onClick={() => setActiveTab('departments')}
@@ -237,24 +237,24 @@ export default function AdminPage() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'categories' && (
+      {activeTab === 'teams' && (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-        {/* Categorie */}
+        {/* Team */}
         <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Categorie</h2>
+          <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Team</h2>
         </div>
         <div className="p-4 lg:p-6">
           <div className="mb-4 flex flex-col sm:flex-row gap-2">
             <input
               type="text"
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleCreateCategory()}
-              placeholder="Nome categoria"
+              value={newTeamName}
+              onChange={(e) => setNewTeamName(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleCreateTeam()}
+              placeholder="Nome team"
               className="flex-1 px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
             />
             <button
-              onClick={handleCreateCategory}
+              onClick={handleCreateTeam}
               className="px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 whitespace-nowrap"
             >
               Aggiungi
@@ -271,18 +271,18 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {categories?.map((cat) => {
-                    const isEditing = editingCategory === cat._id
-                    const displayName = isEditing ? editCategoryName : cat.name
+                  {teams?.map((team) => {
+                    const isEditing = editingTeam === team._id
+                    const displayName = isEditing ? editTeamName : team.name
 
                     return (
-                      <tr key={cat._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <tr key={team._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">
                           {isEditing ? (
                             <input
                               type="text"
-                              value={editCategoryName}
-                              onChange={(e) => setEditCategoryName(e.target.value)}
+                              value={editTeamName}
+                              onChange={(e) => setEditTeamName(e.target.value)}
                               className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
                               autoFocus
                             />
@@ -294,13 +294,13 @@ export default function AdminPage() {
                           {isEditing ? (
                             <div className="flex gap-1 lg:gap-2 justify-center flex-wrap">
                               <button
-                                onClick={() => handleUpdateCategory(cat._id)}
+                                onClick={() => handleUpdateTeam(team._id)}
                                 className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
                               >
                                 Salva
                               </button>
                               <button
-                                onClick={handleCancelEditCategory}
+                                onClick={handleCancelEditTeam}
                                 className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
                               >
                                 Annulla
@@ -309,13 +309,13 @@ export default function AdminPage() {
                           ) : (
                             <div className="flex gap-1 lg:gap-2 justify-center flex-wrap">
                               <button
-                                onClick={() => handleStartEditCategory(cat._id, cat.name)}
+                                onClick={() => handleStartEditTeam(team._id, team.name)}
                                 className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
                               >
                                 Modifica
                               </button>
                               <button
-                                onClick={() => handleRemoveCategory(cat._id)}
+                                onClick={() => handleRemoveTeam(team._id)}
                                 className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600"
                               >
                                 Elimina
@@ -329,8 +329,8 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-            {categories?.length === 0 && (
-              <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">Nessuna categoria presente</div>
+            {teams?.length === 0 && (
+              <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">Nessun team presente</div>
             )}
           </div>
         </div>
@@ -353,23 +353,23 @@ export default function AdminPage() {
               className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
             />
             <div>
-              <label className="block text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categorie associate</label>
+              <label className="block text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Team associati</label>
               <div className="flex flex-wrap gap-2">
-                {categories?.map((cat) => (
-                  <label key={cat._id} className="flex items-center gap-2">
+                {teams?.map((team) => (
+                  <label key={team._id} className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={newDepartmentCategories.includes(cat._id)}
+                      checked={newDepartmentTeams.includes(team._id)}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setNewDepartmentCategories([...newDepartmentCategories, cat._id])
+                          setNewDepartmentTeams([...newDepartmentTeams, team._id])
                         } else {
-                          setNewDepartmentCategories(newDepartmentCategories.filter((id) => id !== cat._id))
+                          setNewDepartmentTeams(newDepartmentTeams.filter((id) => id !== team._id))
                         }
                       }}
                       className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-xs lg:text-sm text-gray-700 dark:text-gray-300">{cat.name}</span>
+                    <span className="text-xs lg:text-sm text-gray-700 dark:text-gray-300">{team.name}</span>
                   </label>
                 ))}
               </div>
@@ -388,7 +388,7 @@ export default function AdminPage() {
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-700 border-b">
                     <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Nome</th>
-                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Categorie</th>
+                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Team</th>
                     <th className="px-3 lg:px-4 py-2 lg:py-3 text-center text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Azioni</th>
                   </tr>
                 </thead>
@@ -413,35 +413,35 @@ export default function AdminPage() {
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm">
                           {isEditing ? (
                             <div className="flex flex-wrap gap-2">
-                              {categories?.map((cat) => (
-                                <label key={cat._id} className="flex items-center gap-1">
+                              {teams?.map((team) => (
+                                <label key={team._id} className="flex items-center gap-1">
                                   <input
                                     type="checkbox"
-                                    checked={editDepartmentCategories.includes(cat._id)}
+                                    checked={editDepartmentTeams.includes(team._id)}
                                     onChange={(e) => {
                                       if (e.target.checked) {
-                                        setEditDepartmentCategories([...editDepartmentCategories, cat._id])
+                                        setEditDepartmentTeams([...editDepartmentTeams, team._id])
                                       } else {
-                                        setEditDepartmentCategories(editDepartmentCategories.filter((id) => id !== cat._id))
+                                        setEditDepartmentTeams(editDepartmentTeams.filter((id) => id !== team._id))
                                       }
                                     }}
                                     className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                                   />
-                                  <span className="text-xs text-gray-700 dark:text-gray-300">{cat.name}</span>
+                                  <span className="text-xs text-gray-700 dark:text-gray-300">{team.name}</span>
                                 </label>
                               ))}
                             </div>
                           ) : (
                             <div className="flex flex-wrap gap-1">
-                              {dept.categoryIds
-                                .map((catId) => categories?.find((c) => c._id === catId))
+                              {dept.teamIds
+                                .map((teamId) => teams?.find((t) => t._id === teamId))
                                 .filter(Boolean)
-                                .map((cat) => (
+                                .map((team) => (
                                   <span
-                                    key={cat!._id}
+                                    key={team!._id}
                                     className="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
                                   >
-                                    {cat!.name}
+                                    {team!.name}
                                   </span>
                                 ))}
                             </div>
@@ -466,7 +466,7 @@ export default function AdminPage() {
                           ) : (
                             <div className="flex gap-1 lg:gap-2 justify-center flex-wrap">
                               <button
-                                onClick={() => handleStartEditDepartment(dept._id, dept.name, dept.categoryIds)}
+                                onClick={() => handleStartEditDepartment(dept._id, dept.name, dept.teamIds)}
                                 className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
                               >
                                 Modifica

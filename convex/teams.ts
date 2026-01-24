@@ -2,30 +2,30 @@ import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
 
 /**
- * Lista tutte le categorie.
+ * Lista tutti i team.
  */
 export const list = query({
   args: {},
   returns: v.array(
     v.object({
-      _id: v.id('categories'),
+      _id: v.id('teams'),
       _creationTime: v.number(),
       name: v.string()
     })
   ),
   handler: async (ctx) => {
-    return await ctx.db.query('categories').collect()
+    return await ctx.db.query('teams').collect()
   }
 })
 
 /**
- * Ottiene una categoria per ID.
+ * Ottiene un team per ID.
  */
 export const getById = query({
-  args: { id: v.id('categories') },
+  args: { id: v.id('teams') },
   returns: v.union(
     v.object({
-      _id: v.id('categories'),
+      _id: v.id('teams'),
       _creationTime: v.number(),
       name: v.string()
     }),
@@ -37,26 +37,26 @@ export const getById = query({
 })
 
 /**
- * Crea una nuova categoria.
+ * Crea un nuovo team.
  */
 export const create = mutation({
   args: {
     name: v.string()
   },
-  returns: v.id('categories'),
+  returns: v.id('teams'),
   handler: async (ctx, args) => {
-    return await ctx.db.insert('categories', {
+    return await ctx.db.insert('teams', {
       name: args.name
     })
   }
 })
 
 /**
- * Aggiorna una categoria.
+ * Aggiorna un team.
  */
 export const update = mutation({
   args: {
-    id: v.id('categories'),
+    id: v.id('teams'),
     name: v.string()
   },
   returns: v.null(),
@@ -67,11 +67,11 @@ export const update = mutation({
 })
 
 /**
- * Elimina una categoria.
+ * Elimina un team.
  */
 export const remove = mutation({
   args: {
-    id: v.id('categories')
+    id: v.id('teams')
   },
   returns: v.null(),
   handler: async (ctx, args) => {

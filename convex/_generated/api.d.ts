@@ -10,7 +10,6 @@
 
 import type * as blockingLabels from "../blockingLabels.js";
 import type * as budget from "../budget.js";
-import type * as categories from "../categories.js";
 import type * as coreAppUpdates from "../coreAppUpdates.js";
 import type * as coreApps from "../coreApps.js";
 import type * as dashboard from "../dashboard.js";
@@ -20,6 +19,7 @@ import type * as keydevs from "../keydevs.js";
 import type * as labels from "../labels.js";
 import type * as months from "../months.js";
 import type * as notes from "../notes.js";
+import type * as teams from "../teams.js";
 import type * as users from "../users.js";
 
 import type {
@@ -31,7 +31,6 @@ import type {
 declare const fullApi: ApiFromModules<{
   blockingLabels: typeof blockingLabels;
   budget: typeof budget;
-  categories: typeof categories;
   coreAppUpdates: typeof coreAppUpdates;
   coreApps: typeof coreApps;
   dashboard: typeof dashboard;
@@ -41,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   labels: typeof labels;
   months: typeof months;
   notes: typeof notes;
+  teams: typeof teams;
   users: typeof users;
 }>;
 

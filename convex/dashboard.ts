@@ -13,10 +13,10 @@ export const getOKRScore = query({
     score: v.number(),
     doneCount: v.number(),
     totalBudget: v.number(),
-    byCategory: v.array(
+    byTeam: v.array(
       v.object({
-        categoryId: v.id('categories'),
-        categoryName: v.string(),
+        teamId: v.id('teams'),
+        teamName: v.string(),
         done: v.number(),
         total: v.number()
       })
@@ -50,23 +50,23 @@ export const getOKRScore = query({
     const doneCount = keydevs.filter((kd) => kd.status === 'Done').length
     const score = totalBudget > 0 ? (doneCount / totalBudget) * 100 : 0
 
-    // Raggruppa per categoria
-    const categories = await ctx.db.query('categories').collect()
-    const byCategory = categories.map((cat) => {
-      const catKeyDevs = keydevs.filter((kd) => kd.categoryId === cat._id)
+    // Raggruppa per team
+    const teams = await ctx.db.query('teams').collect()
+    const byTeam = teams.map((team) => {
+      const teamKeyDevs = keydevs.filter((kd) => kd.teamId === team._id)
       return {
-        categoryId: cat._id,
-        categoryName: cat.name,
-        done: catKeyDevs.filter((kd) => kd.status === 'Done').length,
-        total: catKeyDevs.length
+        teamId: team._id,
+        teamName: team.name,
+        done: teamKeyDevs.filter((kd) => kd.status === 'Done').length,
+        total: teamKeyDevs.length
       }
-    }).filter((c) => c.total > 0)
+    }).filter((t) => t.total > 0)
 
     return {
       score,
       doneCount,
       totalBudget,
-      byCategory
+      byTeam
     }
   }
 })
@@ -84,7 +84,7 @@ export const getDelayedKeyDevs = query({
       monthRef: v.optional(v.string()),
       status: keydevStatusValidator,
       deptId: v.id('departments'),
-      categoryId: v.id('categories')
+      teamId: v.id('teams')
     })
   ),
   handler: async (ctx, args) => {
@@ -98,7 +98,7 @@ export const getDelayedKeyDevs = query({
         monthRef: kd.monthRef,
         status: kd.status,
         deptId: kd.deptId,
-        categoryId: kd.categoryId
+        teamId: kd.teamId
       }))
   }
 })
@@ -216,15 +216,15 @@ export const getKeyDevsByStatus = query({
 })
 
 /**
- * Ottiene i KeyDev filtrati per mese con status >= "FrontValidated", raggruppati per categoria e stato.
+ * Ottiene i KeyDev filtrati per mese con status >= "FrontValidated", raggruppati per team e stato.
  */
-export const getKeyDevsByCategoryAndStatus = query({
+export const getKeyDevsByTeamAndStatus = query({
   args: { monthRef: v.string() },
   returns: v.object({
-    byCategory: v.array(
+    byTeam: v.array(
       v.object({
-        categoryId: v.id('categories'),
-        categoryName: v.string(),
+        teamId: v.id('teams'),
+        teamName: v.string(),
         byStatus: v.array(
           v.object({
             status: v.string(),
@@ -247,15 +247,15 @@ export const getKeyDevsByCategoryAndStatus = query({
       validStatuses.includes(kd.status as typeof validStatuses[number])
     )
 
-    // Ottieni tutte le categorie
-    const categories = await ctx.db.query('categories').collect()
+    // Ottieni tutti i team
+    const teams = await ctx.db.query('teams').collect()
 
-    // Raggruppa per categoria e stato
-    const byCategory = categories.map((cat) => {
-      const catKeydevs = filteredKeydevs.filter((kd) => kd.categoryId === cat._id)
+    // Raggruppa per team e stato
+    const byTeam = teams.map((team) => {
+      const teamKeydevs = filteredKeydevs.filter((kd) => kd.teamId === team._id)
       
       const statusCounts: Record<string, number> = {}
-      for (const kd of catKeydevs) {
+      for (const kd of teamKeydevs) {
         statusCounts[kd.status] = (statusCounts[kd.status] || 0) + 1
       }
 
@@ -265,14 +265,14 @@ export const getKeyDevsByCategoryAndStatus = query({
       }))
 
       return {
-        categoryId: cat._id,
-        categoryName: cat.name,
+        teamId: team._id,
+        teamName: team.name,
         byStatus
       }
-    }).filter((cat) => cat.byStatus.some((s) => s.count > 0))
+    }).filter((team) => team.byStatus.some((s) => s.count > 0))
 
     return {
-      byCategory
+      byTeam
     }
   }
 })
@@ -331,7 +331,7 @@ export const getPastKeyDevs = query({
       monthRef: v.optional(v.string()),
       status: keydevStatusValidator,
       deptId: v.id('departments'),
-      categoryId: v.id('categories')
+      teamId: v.id('teams')
     })
   ),
   handler: async (ctx, args) => {
@@ -346,7 +346,7 @@ export const getPastKeyDevs = query({
         monthRef: kd.monthRef,
         status: kd.status,
         deptId: kd.deptId,
-        categoryId: kd.categoryId
+        teamId: kd.teamId
       }))
   }
 })

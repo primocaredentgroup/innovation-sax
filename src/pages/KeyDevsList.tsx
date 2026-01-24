@@ -31,13 +31,7 @@ const statusesWithoutMonthFilter = ['MockupDone', 'Rejected', 'Approved']
 const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done']
 
 export default function KeyDevsListPage() {
-  const search = useSearch({ strict: false }) as {
-    month?: string
-    dept?: string
-    category?: string
-    status?: string | string[]
-    blockingLabel?: string
-  }
+  const search = useSearch({ strict: false })
   const navigate = useNavigate()
 
   const currentMonth = useMemo(() => {
@@ -57,7 +51,7 @@ export default function KeyDevsListPage() {
   const statusCountsWithoutMonth = useQuery(api.keydevs.getStatusCountsWithoutMonth)
   
   const departments = useQuery(api.departments.list)
-  const categories = useQuery(api.categories.list)
+  const teams = useQuery(api.teams.list)
   const allBlockingLabels = useQuery(api.blockingLabels.list)
   const users = useQuery(api.users.listUsers)
   
@@ -111,7 +105,7 @@ export default function KeyDevsListPage() {
     return map
   }, [allBlockingLabels])
 
-  // Applica i filtri base (mese, dept, category, status) per calcolare i contatori
+  // Applica i filtri base (mese, dept, team, status) per calcolare i contatori
   const baseFilteredKeyDevs = useMemo(() => {
     if (!keydevs) return []
     let result = keydevs
@@ -119,15 +113,15 @@ export default function KeyDevsListPage() {
     if (search.dept) {
       result = result.filter((kd) => kd.deptId === search.dept)
     }
-    if (search.category) {
-      result = result.filter((kd) => kd.categoryId === search.category)
+    if (search.team) {
+      result = result.filter((kd) => kd.teamId === search.team)
     }
     if (selectedStatuses.length > 0) {
       result = result.filter((kd) => selectedStatuses.includes(kd.status))
     }
 
     return result
-  }, [keydevs, search.dept, search.category, selectedStatuses])
+  }, [keydevs, search.dept, search.team, selectedStatuses])
 
   // Calcola i contatori per ogni label di blocking basati sui keydevs filtrati
   const blockingLabelCounts = useMemo(() => {
@@ -197,7 +191,7 @@ export default function KeyDevsListPage() {
     updateSearch({ status: newStatuses.length > 0 ? newStatuses : undefined })
   }
 
-  const selectedCategory = search.category || null
+  const selectedTeam = search.team || null
 
   return (
     <div>
@@ -225,30 +219,30 @@ export default function KeyDevsListPage() {
         </Link>
       </div>
 
-      {/* Category Tabs */}
+      {/* Team Tabs */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 border-b border-gray-200 dark:border-gray-700">
         <div className="flex overflow-x-auto">
           <button
-            onClick={() => updateSearch({ category: undefined })}
+            onClick={() => updateSearch({ team: undefined })}
             className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-              selectedCategory === null
+              selectedTeam === null
                 ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
                 : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
             }`}
           >
-            Tutte le squadre
+            Tutti i team
           </button>
-          {categories?.map((category) => (
+          {teams?.map((team) => (
             <button
-              key={category._id}
-              onClick={() => updateSearch({ category: category._id })}
+              key={team._id}
+              onClick={() => updateSearch({ team: team._id })}
               className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                selectedCategory === category._id
+                selectedTeam === team._id
                   ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
                   : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
-              {category.name}
+              {team.name}
             </button>
           ))}
         </div>
@@ -353,7 +347,7 @@ export default function KeyDevsListPage() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Titolo</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Stato</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Categoria</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Team</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Owner</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Blocchi</th>
               </tr>
@@ -380,7 +374,7 @@ export default function KeyDevsListPage() {
                     {departments?.find((d) => d._id === kd.deptId)?.name || 'N/A'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                    {categories?.find((c) => c._id === kd.categoryId)?.name || 'N/A'}
+                    {teams?.find((t) => t._id === kd.teamId)?.name || 'N/A'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {kd.ownerId ? (users?.find((u) => u._id === kd.ownerId)?.name || 'N/A') : '-'}

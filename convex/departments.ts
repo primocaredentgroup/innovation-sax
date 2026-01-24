@@ -11,7 +11,7 @@ export const list = query({
       _id: v.id('departments'),
       _creationTime: v.number(),
       name: v.string(),
-      categoryIds: v.array(v.id('categories'))
+      teamIds: v.array(v.id('teams'))
     })
   ),
   handler: async (ctx) => {
@@ -29,7 +29,7 @@ export const getById = query({
       _id: v.id('departments'),
       _creationTime: v.number(),
       name: v.string(),
-      categoryIds: v.array(v.id('categories'))
+      teamIds: v.array(v.id('teams'))
     }),
     v.null()
   ),
@@ -44,13 +44,13 @@ export const getById = query({
 export const create = mutation({
   args: {
     name: v.string(),
-    categoryIds: v.array(v.id('categories'))
+    teamIds: v.array(v.id('teams'))
   },
   returns: v.id('departments'),
   handler: async (ctx, args) => {
     return await ctx.db.insert('departments', {
       name: args.name,
-      categoryIds: args.categoryIds
+      teamIds: args.teamIds
     })
   }
 })
@@ -62,7 +62,7 @@ export const update = mutation({
   args: {
     id: v.id('departments'),
     name: v.optional(v.string()),
-    categoryIds: v.optional(v.array(v.id('categories')))
+    teamIds: v.optional(v.array(v.id('teams')))
   },
   returns: v.null(),
   handler: async (ctx, args) => {

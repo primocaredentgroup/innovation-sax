@@ -109,7 +109,18 @@ export const update = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const { id, ...updates } = args
-    await ctx.db.patch(id, updates)
+    // Filtra i campi undefined per evitare di cancellare valori esistenti
+    const filteredUpdates: {
+      monthRef?: string
+      loomUrl?: string
+      title?: string
+      notes?: string
+    } = {}
+    if (updates.monthRef !== undefined) filteredUpdates.monthRef = updates.monthRef
+    if (updates.loomUrl !== undefined) filteredUpdates.loomUrl = updates.loomUrl
+    if (updates.title !== undefined) filteredUpdates.title = updates.title
+    if (updates.notes !== undefined) filteredUpdates.notes = updates.notes
+    await ctx.db.patch(id, filteredUpdates)
     return null
   }
 })

@@ -14,7 +14,7 @@ const keydevReturnValidator = v.object({
   title: v.string(),
   desc: v.string(),
   monthRef: v.optional(v.string()),
-  categoryId: v.id('categories'),
+  teamId: v.id('teams'),
   deptId: v.id('departments'),
   requesterId: v.id('users'),
   businessValidatorId: v.optional(v.id('users')),
@@ -204,7 +204,7 @@ export const create = mutation({
     title: v.string(),
     desc: v.string(),
     monthRef: v.optional(v.string()), // Opzionale per le bozze
-    categoryId: v.id('categories'),
+    teamId: v.id('teams'),
     deptId: v.id('departments')
   },
   returns: v.object({
@@ -254,7 +254,7 @@ export const create = mutation({
       title: args.title,
       desc: args.desc,
       monthRef: args.monthRef, // Può essere undefined per le bozze
-      categoryId: args.categoryId,
+      teamId: args.teamId,
       deptId: args.deptId,
       requesterId: user._id,
       status: 'Draft'
@@ -442,11 +442,11 @@ export const updateStatus = mutation({
       if (args.monthRef) {
         const budgetAlloc = await ctx.db
           .query('budgetKeyDev')
-          .withIndex('by_month_dept_category', (q) =>
+          .withIndex('by_month_dept_team', (q) =>
             q
               .eq('monthRef', args.monthRef!)
               .eq('deptId', keydev.deptId)
-              .eq('categoryId', keydev.categoryId)
+              .eq('teamId', keydev.teamId)
           )
           .first()
         
@@ -454,7 +454,7 @@ export const updateStatus = mutation({
           throw new Error(`Nessun budget disponibile per il mese ${args.monthRef}. Contatta l'amministratore per allocare il budget.`)
         }
         
-        // Conta i keydevs già validati per questo mese/dept/category
+        // Conta i keydevs già validati per questo mese/dept/team
         const existingKeydevs = await ctx.db
           .query('keydevs')
           .withIndex('by_dept_and_month', (q) =>
@@ -464,12 +464,12 @@ export const updateStatus = mutation({
         
         const validatedCount = existingKeydevs.filter(
           (kd) => 
-            kd.categoryId === keydev.categoryId && 
+            kd.teamId === keydev.teamId && 
             ['FrontValidated', 'InProgress', 'Done'].includes(kd.status)
         ).length
         
         if (validatedCount >= budgetAlloc.maxAlloc) {
-          throw new Error(`Budget esaurito per il mese ${args.monthRef}. Già ${validatedCount}/${budgetAlloc.maxAlloc} KeyDevs validati per questa categoria/dipartimento.`)
+          throw new Error(`Budget esaurito per il mese ${args.monthRef}. Già ${validatedCount}/${budgetAlloc.maxAlloc} KeyDevs validati per questo team/dipartimento.`)
         }
         
         updates.monthRef = args.monthRef

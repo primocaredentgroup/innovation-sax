@@ -12,7 +12,7 @@ export const getByMonth = query({
       _creationTime: v.number(),
       monthRef: v.string(),
       deptId: v.id('departments'),
-      categoryId: v.id('categories'),
+      teamId: v.id('teams'),
       maxAlloc: v.number()
     })
   ),
@@ -25,13 +25,13 @@ export const getByMonth = query({
 })
 
 /**
- * Ottiene l'allocazione per una specifica combinazione mese/dept/category.
+ * Ottiene l'allocazione per una specifica combinazione mese/dept/team.
  */
-export const getByMonthDeptCategory = query({
+export const getByMonthDeptTeam = query({
   args: {
     monthRef: v.string(),
     deptId: v.id('departments'),
-    categoryId: v.id('categories')
+    teamId: v.id('teams')
   },
   returns: v.union(
     v.object({
@@ -39,7 +39,7 @@ export const getByMonthDeptCategory = query({
       _creationTime: v.number(),
       monthRef: v.string(),
       deptId: v.id('departments'),
-      categoryId: v.id('categories'),
+      teamId: v.id('teams'),
       maxAlloc: v.number()
     }),
     v.null()
@@ -47,11 +47,11 @@ export const getByMonthDeptCategory = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query('budgetKeyDev')
-      .withIndex('by_month_dept_category', (q) =>
+      .withIndex('by_month_dept_team', (q) =>
         q
           .eq('monthRef', args.monthRef)
           .eq('deptId', args.deptId)
-          .eq('categoryId', args.categoryId)
+          .eq('teamId', args.teamId)
       )
       .first()
   }
@@ -64,18 +64,18 @@ export const upsert = mutation({
   args: {
     monthRef: v.string(),
     deptId: v.id('departments'),
-    categoryId: v.id('categories'),
+    teamId: v.id('teams'),
     maxAlloc: v.number()
   },
   returns: v.id('budgetKeyDev'),
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query('budgetKeyDev')
-      .withIndex('by_month_dept_category', (q) =>
+      .withIndex('by_month_dept_team', (q) =>
         q
           .eq('monthRef', args.monthRef)
           .eq('deptId', args.deptId)
-          .eq('categoryId', args.categoryId)
+          .eq('teamId', args.teamId)
       )
       .first()
 
@@ -87,7 +87,7 @@ export const upsert = mutation({
     return await ctx.db.insert('budgetKeyDev', {
       monthRef: args.monthRef,
       deptId: args.deptId,
-      categoryId: args.categoryId,
+      teamId: args.teamId,
       maxAlloc: args.maxAlloc
     })
   }

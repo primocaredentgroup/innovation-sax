@@ -58,7 +58,7 @@ export default function KeyDevDetailPage() {
     isNew ? 'skip' : (isReadableId ? { readableId: id } : { id: id as Id<'keydevs'> })
   )
   const departments = useQuery(api.departments.list)
-  const categories = useQuery(api.categories.list)
+  const teams = useQuery(api.teams.list)
   const users = useQuery(api.users.listUsers)
   const currentUser = useQuery(api.users.getCurrentUser)
   const notes = useQuery(
@@ -94,7 +94,7 @@ export default function KeyDevDetailPage() {
   const [validationCommit, setValidationCommit] = useState('')
   const [validationError, setValidationError] = useState('')
   
-  // Calcola i valori iniziali per dipartimento e categoria in base all'utente
+  // Calcola i valori iniziali per dipartimento e team in base all'utente
   const getInitialDeptId = () => {
     if (isNew && currentUser?.deptId && departments) {
       const userDept = departments.find(d => d._id === currentUser.deptId)
@@ -103,11 +103,11 @@ export default function KeyDevDetailPage() {
     return ''
   }
 
-  const getInitialCategoryId = (deptId: string) => {
-    if (isNew && deptId && categories && departments) {
+  const getInitialTeamId = (deptId: string) => {
+    if (isNew && deptId && teams && departments) {
       const userDept = departments.find(d => d._id === deptId)
-      if (userDept && userDept.categoryIds.length > 0) {
-        return userDept.categoryIds[0]
+      if (userDept && userDept.teamIds.length > 0) {
+        return userDept.teamIds[0]
       }
     }
     return ''
@@ -115,30 +115,30 @@ export default function KeyDevDetailPage() {
 
   // Stati per il form di creazione con inizializzazione lazy
   const [selectedDeptId, setSelectedDeptId] = useState<string>(() => getInitialDeptId())
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(() => getInitialCategoryId(getInitialDeptId()))
+  const [selectedTeamId, setSelectedTeamId] = useState<string>(() => getInitialTeamId(getInitialDeptId()))
   
-  // Aggiorna gli stati quando cambiano i dati dell'utente o dipartimenti/categorie
-  // Questo è necessario per sincronizzare lo stato del form con i dati esterni (utente, dipartimenti, categorie)
+  // Aggiorna gli stati quando cambiano i dati dell'utente o dipartimenti/teams
+  // Questo è necessario per sincronizzare lo stato del form con i dati esterni (utente, dipartimenti, teams)
   useEffect(() => {
     if (isNew) {
       const newDeptId = getInitialDeptId()
-      const newCategoryId = getInitialCategoryId(newDeptId)
+      const newTeamId = getInitialTeamId(newDeptId)
       // Aggiorna solo se i valori sono diversi per evitare render inutili
       if (newDeptId && newDeptId !== selectedDeptId) {
         setSelectedDeptId(newDeptId)
       }
-      if (newCategoryId && newCategoryId !== selectedCategoryId) {
-        setSelectedCategoryId(newCategoryId)
+      if (newTeamId && newTeamId !== selectedTeamId) {
+        setSelectedTeamId(newTeamId)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNew, currentUser?.deptId, departments, categories])
+  }, [isNew, currentUser?.deptId, departments, teams])
 
   // Query per il budget disponibile per la validazione
   const budgetForValidation = useQuery(
-    api.budget.getByMonthDeptCategory,
+    api.budget.getByMonthDeptTeam,
     keydev && keydev.status === 'Approved' 
-      ? { monthRef: validationMonth, deptId: keydev.deptId, categoryId: keydev.categoryId }
+      ? { monthRef: validationMonth, deptId: keydev.deptId, teamId: keydev.teamId }
       : 'skip'
   )
 
@@ -162,16 +162,16 @@ export default function KeyDevDetailPage() {
   const mockupRepoUrl = mockupRepoUrlInput || keydev?.mockupRepoUrl || ''
 
 
-  // Filtra le categorie in base al dipartimento selezionato
-  const availableCategories = useMemo(() => {
-    if (!categories || !selectedDeptId) return []
+  // Filtra i team in base al dipartimento selezionato
+  const availableTeams = useMemo(() => {
+    if (!teams || !selectedDeptId) return []
     const selectedDept = departments?.find(d => d._id === selectedDeptId)
     if (!selectedDept) return []
-    return categories.filter(c => selectedDept.categoryIds.includes(c._id))
-  }, [categories, selectedDeptId, departments])
+    return teams.filter(t => selectedDept.teamIds.includes(t._id))
+  }, [teams, selectedDeptId, departments])
 
-  // Verifica se il form è valido (dipartimento e categoria selezionati)
-  const isFormValid = selectedDeptId !== '' && selectedCategoryId !== '' && availableCategories.some(c => c._id === selectedCategoryId)
+  // Verifica se il form è valido (dipartimento e team selezionati)
+  const isFormValid = selectedDeptId !== '' && selectedTeamId !== '' && availableTeams.some(t => t._id === selectedTeamId)
 
   // Ruoli e permessi utente corrente
   const userRoles = currentUser?.roles as Role[] | undefined
@@ -190,7 +190,7 @@ export default function KeyDevDetailPage() {
     const formData = new FormData(e.currentTarget)
     const title = formData.get('title') as string
     const desc = formData.get('desc') as string
-    const categoryId = isNew ? selectedCategoryId : (formData.get('categoryId') as string)
+    const teamId = isNew ? selectedTeamId : (formData.get('teamId') as string)
     const deptId = isNew ? selectedDeptId : (formData.get('deptId') as string)
 
     if (isNew) {
@@ -198,7 +198,7 @@ export default function KeyDevDetailPage() {
       const result = await createKeyDev({
         title,
         desc,
-        categoryId: categoryId as Id<'categories'>,
+        teamId: teamId as Id<'teams'>,
         deptId: deptId as Id<'departments'>
       })
       navigate({ to: '/keydevs/$id', params: { id: result.readableId } })
@@ -343,7 +343,7 @@ export default function KeyDevDetailPage() {
                       value={selectedDeptId}
                       onChange={(e) => {
                         setSelectedDeptId(e.target.value)
-                        setSelectedCategoryId('') // Reset categoria quando cambia dipartimento
+                        setSelectedTeamId('') // Reset team quando cambia dipartimento
                       }}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
                       required
@@ -355,18 +355,18 @@ export default function KeyDevDetailPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categoria</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Team</label>
                     <select
-                      name="categoryId"
-                      value={selectedCategoryId}
-                      onChange={(e) => setSelectedCategoryId(e.target.value)}
+                      name="teamId"
+                      value={selectedTeamId}
+                      onChange={(e) => setSelectedTeamId(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
                       required
-                      disabled={!selectedDeptId || availableCategories.length === 0}
+                      disabled={!selectedDeptId || availableTeams.length === 0}
                     >
-                      <option value="">{selectedDeptId && availableCategories.length === 0 ? 'Nessuna categoria disponibile' : 'Seleziona...'}</option>
-                      {availableCategories.map((c) => (
-                        <option key={c._id} value={c._id}>{c.name}</option>
+                      <option value="">{selectedDeptId && availableTeams.length === 0 ? 'Nessun team disponibile' : 'Seleziona...'}</option>
+                      {availableTeams.map((t) => (
+                        <option key={t._id} value={t._id}>{t.name}</option>
                       ))}
                     </select>
                   </div>
@@ -573,11 +573,11 @@ export default function KeyDevDetailPage() {
                               ? 'text-green-800 dark:text-green-300'
                               : 'text-red-800 dark:text-red-300'
                           }`}>
-                            Budget disponibile: <strong>{budgetForValidation.maxAlloc}</strong> Sviluppi Chiave per questa categoria/dipartimento nel mese selezionato
+                            Budget disponibile: <strong>{budgetForValidation.maxAlloc}</strong> Sviluppi Chiave per questo team/dipartimento nel mese selezionato
                           </p>
                         ) : (
                           <p className="text-sm text-red-800 dark:text-red-300">
-                            Nessun budget allocato per questa combinazione mese/dipartimento/categoria.
+                            Nessun budget allocato per questa combinazione mese/dipartimento/team.
                             Contatta l'amministratore.
                           </p>
                         )}
@@ -778,9 +778,9 @@ export default function KeyDevDetailPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-sm text-gray-500 dark:text-gray-400">Categoria</dt>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">Team</dt>
                   <dd className="font-medium text-gray-900 dark:text-gray-100">
-                    {categories?.find((c) => c._id === keydev.categoryId)?.name || 'N/A'}
+                    {teams?.find((t) => t._id === keydev.teamId)?.name || 'N/A'}
                   </dd>
                 </div>
                 <div>
