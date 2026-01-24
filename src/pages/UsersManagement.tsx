@@ -110,162 +110,321 @@ export default function UsersManagementPage() {
         <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100">Gestione Utenti</h1>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto -mx-4 lg:mx-0">
-          <div className="inline-block min-w-full align-middle">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-700 border-b">
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Nome</th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Email</th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Ruolo</th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Team</th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-center text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Azioni</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {users?.map((user) => {
-                  const userDept = departments?.find((d) => d._id === user.deptId)
-                  const isEditing = editingUser === user._id
+      {/* Vista mobile: schede */}
+      <div className="md:hidden space-y-4">
+        {users?.map((user) => {
+          const userDept = departments?.find((d) => d._id === user.deptId)
+          const userTeam = teams?.find((t) => t._id === user.teamId)
+          const isEditing = editingUser === user._id
 
-                  return (
-                    <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-700">
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm">
-                        {isEditing ? (
+          return (
+            <div key={user._id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              {isEditing ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Nome
+                    </label>
+                    <input
+                      type="text"
+                      value={editedName}
+                      onChange={(e) => setEditedName(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Email
+                    </label>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{user.email || '-'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Ruoli
+                    </label>
+                    <div className="space-y-2">
+                      {allRoles.map((role) => (
+                        <label key={role} className="flex items-center gap-2 cursor-pointer">
                           <input
-                            type="text"
-                            value={editedName}
-                            onChange={(e) => setEditedName(e.target.value)}
-                            className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                            type="checkbox"
+                            checked={selectedRoles.includes(role)}
+                            onChange={() => handleToggleRole(role)}
+                            className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                           />
-                        ) : (
-                          <span className="text-gray-900 dark:text-gray-100">{user.name}</span>
-                        )}
-                      </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-600 dark:text-gray-400 truncate max-w-[150px] lg:max-w-none">{user.email || '-'}</td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm">
-                        {isEditing ? (
-                          <div className="flex flex-wrap gap-1 lg:gap-2">
-                            {allRoles.map((role) => (
-                              <label key={role} className="flex items-center gap-1 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedRoles.includes(role)}
-                                  onChange={() => handleToggleRole(role)}
-                                  className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-xs">{roleLabels[role]}</span>
-                              </label>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {(user.roles || ['Requester']).map((role) => (
-                              <span
-                                key={role}
-                                className={`px-2 py-1 text-xs rounded-full ${
-                                  role === 'Admin'
-                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-                                    : role === 'TechValidator'
-                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
-                                    : role === 'BusinessValidator'
-                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
-                                }`}
-                              >
-                                {roleLabels[role as Role]}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm">
-                        {isEditing ? (
-                          <select
-                            value={selectedDeptId}
-                            onChange={(e) => setSelectedDeptId(e.target.value as Id<'departments'> | '')}
-                            className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
-                          >
-                            <option value="">Nessun dipartimento</option>
-                            {departments?.map((dept) => (
-                              <option key={dept._id} value={dept._id}>
-                                {dept.name}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-gray-900 dark:text-gray-100">{userDept?.name || '-'}</span>
-                        )}
-                      </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm">
-                        {isEditing ? (
-                          <select
-                            value={selectedTeamId}
-                            onChange={(e) => setSelectedTeamId(e.target.value as Id<'teams'> | '')}
-                            className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
-                          >
-                            <option value="">Nessun team</option>
-                            {teams?.map((team) => (
-                              <option key={team._id} value={team._id}>
-                                {team.name}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <>
-                            {user.teamId ? (
-                              (() => {
-                                const userTeam = teams?.find((t) => t._id === user.teamId)
-                                return userTeam ? (
-                                  <span className="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
-                                    {userTeam.name}
-                                  </span>
-                                ) : (
-                                  <span className="text-gray-400 dark:text-gray-500">-</span>
-                                )
-                              })()
-                            ) : (
-                              <span className="text-gray-400 dark:text-gray-500">-</span>
-                            )}
-                          </>
-                        )}
-                      </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-center">
-                        {isEditing ? (
-                          <div className="flex gap-1 lg:gap-2 justify-center flex-wrap">
-                            <button
-                              onClick={() => handleSaveUser(user._id)}
-                              className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
-                            >
-                              Salva
-                            </button>
-                            <button
-                              onClick={handleCancelEdit}
-                              className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
-                            >
-                              Annulla
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleEditUser(user._id, user.name, user.deptId, (user.roles || ['Requester']) as Role[], user.teamId ?? undefined)}
-                            className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
-                          >
-                            Modifica
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                          <span className="text-sm text-gray-900 dark:text-gray-100">{roleLabels[role]}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Dipartimento
+                    </label>
+                    <select
+                      value={selectedDeptId}
+                      onChange={(e) => setSelectedDeptId(e.target.value as Id<'departments'> | '')}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                    >
+                      <option value="">Nessun dipartimento</option>
+                      {departments?.map((dept) => (
+                        <option key={dept._id} value={dept._id}>
+                          {dept.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Team
+                    </label>
+                    <select
+                      value={selectedTeamId}
+                      onChange={(e) => setSelectedTeamId(e.target.value as Id<'teams'> | '')}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                    >
+                      <option value="">Nessun team</option>
+                      {teams?.map((team) => (
+                        <option key={team._id} value={team._id}>
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => handleSaveUser(user._id)}
+                      className="flex-1 px-4 py-2 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                    >
+                      Salva
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      className="flex-1 px-4 py-2 text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                    >
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Nome</div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{user.name}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Email</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{user.email || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Ruoli</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(user.roles || ['Requester']).map((role) => (
+                        <span
+                          key={role}
+                          className={`px-2 py-1 text-xs rounded-full ${
+                            role === 'Admin'
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                              : role === 'TechValidator'
+                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
+                              : role === 'BusinessValidator'
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+                          }`}
+                        >
+                          {roleLabels[role as Role]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Dipartimento</div>
+                    <div className="text-sm text-gray-900 dark:text-gray-100">{userDept?.name || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Team</div>
+                    {userTeam ? (
+                      <span className="inline-block px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                        {userTeam.name}
+                      </span>
+                    ) : (
+                      <div className="text-sm text-gray-400 dark:text-gray-500">-</div>
+                    )}
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      onClick={() => handleEditUser(user._id, user.name, user.deptId, (user.roles || ['Requester']) as Role[], user.teamId ?? undefined)}
+                      className="w-full px-4 py-2 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                    >
+                      Modifica
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {users?.length === 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            Nessun utente presente.
           </div>
+        )}
+      </div>
+
+      {/* Vista desktop: tabella */}
+      <div className="hidden md:block bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead>
+              <tr className="bg-gray-50 dark:bg-gray-700 border-b">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Nome</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Email</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Ruolo</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Team</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-gray-100">Azioni</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {users?.map((user) => {
+                const userDept = departments?.find((d) => d._id === user.deptId)
+                const isEditing = editingUser === user._id
+
+                return (
+                  <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-700">
+                    <td className="px-4 py-3 text-sm">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editedName}
+                          onChange={(e) => setEditedName(e.target.value)}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                        />
+                      ) : (
+                        <span className="text-gray-900 dark:text-gray-100">{user.name}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{user.email || '-'}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {isEditing ? (
+                        <div className="flex flex-wrap gap-2">
+                          {allRoles.map((role) => (
+                            <label key={role} className="flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={selectedRoles.includes(role)}
+                                onChange={() => handleToggleRole(role)}
+                                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-xs">{roleLabels[role]}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {(user.roles || ['Requester']).map((role) => (
+                            <span
+                              key={role}
+                              className={`px-2 py-1 text-xs rounded-full ${
+                                role === 'Admin'
+                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                                  : role === 'TechValidator'
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
+                                  : role === 'BusinessValidator'
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+                              }`}
+                            >
+                              {roleLabels[role as Role]}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {isEditing ? (
+                        <select
+                          value={selectedDeptId}
+                          onChange={(e) => setSelectedDeptId(e.target.value as Id<'departments'> | '')}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                        >
+                          <option value="">Nessun dipartimento</option>
+                          {departments?.map((dept) => (
+                            <option key={dept._id} value={dept._id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-gray-900 dark:text-gray-100">{userDept?.name || '-'}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {isEditing ? (
+                        <select
+                          value={selectedTeamId}
+                          onChange={(e) => setSelectedTeamId(e.target.value as Id<'teams'> | '')}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                        >
+                          <option value="">Nessun team</option>
+                          {teams?.map((team) => (
+                            <option key={team._id} value={team._id}>
+                              {team.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <>
+                          {user.teamId ? (
+                            (() => {
+                              const userTeam = teams?.find((t) => t._id === user.teamId)
+                              return userTeam ? (
+                                <span className="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                                  {userTeam.name}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 dark:text-gray-500">-</span>
+                              )
+                            })()
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-500">-</span>
+                          )}
+                        </>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {isEditing ? (
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => handleSaveUser(user._id)}
+                            className="px-3 py-1 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                          >
+                            Salva
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                          >
+                            Annulla
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleEditUser(user._id, user.name, user.deptId, (user.roles || ['Requester']) as Role[], user.teamId ?? undefined)}
+                          className="px-3 py-1 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                        >
+                          Modifica
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
 
         {users?.length === 0 && (
-          <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">
+          <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
             Nessun utente presente.
           </div>
         )}

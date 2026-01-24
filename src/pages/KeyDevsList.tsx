@@ -1,8 +1,9 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
-import { useMemo } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
+import { ChevronDown, X } from 'lucide-react'
 
 const statusColors: Record<string, string> = {
   Draft: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
@@ -35,6 +36,8 @@ const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValida
 export default function KeyDevsListPage() {
   const search = useSearch({ strict: false })
   const navigate = useNavigate()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const currentMonth = useMemo(() => {
     const now = new Date()
@@ -128,44 +131,10 @@ export default function KeyDevsListPage() {
     return result
   }, [keydevs, search.dept, search.team, selectedStatuses])
 
-  // Calcola i contatori per ogni label di blocking basati sui keydevs filtrati
-  const blockingLabelCounts = useMemo(() => {
-    const counts = new Map<Id<'labels'>, { label: { value: string; label: string }; count: number }>()
-    if (allBlockingLabels && baseFilteredKeyDevs.length > 0) {
-      // Raggruppa per labelId
-      const labelMap = new Map<Id<'labels'>, { label: { value: string; label: string }; keyDevIds: Set<Id<'keydevs'>> }>()
-      
-      for (const bl of allBlockingLabels) {
-        if (!labelMap.has(bl.labelId)) {
-          labelMap.set(bl.labelId, { label: bl.label, keyDevIds: new Set() })
-        }
-        labelMap.get(bl.labelId)!.keyDevIds.add(bl.keyDevId)
-      }
-      
-      // Conta solo i keydevs che sono nella lista filtrata corrente
-      for (const [labelId, data] of labelMap.entries()) {
-        const matchingKeyDevs = baseFilteredKeyDevs.filter(kd => data.keyDevIds.has(kd._id))
-        if (matchingKeyDevs.length > 0) {
-          counts.set(labelId, { label: data.label, count: matchingKeyDevs.length })
-        }
-      }
-    }
-    return counts
-  }, [allBlockingLabels, baseFilteredKeyDevs])
-
-  // Filter keydevs based on search params (usa baseFilteredKeyDevs e aggiunge il filtro blockingLabel)
+  // Filter keydevs based on search params
   const filteredKeyDevs = useMemo(() => {
-    let result = baseFilteredKeyDevs
-
-    if (search.blockingLabel) {
-      result = result.filter((kd) => {
-        const labels = blockingLabelsByKeyDev.get(kd._id) || []
-        return labels.some((l) => l.labelId === search.blockingLabel)
-      })
-    }
-
-    return result
-  }, [baseFilteredKeyDevs, search.blockingLabel, blockingLabelsByKeyDev])
+    return baseFilteredKeyDevs
+  }, [baseFilteredKeyDevs])
 
   // Calcola l'utilizzo del budget (slot occupati vs slot massimi disponibili)
   const budgetUtilization = useMemo(() => {
@@ -234,40 +203,70 @@ export default function KeyDevsListPage() {
 
   const selectedTeam = search.team || null
 
+  // Chiudi dropdown quando si clicca fuori
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [dropdownOpen])
+
+  // Testo del pulsante dropdown
+  const dropdownButtonText = useMemo(() => {
+    if (selectedStatuses.length === 0) {
+      return 'Tutti gli stati'
+    }
+    if (selectedStatuses.length === 1) {
+      return statusLabels[selectedStatuses[0]]
+    }
+    return `${selectedStatuses.length} stati selezionati`
+  }, [selectedStatuses])
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Sviluppi Chiave di</h1>
-          <select
-            value={selectedMonth}
-            onChange={(e) => updateSearch({ month: e.target.value })}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-lg font-semibold"
-          >
-            {monthOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">per</span>
-          <select
-            value={search.dept || ''}
-            onChange={(e) => updateSearch({ dept: e.target.value || undefined })}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-lg font-semibold"
-          >
-            <option value="">Tutti i dipartimenti</option>
-            {departments?.map((d) => (
-              <option key={d._id} value={d._id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:flex-wrap">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Sviluppi Chiave di</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={selectedMonth}
+              onChange={(e) => updateSearch({ month: e.target.value })}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-base sm:text-lg font-semibold"
+            >
+              {monthOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 hidden sm:inline">per</span>
+            <select
+              value={search.dept || ''}
+              onChange={(e) => updateSearch({ dept: e.target.value || undefined })}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-base sm:text-lg font-semibold"
+            >
+              <option value="">Tutti i dipartimenti</option>
+              {departments?.map((d) => (
+                <option key={d._id} value={d._id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <Link
           to="/keydevs/$id"
           params={{ id: 'new' }}
-          className="px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-medium rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors border border-blue-600 dark:border-blue-500"
+          className="px-3 sm:px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-medium rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors border border-blue-600 dark:border-blue-500 text-sm sm:text-base whitespace-nowrap self-start sm:self-auto"
         >
           + Nuovo Sviluppo Chiave
         </Link>
@@ -275,8 +274,8 @@ export default function KeyDevsListPage() {
 
       {/* Budget Utilization Card */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
             <div>
               <span className="text-sm text-gray-500 dark:text-gray-400">Slot occupati:</span>
               <span className="ml-2 font-semibold text-gray-900 dark:text-gray-100">
@@ -292,7 +291,7 @@ export default function KeyDevsListPage() {
                 {budgetUtilization.budgetAssigned}
               </span>
               {budgetUtilization.competitionSlots > 0 && (
-                <span className="ml-2 text-sm font-medium text-orange-600 dark:text-orange-400">
+                <span className="ml-2 text-sm font-medium text-orange-600 dark:text-orange-400 block sm:inline">
                   ({budgetUtilization.competitionSlots} in competizione)
                 </span>
               )}
@@ -348,61 +347,123 @@ export default function KeyDevsListPage() {
         )}
       </div>
 
-      {/* Team Tabs and Blocking Label Filter */}
+      {/* Team Tabs */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between">
-          <div className="flex overflow-x-auto flex-1">
+        <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <button
+            onClick={() => updateSearch({ team: undefined })}
+            className={`px-4 sm:px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              selectedTeam === null
+                ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+            }`}
+          >
+            Tutti i team
+          </button>
+          {teams?.map((team) => (
             <button
-              onClick={() => updateSearch({ team: undefined })}
-              className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                selectedTeam === null
+              key={team._id}
+              onClick={() => updateSearch({ team: team._id })}
+              className={`px-4 sm:px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                selectedTeam === team._id
                   ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
                   : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
-              Tutti i team
+              {team.name}
             </button>
-            {teams?.map((team) => (
-              <button
-                key={team._id}
-                onClick={() => updateSearch({ team: team._id })}
-                className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  selectedTeam === team._id
-                    ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
-                }`}
-              >
-                {team.name}
-              </button>
-            ))}
-          </div>
-          <div className="ml-4 px-4 py-3">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Filtra per Blocking Label
-            </label>
-            <select
-              value={search.blockingLabel || ''}
-              onChange={(e) => updateSearch({ blockingLabel: e.target.value || undefined })}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-            >
-              <option value="">Tutti</option>
-              {Array.from(blockingLabelCounts.entries())
-                .sort((a, b) => a[1].label.label.localeCompare(b[1].label.label))
-                .map(([labelId, data]) => (
-                  <option key={labelId} value={labelId}>
-                    {data.label.label} ({data.count})
-                  </option>
-                ))}
-            </select>
-          </div>
+          ))}
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6 space-y-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 sm:p-4 mb-6 space-y-4">
 
-        {/* Status Filters - Tag Style */}
-        <div>
+        {/* Status Filters - Dropdown (Mobile) */}
+        <div className="md:hidden" ref={dropdownRef}>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Filtra per Stato
+          </label>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm hover:border-blue-500 dark:hover:border-blue-500 transition-colors text-left"
+            >
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {dropdownButtonText}
+              </span>
+              <ChevronDown 
+                size={20} 
+                className={`text-gray-500 dark:text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-[320px] overflow-y-auto">
+                <div className="p-2 space-y-1">
+                  {statusOrder.map((key) => {
+                    const label = statusLabels[key]
+                    const isSelected = selectedStatuses.includes(key)
+                    const count = statusCounts?.[key] || 0
+                    const hasNoMonthFilter = statusesWithoutMonthFilter.includes(key)
+                    
+                    return (
+                      <label
+                        key={key}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                          isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleStatus(key)}
+                          className="w-4 h-4 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-2"
+                        />
+                        <div className="flex-1 flex items-center gap-2">
+                          <span className={`px-2 py-1 text-xs rounded-full ${statusColors[key]}`}>
+                            {label}
+                          </span>
+                          {hasNoMonthFilter && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400" title="Non filtrato per mese">*</span>
+                          )}
+                          {count > 0 && (
+                            <span className="ml-auto text-xs font-medium text-gray-500 dark:text-gray-400">
+                              ({count})
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+                <div className="border-t border-gray-200 dark:border-gray-700 p-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 px-2">
+                      * Stati non filtrati per mese
+                    </p>
+                    {selectedStatuses.length > 0 && (
+                      <button
+                        onClick={() => {
+                          updateSearch({ status: undefined })
+                          setDropdownOpen(false)
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                      >
+                        <X size={14} />
+                        Rimuovi filtri
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Status Filters - Tag Style (Desktop) */}
+        <div className="hidden md:block">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Filtra per Stato
           </label>
@@ -450,9 +511,91 @@ export default function KeyDevsListPage() {
         </div>
       </div>
 
-      {/* KeyDev List Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* KeyDev List - Card View (Mobile) */}
+      <div className="md:hidden space-y-3">
+        {filteredKeyDevs.length === 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center text-gray-500 dark:text-gray-400">
+            Nessuno Sviluppo Chiave trovato per i filtri selezionati
+          </div>
+        ) : (
+          filteredKeyDevs.map((kd) => {
+            const labels = blockingLabelsByKeyDev.get(kd._id) || []
+            const openLabels = labels.filter((l) => l.status === 'Open')
+            const closedLabels = labels.filter((l) => l.status === 'Closed')
+            
+            return (
+              <div
+                key={kd._id}
+                onClick={() => navigate({ to: '/keydevs/$id', params: { id: kd.readableId } })}
+                className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 hover:shadow-md transition-shadow cursor-pointer border border-gray-200 dark:border-gray-700"
+              >
+                {/* Header con ID e Stato */}
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-gray-500 dark:text-gray-400 font-mono text-xs">{kd.readableId}</span>
+                      <span className={`px-2 py-1 text-xs rounded-full ${statusColors[kd.status]}`}>
+                        {statusLabels[kd.status]}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 wrap-break-word">
+                      {kd.title}
+                    </h3>
+                  </div>
+                </div>
+
+                {/* Informazioni aggiuntive */}
+                <div className="space-y-2 mb-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-medium">Dipartimento:</span>
+                    <span>{departments?.find((d) => d._id === kd.deptId)?.name || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-medium">Team:</span>
+                    <span>{teams?.find((t) => t._id === kd.teamId)?.name || 'N/A'}</span>
+                  </div>
+                  {kd.ownerId && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <span className="font-medium">Owner:</span>
+                      <span>{users?.find((u) => u._id === kd.ownerId)?.name || 'N/A'}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Blocchi */}
+                {(openLabels.length > 0 || closedLabels.length > 0) && (
+                  <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex flex-wrap gap-2">
+                      {openLabels.map((bl) => (
+                        <span
+                          key={`open-${bl.labelId}`}
+                          className="px-2 py-1 text-xs rounded-full bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"
+                          title={`${bl.label.label} (Aperto)`}
+                        >
+                          {bl.label.label}
+                        </span>
+                      ))}
+                      {closedLabels.map((bl) => (
+                        <span
+                          key={`closed-${bl.labelId}`}
+                          className="px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 line-through"
+                          title={`${bl.label.label} (Chiuso)`}
+                        >
+                          {bl.label.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {/* KeyDev List Table (Desktop) */}
+      <div className="hidden md:block bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
@@ -460,7 +603,7 @@ export default function KeyDevsListPage() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Stato</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Team</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Owner</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 hidden lg:table-cell">Owner</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Blocchi</th>
               </tr>
             </thead>
@@ -488,7 +631,7 @@ export default function KeyDevsListPage() {
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {teams?.find((t) => t._id === kd.teamId)?.name || 'N/A'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 hidden lg:table-cell">
                     {kd.ownerId ? (users?.find((u) => u._id === kd.ownerId)?.name || 'N/A') : '-'}
                   </td>
                   <td className="px-4 py-3 text-sm">

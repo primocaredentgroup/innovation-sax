@@ -600,44 +600,47 @@ export default function KeyDevDetailPage() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-4">
+    <div className="w-full max-w-full overflow-x-hidden">
+      {/* Header responsive */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0">
           <Link
             to="/keydevs"
             search={{ month: keydev?.monthRef || currentMonth }}
-            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            className="text-sm sm:text-base text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap"
           >
             ← Torna alla lista
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {isNew ? 'Nuovo Sviluppo Chiave' : keydev?.title}
-          </h1>
-          {!isNew && keydev && (
-            <>
-              <span className="px-3 py-1 rounded-md text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                {keydev.readableId}
-              </span>
-              <div className="flex items-center gap-3">
-                <span className={`px-3 py-1 rounded-full text-sm ${statusColors[keydev.status]}`}>
-                  {statusLabels[keydev.status]}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
+              {isNew ? 'Nuovo Sviluppo Chiave' : keydev?.title}
+            </h1>
+            {!isNew && keydev && (
+              <>
+                <span className="px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                  {keydev.readableId}
                 </span>
-                {/* Pulsante per riportare in Bozza quando rifiutato */}
-                {keydev.status === 'Rejected' && (isRequester || userIsAdmin) && (
-                  <button
-                    onClick={async () => {
-                      if (!confirm('Sei sicuro di voler riportare questo sviluppo in Bozza? Potrai modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato".')) return
-                      await updateStatus({ id: keydev._id, status: 'Draft' })
-                    }}
-                    className="px-4 py-1 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm font-medium"
-                    title="Riporta in Bozza per modificare il mockup"
-                  >
-                    ↶ Riporta in Bozza
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm ${statusColors[keydev.status]}`}>
+                    {statusLabels[keydev.status]}
+                  </span>
+                  {/* Pulsante per riportare in Bozza quando rifiutato */}
+                  {keydev.status === 'Rejected' && (isRequester || userIsAdmin) && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Sei sicuro di voler riportare questo sviluppo in Bozza? Potrai modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato".')) return
+                        await updateStatus({ id: keydev._id, status: 'Draft' })
+                      }}
+                      className="px-3 sm:px-4 py-1 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-xs sm:text-sm font-medium whitespace-nowrap"
+                      title="Riporta in Bozza per modificare il mockup"
+                    >
+                      ↶ Riporta in Bozza
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
         {!isNew && keydev && (
           <button
@@ -649,7 +652,7 @@ export default function KeyDevDetailPage() {
                 search: newShowNotesPage ? { notes: 'true' } : {}
               })
             }}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
               showNotesPage
                 ? 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
@@ -660,9 +663,10 @@ export default function KeyDevDetailPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      {/* Layout responsive: singola colonna su mobile, due colonne su desktop */}
+      <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Form */}
-        <div className="col-span-2 space-y-6">
+        <div className="w-full lg:col-span-2 space-y-4 sm:space-y-6">
           {showNotesPage ? (
             /* Sottopagina Note */
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -685,25 +689,25 @@ export default function KeyDevDetailPage() {
                           ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' 
                           : 'bg-gray-50 dark:bg-gray-700/50'
                       }`}>
-                        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                               {formatUserName(users?.find((u) => u._id === note.authorId)?.name)}
                             </span>
                             {note.type === 'Mention' && mentionedUsers.length > 0 && (
-                              <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded">
+                              <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded wrap-break-word">
                                 Menzione → {mentionedUsers.map(u => formatUserName(u?.name)).filter(Boolean).join(', ')}
                               </span>
                             )}
-                            <span className="text-sm text-gray-400 dark:text-gray-500">
+                            <span className="text-xs sm:text-sm text-gray-400 dark:text-gray-500">
                               {new Date(note.ts).toLocaleString('it-IT')}
                             </span>
                           </div>
                           {canEdit && !isEditing && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <button
                                 onClick={() => handleStartEditNote(note._id)}
-                                className="text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                                className="text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
                                 title="Modifica nota"
                               >
                                 ✏️ Modifica
@@ -711,24 +715,24 @@ export default function KeyDevDetailPage() {
                               {!isConfirmDelete && (
                                 <button
                                   onClick={() => handleDeleteNoteClick(note._id)}
-                                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
                                   title="Elimina nota"
                                 >
                                   🗑️ Elimina
                                 </button>
                               )}
                               {isConfirmDelete && (
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                   <span className="text-xs text-red-600 dark:text-red-400">Confermi eliminazione?</span>
                                   <button
                                     onClick={() => handleConfirmDeleteNote(note._id)}
-                                    className="text-xs bg-red-600 dark:bg-red-700 text-white px-2 py-1 rounded hover:bg-red-700 dark:hover:bg-red-600"
+                                    className="text-xs bg-red-600 dark:bg-red-700 text-white px-2 py-1 rounded hover:bg-red-700 dark:hover:bg-red-600 whitespace-nowrap"
                                   >
                                     Sì, elimina
                                   </button>
                                   <button
                                     onClick={handleCancelDeleteNote}
-                                    className="text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 px-2 py-1 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
+                                    className="text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 px-2 py-1 rounded hover:bg-gray-400 dark:hover:bg-gray-500 whitespace-nowrap"
                                   >
                                     Annulla
                                   </button>
@@ -826,7 +830,7 @@ export default function KeyDevDetailPage() {
                                 </div>
                               )}
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex flex-col sm:flex-row gap-2">
                               <button
                                 onClick={() => handleSaveEditNote(note._id)}
                                 disabled={!editingNoteText.trim()}
@@ -879,55 +883,55 @@ export default function KeyDevDetailPage() {
 
                 <div className="border-t dark:border-gray-700 pt-4">
                   <div className="relative">
-                    <div className="flex gap-2">
-                      <div className="flex-1 relative mention-dropdown-container">
-                        <textarea
-                          value={newNote}
-                          onChange={handleNoteInput}
-                          onKeyDown={(e) => {
-                            // Gestisci Escape per chiudere il dropdown
-                            if (e.key === 'Escape' && showMentionDropdown) {
-                              setShowMentionDropdown(false)
-                              setMentionQuery('')
-                              setMentionPosition(null)
-                            }
-                            // Gestisci Enter per selezionare il primo utente nel dropdown
-                            if (e.key === 'Enter' && showMentionDropdown && filteredUsersForMention.length > 0 && !e.shiftKey) {
-                              e.preventDefault()
-                              handleSelectMention(filteredUsersForMention[0].name)
-                            }
-                          }}
-                          placeholder="Aggiungi un commento... Usa @ per menzionare un utente"
-                          rows={2}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
-                        />
-                        {/* Dropdown per selezionare utenti */}
-                        {showMentionDropdown && filteredUsersForMention && filteredUsersForMention.length > 0 && (
-                          <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
-                            {filteredUsersForMention.map((user) => (
-                              <button
-                                key={user._id}
-                                type="button"
-                                onClick={() => handleSelectMention(user.name)}
-                                className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                              >
-                                <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
-                                {user.email && (
-                                  <span className="text-sm text-gray-500 dark:text-gray-400">({user.email})</span>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={handleAddNote}
-                        disabled={!newNote.trim()}
-                        className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50"
-                      >
-                        Aggiungi
-                      </button>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex-1 relative mention-dropdown-container">
+                      <textarea
+                        value={newNote}
+                        onChange={handleNoteInput}
+                        onKeyDown={(e) => {
+                          // Gestisci Escape per chiudere il dropdown
+                          if (e.key === 'Escape' && showMentionDropdown) {
+                            setShowMentionDropdown(false)
+                            setMentionQuery('')
+                            setMentionPosition(null)
+                          }
+                          // Gestisci Enter per selezionare il primo utente nel dropdown
+                          if (e.key === 'Enter' && showMentionDropdown && filteredUsersForMention.length > 0 && !e.shiftKey) {
+                            e.preventDefault()
+                            handleSelectMention(filteredUsersForMention[0].name)
+                          }
+                        }}
+                        placeholder="Aggiungi un commento... Usa @ per menzionare un utente"
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                      />
+                      {/* Dropdown per selezionare utenti */}
+                      {showMentionDropdown && filteredUsersForMention && filteredUsersForMention.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                          {filteredUsersForMention.map((user) => (
+                            <button
+                              key={user._id}
+                              type="button"
+                              onClick={() => handleSelectMention(user.name)}
+                              className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                            >
+                              <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
+                              {user.email && (
+                                <span className="text-sm text-gray-500 dark:text-gray-400">({user.email})</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
+                    <button
+                      onClick={handleAddNote}
+                      disabled={!newNote.trim()}
+                      className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      Aggiungi
+                    </button>
+                  </div>
                   </div>
                 </div>
               </div>
@@ -961,7 +965,7 @@ export default function KeyDevDetailPage() {
               </div>
 
               {isNew && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dipartimento</label>
                     <select
@@ -1064,7 +1068,7 @@ export default function KeyDevDetailPage() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Repository URL
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
                         value={mockupRepoUrl}
@@ -1075,7 +1079,7 @@ export default function KeyDevDetailPage() {
                       <button
                         onClick={handleLinkMockupRepo}
                         disabled={!mockupRepoUrl.trim()}
-                        className="px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-md hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50"
+                        className="px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-md hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 whitespace-nowrap"
                       >
                         Salva
                       </button>
@@ -1124,7 +1128,7 @@ export default function KeyDevDetailPage() {
                           </p>
                         </div>
                         
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <button
                             onClick={() => updateStatus({ id: keydev._id, status: 'Approved', weight: techWeight })}
                             disabled={techWeight === undefined}
@@ -1150,7 +1154,7 @@ export default function KeyDevDetailPage() {
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-gray-100"
                           required
                         />
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <button
                             onClick={handleReject}
                             disabled={!rejectionReason.trim()}
@@ -1203,7 +1207,7 @@ export default function KeyDevDetailPage() {
                       </div>
                       
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             Commit Validato dal Business <span className="text-red-500">*</span>
                           </label>
@@ -1212,7 +1216,7 @@ export default function KeyDevDetailPage() {
                               href={`${keydev.mockupRepoUrl.replace(/\/+$/, '')}/commits/`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors whitespace-nowrap"
                               title="Vai alla pagina dei commit, clicca il bottone 'Copia' dell'ultimo commit (dove apparirà 'Copy full SHA for [xxx]') e incollalo qui: sarà il patto tra sviluppatori e dipartimento richiedente."
                             >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -1456,20 +1460,20 @@ export default function KeyDevDetailPage() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Commit Mockup Validato
                     </label>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono break-all">
                         {keydev.validatedMockupCommit}
                       </span>
                       <a
                         href={`${keydev.mockupRepoUrl}/commit/${keydev.validatedMockupCommit}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                        className="text-blue-600 dark:text-blue-400 hover:underline text-sm whitespace-nowrap"
                       >
                         Vedi su GitHub
                       </a>
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 break-all">
                       Repository: {keydev.mockupRepoUrl}
                     </p>
                   </div>
@@ -1480,20 +1484,20 @@ export default function KeyDevDetailPage() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Commit di Rilascio
                     </label>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono break-all">
                         {keydev.releaseCommit}
                       </span>
                       <a
                         href={`${keydev.repoUrl}/commit/${keydev.releaseCommit}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                        className="text-blue-600 dark:text-blue-400 hover:underline text-sm whitespace-nowrap"
                       >
                         Vedi su GitHub
                       </a>
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 break-all">
                       Repository: {keydev.repoUrl}
                     </p>
                   </div>
@@ -1581,15 +1585,15 @@ export default function KeyDevDetailPage() {
                     {penalties.map((penalty) => (
                       <div
                         key={penalty._id}
-                        className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
                       >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="font-semibold text-red-800 dark:text-red-300">
                               {(penalty.weight * 100).toFixed(0)}%
                             </span>
                             {penalty.description && (
-                              <span className="text-sm text-gray-700 dark:text-gray-300">
+                              <span className="text-sm text-gray-700 dark:text-gray-300 wrap-break-word">
                                 - {penalty.description}
                               </span>
                             )}
@@ -1609,7 +1613,7 @@ export default function KeyDevDetailPage() {
                             if (!confirm('Sei sicuro di voler rimuovere questa penalità?')) return
                             await removePenalty({ id: penalty._id })
                           }}
-                          className="ml-4 px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+                          className="sm:ml-4 px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30 rounded whitespace-nowrap self-start sm:self-auto"
                         >
                           Rimuovi
                         </button>
@@ -1637,33 +1641,35 @@ export default function KeyDevDetailPage() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Repository URL
                   </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={keydev.mockupRepoUrl}
-                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-sm"
-                      onClick={(e) => (e.target as HTMLInputElement).select()}
-                    />
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(keydev.mockupRepoUrl || '')
-                      }}
-                      className="px-4 py-2 bg-gray-600 dark:bg-gray-700 text-white rounded-md hover:bg-gray-700 dark:hover:bg-gray-600 text-sm"
-                      title="Copia URL"
-                    >
-                      Copia
-                    </button>
-                    <a
-                      href={keydev.mockupRepoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm"
-                      title="Apri in nuova scheda"
-                    >
-                      Apri
-                    </a>
-                  </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={keydev.mockupRepoUrl}
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-xs sm:text-sm"
+                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(keydev.mockupRepoUrl || '')
+                          }}
+                          className="flex-1 sm:flex-none px-4 py-2 bg-gray-600 dark:bg-gray-700 text-white rounded-md hover:bg-gray-700 dark:hover:bg-gray-600 text-sm whitespace-nowrap"
+                          title="Copia URL"
+                        >
+                          Copia
+                        </button>
+                        <a
+                          href={keydev.mockupRepoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm text-center whitespace-nowrap"
+                          title="Apri in nuova scheda"
+                        >
+                          Apri
+                        </a>
+                      </div>
+                    </div>
                 </div>
 
                 {keydev.validatedMockupCommit && (
@@ -1686,7 +1692,7 @@ export default function KeyDevDetailPage() {
 
         {/* Sidebar */}
         {!isNew && keydev && (
-          <div className="space-y-6">
+          <div className="w-full lg:w-auto space-y-4 sm:space-y-6">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Informazioni Sviluppo Chiave</h3>
               <dl className="space-y-3">
@@ -1718,16 +1724,16 @@ export default function KeyDevDetailPage() {
                 </div>
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">RepoMockup</dt>
-                  <dd className="font-medium text-gray-900 dark:text-gray-100">
+                  <dd className="font-medium text-gray-900 dark:text-gray-100 wrap-break-word">
                     {keydev.mockupRepoUrl ? (
                       <a
                         href={keydev.mockupRepoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline block truncate"
+                        className="text-blue-600 dark:text-blue-400 hover:underline break-all"
                         title={keydev.mockupRepoUrl}
                       >
-                        {truncateUrl(keydev.mockupRepoUrl, 50)}
+                        {truncateUrl(keydev.mockupRepoUrl, 40)}
                       </a>
                     ) : (
                       <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
@@ -1736,16 +1742,16 @@ export default function KeyDevDetailPage() {
                 </div>
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">RepoUrl ufficiale</dt>
-                  <dd className="font-medium text-gray-900 dark:text-gray-100">
+                  <dd className="font-medium text-gray-900 dark:text-gray-100 wrap-break-word">
                     {keydev.repoUrl ? (
                       <a
                         href={keydev.repoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline block truncate"
+                        className="text-blue-600 dark:text-blue-400 hover:underline break-all"
                         title={keydev.repoUrl}
                       >
-                        {truncateUrl(keydev.repoUrl, 50)}
+                        {truncateUrl(keydev.repoUrl, 40)}
                       </a>
                     ) : (
                       <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
@@ -1910,20 +1916,20 @@ export default function KeyDevDetailPage() {
                   {blockingLabels.map((bl) => (
                     <div
                       key={bl._id}
-                      className={`flex items-center justify-between px-3 py-2 rounded ${
+                      className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 py-2 rounded ${
                         bl.status === 'Open' ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : 'bg-gray-50 dark:bg-gray-700/50'
                       }`}
                     >
-                      <span className={bl.status === 'Closed' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}>
+                      <span className={`wrap-break-word ${bl.status === 'Closed' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
                         {bl.label.label}
                       </span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs ${bl.status === 'Open' ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <span className={`text-xs whitespace-nowrap ${bl.status === 'Open' ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
                           {bl.status === 'Open' ? 'Aperto' : 'Chiuso'}
                         </span>
                         <button
                           onClick={() => handleRemoveBlockingLabel(bl._id)}
-                          className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 px-2 py-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30"
+                          className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 px-2 py-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 whitespace-nowrap"
                           title="Rimuovi blocking label"
                         >
                           ×

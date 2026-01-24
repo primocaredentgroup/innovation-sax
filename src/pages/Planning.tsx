@@ -144,7 +144,92 @@ export default function PlanningPage() {
         )}
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+      {/* Vista mobile: schede */}
+      <div className="md:hidden space-y-4">
+        {departments?.map((dept) => {
+          const deptTotal = teams?.reduce(
+            (sum, team) => sum + getAllocation(dept._id, team._id),
+            0
+          ) ?? 0
+
+          return (
+            <div key={dept._id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                  {dept.name}
+                </h3>
+                <div className="mt-1 text-sm font-semibold text-gray-600 dark:text-gray-400">
+                  Totale: {deptTotal}
+                </div>
+              </div>
+              <div className="space-y-3">
+                {teams?.map((team) => {
+                  const key = `${dept._id}-${team._id}`
+                  const isEditing = editingCell === key
+                  const value = getAllocation(dept._id, team._id)
+
+                  return (
+                    <div key={team._id} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{team.name}</span>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleCellSave(dept._id, team._id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleCellSave(dept._id, team._id)
+                            if (e.key === 'Escape') setEditingCell(null)
+                          }}
+                          className="w-20 px-2 py-1 text-center border border-blue-500 dark:border-blue-400 rounded focus:outline-none dark:bg-gray-700 dark:text-gray-100"
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          onClick={() => handleCellClick(dept._id, team._id)}
+                          className={`w-16 h-8 rounded text-sm ${
+                            value > 0
+                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/50'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                          }`}
+                        >
+                          {value}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+        {/* Card totale generale */}
+        <div className="bg-gray-100 dark:bg-gray-700 rounded-lg shadow p-4">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">Totale Generale</h3>
+          <div className="space-y-2">
+            {teams?.map((team) => {
+              const teamTotal = departments?.reduce(
+                (sum, dept) => sum + getAllocation(dept._id, team._id),
+                0
+              ) ?? 0
+              return (
+                <div key={team._id} className="flex items-center justify-between">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{team.name}</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{teamTotal}</span>
+                </div>
+              )
+            })}
+            <div className="pt-2 mt-2 border-t border-gray-300 dark:border-gray-600 flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Totale</span>
+              <span className="text-base font-bold text-gray-900 dark:text-gray-100">{totalAllocated}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Vista desktop: tabella */}
+      <div className="hidden md:block bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>

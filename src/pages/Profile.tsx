@@ -26,24 +26,30 @@ export default function ProfilePage() {
 
       <Authenticated>
         <div className="space-y-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Informazioni Utente</h2>
-            <div className="flex items-start gap-4">
-              {user?.picture && (
-                <img src={user.picture} alt="Avatar" className="w-16 h-16 rounded-full" />
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
+              {user?.picture ? (
+                <img src={user.picture} alt="Avatar" className="w-20 h-20 sm:w-16 sm:h-16 rounded-full shrink-0" />
+              ) : (
+                <div className="w-20 h-20 sm:w-16 sm:h-16 rounded-full bg-green-600 dark:bg-green-700 flex items-center justify-center shrink-0">
+                  <span className="text-white text-2xl sm:text-xl font-semibold">
+                    {(currentUser?.name || user?.name || 'U').charAt(0).toUpperCase()}
+                  </span>
+                </div>
               )}
-              <div className="flex-1">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400">Nome</label>
-                    <p className="font-medium">{currentUser?.name || user?.name}</p>
+              <div className="flex-1 w-full min-w-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-4">
+                  <div className="min-w-0">
+                    <label className="text-sm text-gray-500 dark:text-gray-400 block mb-1">Nome</label>
+                    <p className="font-medium wrap-break-word text-sm sm:text-base">{currentUser?.name || user?.name || 'N/A'}</p>
                   </div>
-                  <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400">Email</label>
-                    <p className="font-medium">{currentUser?.email || user?.email}</p>
+                  <div className="min-w-0">
+                    <label className="text-sm text-gray-500 dark:text-gray-400 block mb-1">Email</label>
+                    <p className="font-medium wrap-break-word text-sm sm:text-base">{currentUser?.email || user?.email || 'N/A'}</p>
                   </div>
-                  <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400">Ruoli</label>
+                  <div className="min-w-0">
+                    <label className="text-sm text-gray-500 dark:text-gray-400 block mb-1">Ruoli</label>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {(currentUser?.roles || ['Requester']).map((role) => (
                         <span 
@@ -63,9 +69,9 @@ export default function ProfilePage() {
                       ))}
                     </div>
                   </div>
-                  <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400">Dipartimento</label>
-                    <p className="font-medium">
+                  <div className="min-w-0">
+                    <label className="text-sm text-gray-500 dark:text-gray-400 block mb-1">Dipartimento</label>
+                    <p className="font-medium wrap-break-word text-sm sm:text-base">
                       {currentUser?.deptId
                         ? departments?.find((d) => d._id === currentUser.deptId)?.name || 'N/A'
                         : 'Non assegnato'}

@@ -424,9 +424,7 @@ export const updateStatus = mutation({
           if (!userIsAdmin && keydev.requesterId !== user._id) {
             throw new Error('Solo il requester o un admin possono riportare in Bozza')
           }
-          // Pulisci i dati di rifiuto quando si torna in Draft
-          updates.rejectionReason = undefined
-          updates.rejectedById = undefined
+          // I dati di rifiuto verranno rimossi nel blocco successivo tramite destructuring
           break
 
         default:
@@ -463,9 +461,9 @@ export const updateStatus = mutation({
       updates.techValidatedAt = now // Traccia timestamp validazione tecnica
       updates.techValidatorId = user._id
       updates.weight = args.weight // Salva il peso dello sviluppo
-      // Pulisci eventuali dati di rifiuto precedenti
-      updates.rejectionReason = undefined
-      updates.rejectedById = undefined
+      // NOTA: Non impostare rejectionReason e rejectedById a undefined qui
+      // perché patch() non accetta valori undefined. La pulizia avviene sotto
+      // usando replace() se necessario.
     }
 
     if (args.status === 'Rejected') {
@@ -532,9 +530,13 @@ export const updateStatus = mutation({
       updates.releasedAt = Date.now()
     }
 
-    // Se stiamo passando da Rejected a Draft, dobbiamo cancellare i campi rejectionReason e rejectedById
-    // Usiamo replace() invece di patch() perché patch() ignora i valori undefined
-    if (args.status === 'Draft' && keydev.status === 'Rejected') {
+    // Se stiamo passando da Rejected a Draft o a Approved, dobbiamo cancellare i campi rejectionReason e rejectedById
+    // Usiamo replace() invece di patch() perché patch() non accetta valori undefined
+    const needsRejectionFieldsCleanup = 
+      (args.status === 'Draft' && keydev.status === 'Rejected') ||
+      (args.status === 'Approved' && (keydev.rejectionReason !== undefined || keydev.rejectedById !== undefined))
+    
+    if (needsRejectionFieldsCleanup) {
       // Ottieni il documento esistente
       const existing = await ctx.db.get(args.id)
       if (!existing) {

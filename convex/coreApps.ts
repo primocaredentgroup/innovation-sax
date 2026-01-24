@@ -16,7 +16,11 @@ const coreAppReturnValidator = v.object({
   percentComplete: v.number(),
   repoUrl: v.optional(v.string()),
   hubMilestonesUrl: v.optional(v.string()),
-  status: coreAppStatusValidator
+  status: coreAppStatusValidator,
+  lastUpdate: v.optional(v.object({
+    createdAt: v.number(),
+    weekRef: v.string()
+  }))
 })
 
 /**
@@ -26,7 +30,28 @@ export const list = query({
   args: {},
   returns: v.array(coreAppReturnValidator),
   handler: async (ctx) => {
-    return await ctx.db.query('coreApps').collect()
+    const apps = await ctx.db.query('coreApps').collect()
+    
+    // Per ogni app, trova l'ultimo aggiornamento
+    const appsWithLastUpdate = await Promise.all(
+      apps.map(async (app) => {
+        const lastUpdate = await ctx.db
+          .query('coreAppUpdates')
+          .withIndex('by_coreApp', (q) => q.eq('coreAppId', app._id))
+          .order('desc')
+          .first()
+        
+        return {
+          ...app,
+          lastUpdate: lastUpdate ? {
+            createdAt: lastUpdate.createdAt,
+            weekRef: lastUpdate.weekRef
+          } : undefined
+        }
+      })
+    )
+    
+    return appsWithLastUpdate
   }
 })
 

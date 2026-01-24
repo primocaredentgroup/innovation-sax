@@ -140,15 +140,15 @@ function UpdateDialogForm({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 border-b dark:border-gray-700">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">
             {isEditing ? 'Modifica Aggiornamento' : 'Nuovo Aggiornamento'}
           </h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Settimana *
@@ -230,17 +230,17 @@ function UpdateDialogForm({
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 whitespace-nowrap"
             >
               Annulla
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 whitespace-nowrap"
             >
               {isEditing ? 'Salva Modifiche' : 'Crea Aggiornamento'}
             </button>
@@ -306,11 +306,11 @@ function ViewUpdateDialog({
   if (!isOpen || !update) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b dark:border-gray-700 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 border-b dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 wrap-break-word">
               {update.title || `Aggiornamento ${update.weekRef}`}
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -319,7 +319,7 @@ function ViewUpdateDialog({
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 self-start sm:self-auto shrink-0"
           >
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -327,33 +327,33 @@ function ViewUpdateDialog({
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {update.loomUrl && <LoomEmbed url={update.loomUrl} />}
 
           {update.notes && (
             <div className="mt-4">
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Note</h3>
-              <p className="text-gray-600 dark:text-gray-400">{update.notes}</p>
+              <p className="text-gray-600 dark:text-gray-400 wrap-break-word">{update.notes}</p>
             </div>
           )}
 
-          <div className="flex justify-between mt-6 pt-4 border-t dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row sm:justify-between gap-3 mt-6 pt-4 border-t dark:border-gray-700">
             <button
               onClick={onDelete}
-              className="px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+              className="px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg whitespace-nowrap self-start sm:self-auto"
             >
               Elimina
             </button>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 whitespace-nowrap"
               >
                 Chiudi
               </button>
               <button
                 onClick={onEdit}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 whitespace-nowrap"
               >
                 Modifica
               </button>
@@ -530,73 +530,77 @@ export default function CoreAppDetailPage() {
   }
 
   return (
-    <div>
-      <div className="flex items-center gap-4 mb-6">
-        <Link to="/core-apps" className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+    <div className="w-full max-w-full overflow-x-hidden">
+      {/* Header responsive */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6">
+        <Link to="/core-apps" className="text-sm sm:text-base text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap">
           ← Torna alla lista
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{coreApp.name}</h1>
-        <div className="relative">
-          <button
-            onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-            className={`px-3 py-1 rounded-full text-sm ${statusColors[coreApp.status]} hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-2`}
-          >
-            {statusLabels[coreApp.status]}
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {isStatusDropdownOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setIsStatusDropdownOpen(false)}
-              />
-              <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 z-20 min-w-[180px]">
-                {(['Planning', 'InProgress', 'Completed'] as const).map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => handleStatusChange(status)}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg ${
-                      coreApp.status === status
-                        ? `${statusColors[status]} font-medium`
-                        : 'text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    {statusLabels[status]}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">{coreApp.name}</h1>
+          <div className="relative self-start sm:self-auto">
+            <button
+              onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+              className={`px-3 py-1 rounded-full text-xs sm:text-sm ${statusColors[coreApp.status]} hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-2 whitespace-nowrap`}
+            >
+              {statusLabels[coreApp.status]}
+              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {isStatusDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setIsStatusDropdownOpen(false)}
+                />
+                <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 z-20 min-w-[180px]">
+                  {(['Planning', 'InProgress', 'Completed'] as const).map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusChange(status)}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg ${
+                        coreApp.status === status
+                          ? `${statusColors[status]} font-medium`
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {statusLabels[status]}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      {/* Layout responsive: singola colonna su mobile, due colonne su desktop */}
+      <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="w-full lg:col-span-2 space-y-4 sm:space-y-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Informazioni</h2>
             {coreApp.description && (
-              <p className="text-gray-600 dark:text-gray-400 mb-4">{coreApp.description}</p>
+              <p className="text-gray-600 dark:text-gray-400 mb-4 wrap-break-word">{coreApp.description}</p>
             )}
             {coreApp.repoUrl && (
               <a
                 href={coreApp.repoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 break-all"
               >
                 {coreApp.repoUrl}
               </a>
             )}
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
                 Aggiornamenti Settimanali
               </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                 <select
                   value={selectedMonth || ''}
                   onChange={(e) => setSelectedMonth(e.target.value || null)}
@@ -612,7 +616,7 @@ export default function CoreAppDetailPage() {
                 <Link
                   to="/core-apps/$slug/updates/new"
                   params={{ slug }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm inline-block"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm inline-block text-center whitespace-nowrap"
                 >
                   + Nuovo Aggiornamento
                 </Link>
@@ -627,23 +631,23 @@ export default function CoreAppDetailPage() {
                     onClick={() => openViewDialog(update)}
                     className="border dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                          <h3 className="font-medium text-gray-900 dark:text-gray-100 wrap-break-word">
                             {update.title || `Settimana ${update.weekRef}`}
                           </h3>
-                          <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-1 rounded">
+                          <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-1 rounded whitespace-nowrap">
                             {update.weekRef}
                           </span>
                         </div>
                         {update.notes && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2 wrap-break-word">
                             {update.notes}
                           </p>
                         )}
                       </div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500 ml-4">
+                      <div className="text-xs text-gray-400 dark:text-gray-500 sm:ml-4 whitespace-nowrap">
                         {new Date(update.createdAt).toLocaleDateString('it-IT')}
                       </div>
                     </div>
@@ -656,8 +660,8 @@ export default function CoreAppDetailPage() {
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="w-full lg:w-auto space-y-4 sm:space-y-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Progresso</h3>
             <div className="text-center">
               {isEditingPercent ? (
@@ -668,7 +672,7 @@ export default function CoreAppDetailPage() {
                     max="100"
                     value={tempPercent}
                     onChange={(e) => setTempPercent(Number(e.target.value))}
-                    className="text-4xl font-bold text-gray-900 dark:text-gray-100 bg-transparent border-b-2 border-blue-500 dark:border-blue-400 text-center w-24 focus:outline-none"
+                    className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 bg-transparent border-b-2 border-blue-500 dark:border-blue-400 text-center w-20 sm:w-24 focus:outline-none"
                     autoFocus
                     onBlur={handleSavePercent}
                     onKeyDown={(e) => {
@@ -679,10 +683,10 @@ export default function CoreAppDetailPage() {
                       }
                     }}
                   />
-                  <div className="flex justify-center gap-2">
+                  <div className="flex flex-col sm:flex-row justify-center gap-2">
                     <button
                       onClick={handleSavePercent}
-                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
                     >
                       Salva
                     </button>
@@ -690,7 +694,7 @@ export default function CoreAppDetailPage() {
                       onClick={() => {
                         setIsEditingPercent(false)
                       }}
-                      className="px-3 py-1 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
+                      className="px-3 py-1 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-400 dark:hover:bg-gray-500 whitespace-nowrap"
                     >
                       Annulla
                     </button>
@@ -702,7 +706,7 @@ export default function CoreAppDetailPage() {
                   className="cursor-pointer hover:opacity-80 transition-opacity"
                   title="Clicca per modificare"
                 >
-                  <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                  <div className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                     {currentPercent}%
                   </div>
                 </div>
@@ -740,10 +744,10 @@ export default function CoreAppDetailPage() {
                         }
                       }}
                     />
-                    <div className="flex justify-center gap-2">
+                    <div className="flex flex-col sm:flex-row justify-center gap-2">
                       <button
                         onClick={handleSaveHubUrl}
-                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
                       >
                         Salva
                       </button>
@@ -751,24 +755,33 @@ export default function CoreAppDetailPage() {
                         onClick={() => {
                           setIsEditingHubUrl(false)
                         }}
-                        className="px-3 py-1 text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
+                        className="px-3 py-1 text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-400 dark:hover:bg-gray-500 whitespace-nowrap"
                       >
                         Annulla
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div>
+                  <div className="wrap-break-word">
                     {currentHubUrl ? (
-                      <a
-                        href={currentHubUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm break-all inline-block max-w-full truncate"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {currentHubUrl}
-                      </a>
+                      <div className="flex items-start gap-2">
+                        <a
+                          href={currentHubUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm break-all flex-1 min-w-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {currentHubUrl}
+                        </a>
+                        <button
+                          onClick={startEditingHubUrl}
+                          className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 shrink-0"
+                          title="Modifica URL"
+                        >
+                          ✏️
+                        </button>
+                      </div>
                     ) : (
                       <button
                         onClick={startEditingHubUrl}
@@ -777,22 +790,13 @@ export default function CoreAppDetailPage() {
                         + Aggiungi link milestone
                       </button>
                     )}
-                    {currentHubUrl && (
-                      <button
-                        onClick={startEditingHubUrl}
-                        className="ml-2 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
-                        title="Modifica URL"
-                      >
-                        ✏️
-                      </button>
-                    )}
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Riepilogo</h3>
             <dl className="space-y-3">
               <div>
@@ -802,7 +806,7 @@ export default function CoreAppDetailPage() {
               {updates && updates.length > 0 && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Ultimo Aggiornamento</dt>
-                  <dd className="font-medium text-gray-900 dark:text-gray-100">{updates[0].weekRef}</dd>
+                  <dd className="font-medium text-gray-900 dark:text-gray-100 wrap-break-word">{updates[0].weekRef}</dd>
                 </div>
               )}
             </dl>
