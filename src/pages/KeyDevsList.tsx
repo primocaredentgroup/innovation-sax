@@ -59,6 +59,7 @@ export default function KeyDevsListPage() {
   const departments = useQuery(api.departments.list)
   const categories = useQuery(api.categories.list)
   const allBlockingLabels = useQuery(api.blockingLabels.list)
+  const users = useQuery(api.users.listUsers)
   
   // Combina i contatori
   const statusCounts = useMemo(() => {
@@ -201,7 +202,20 @@ export default function KeyDevsListPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Sviluppi Chiave</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Sviluppi Chiave di</h1>
+          <select
+            value={selectedMonth}
+            onChange={(e) => updateSearch({ month: e.target.value })}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-lg font-semibold"
+          >
+            {monthOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <Link
           to="/keydevs/$id"
           params={{ id: 'new' }}
@@ -222,7 +236,7 @@ export default function KeyDevsListPage() {
                 : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
             }`}
           >
-            Tutte
+            Tutte le squadre
           </button>
           {categories?.map((category) => (
             <button
@@ -242,26 +256,10 @@ export default function KeyDevsListPage() {
 
       {/* Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6 space-y-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Mese (obbligatorio)
-            </label>
-            <select
-              value={selectedMonth}
-              onChange={(e) => updateSearch({ month: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-            >
-              {monthOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Dipartimento
+              Dipartimento richiedente
             </label>
             <select
               value={search.dept || ''}
@@ -356,7 +354,7 @@ export default function KeyDevsListPage() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Stato</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Categoria</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Completamento</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Owner</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Blocchi</th>
               </tr>
             </thead>
@@ -384,20 +382,8 @@ export default function KeyDevsListPage() {
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {categories?.find((c) => c._id === kd.categoryId)?.name || 'N/A'}
                   </td>
-                  <td className="px-4 py-3 text-sm">
-                    {kd.donePerc !== undefined ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-900 dark:text-gray-100 font-medium w-10">{kd.donePerc}%</span>
-                        <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 max-w-24">
-                          <div
-                            className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full"
-                            style={{ width: `${kd.donePerc}%` }}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 dark:text-gray-500">-</span>
-                    )}
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                    {kd.ownerId ? (users?.find((u) => u._id === kd.ownerId)?.name || 'N/A') : '-'}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex flex-wrap gap-2">

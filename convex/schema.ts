@@ -105,9 +105,7 @@ export default defineSchema({
     frontValidatedAt: v.optional(v.number()),
     techValidatedAt: v.optional(v.number()), // Quando TechValidator approva (MockupDone → Approved)
     businessValidatedAt: v.optional(v.number()), // Quando BusinessValidator valida (Approved → FrontValidated)
-    releasedAt: v.optional(v.number()),
-    // Progress
-    donePerc: v.optional(v.number())
+    releasedAt: v.optional(v.number())
   })
     .index('by_month', ['monthRef'])
     .index('by_dept_and_month', ['deptId', 'monthRef'])

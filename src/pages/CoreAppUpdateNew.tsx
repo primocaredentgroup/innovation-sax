@@ -15,7 +15,9 @@ function getMonthFromWeekRef(weekRef: string): string {
   const week = parseInt(match[2], 10)
   const monday = getMondayOfISOWeek(year, week)
   const month = monday.getMonth() + 1
-  return `${year}-${String(month).padStart(2, '0')}`
+  // Usa l'anno effettivo del lunedì, non l'anno della settimana ISO
+  // (importante quando una settimana ISO inizia in un anno diverso)
+  return `${monday.getFullYear()}-${String(month).padStart(2, '0')}`
 }
 
 // Helper per calcolare il numero della settimana ISO
@@ -216,12 +218,13 @@ export default function CoreAppUpdateNewPage() {
   }, [months])
   
   // Quando cambia la settimana, aggiorna automaticamente il mese
+  // Nota: selectedMonth NON è nelle dipendenze per permettere la selezione manuale
   useEffect(() => {
     const calculatedMonth = getMonthFromWeekRef(selectedWeek)
-    if (calculatedMonth !== selectedMonth && monthOptions.includes(calculatedMonth)) {
+    if (monthOptions.includes(calculatedMonth)) {
       setSelectedMonth(calculatedMonth)
     }
-  }, [selectedWeek, monthOptions, selectedMonth])
+  }, [selectedWeek, monthOptions])
   
   // Genera il titolo automatico basato sulla settimana e sul nome del prodotto Core
   const autoTitle = useMemo(() => {

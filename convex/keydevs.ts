@@ -31,8 +31,7 @@ const keydevReturnValidator = v.object({
   frontValidatedAt: v.optional(v.number()),
   techValidatedAt: v.optional(v.number()),
   businessValidatedAt: v.optional(v.number()),
-  releasedAt: v.optional(v.number()),
-  donePerc: v.optional(v.number())
+  releasedAt: v.optional(v.number())
 })
 
 /**
@@ -495,7 +494,6 @@ export const updateStatus = mutation({
 
     if (args.status === 'Done') {
       updates.releasedAt = Date.now()
-      updates.donePerc = 100
     }
 
     await ctx.db.patch(args.id, updates)
@@ -592,8 +590,7 @@ export const markAsDone = mutation({
 
     await ctx.db.patch(args.id, {
       status: 'Done',
-      releasedAt: Date.now(),
-      donePerc: 100
+      releasedAt: Date.now()
     })
     return null
   }
@@ -629,17 +626,3 @@ export const linkMockupRepo = mutation({
   }
 })
 
-/**
- * Aggiorna il progresso di un KeyDev.
- */
-export const updateProgress = mutation({
-  args: {
-    id: v.id('keydevs'),
-    donePerc: v.number()
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { donePerc: args.donePerc })
-    return null
-  }
-})
