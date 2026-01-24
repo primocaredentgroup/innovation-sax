@@ -466,8 +466,8 @@ export default function CoreAppDetailPage() {
     await updateUpdate({
       id: selectedUpdate._id,
       loomUrl: data.loomUrl,
-      title: data.title || undefined,
-      notes: data.notes || undefined,
+      title: data.title, // Passa la stringa vuota direttamente per permettere la cancellazione
+      notes: data.notes, // Passa la stringa vuota direttamente per permettere la cancellazione
       monthRef: data.monthRef
     })
     setIsEditDialogOpen(false)

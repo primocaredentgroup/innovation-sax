@@ -110,6 +110,7 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const { id, ...updates } = args
     // Filtra i campi undefined per evitare di cancellare valori esistenti
+    // Le stringhe vuote vengono accettate per permettere la cancellazione di campi opzionali
     const filteredUpdates: {
       monthRef?: string
       loomUrl?: string
