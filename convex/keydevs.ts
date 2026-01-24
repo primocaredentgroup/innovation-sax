@@ -1,6 +1,6 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
-import { keydevStatusValidator } from './schema'
+import { keydevStatusValidator, keydevWeightValidator } from './schema'
 import { hasRole, isAdmin } from './users'
 import type { Doc } from './_generated/dataModel'
 
@@ -28,6 +28,7 @@ const keydevReturnValidator = v.object({
   repoUrl: v.optional(v.string()),
   repoTag: v.optional(v.string()),
   releaseCommit: v.optional(v.string()),
+  weight: v.optional(keydevWeightValidator),
   approvedAt: v.optional(v.number()),
   frontValidatedAt: v.optional(v.number()),
   techValidatedAt: v.optional(v.number()),
@@ -302,7 +303,8 @@ export const updateStatus = mutation({
     status: keydevStatusValidator,
     rejectionReason: v.optional(v.string()),
     monthRef: v.optional(v.string()), // Richiesto per FrontValidated
-    validatedMockupCommit: v.optional(v.string()) // Commit validato per FrontValidated
+    validatedMockupCommit: v.optional(v.string()), // Commit validato per FrontValidated
+    weight: v.optional(keydevWeightValidator) // Peso obbligatorio quando TechValidator approva (MockupDone → Approved)
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -352,6 +354,10 @@ export const updateStatus = mutation({
           }
           if (!hasRole(userRoles, 'TechValidator')) {
             throw new Error('Solo i TechValidator possono approvare')
+          }
+          // Weight è obbligatorio quando si approva
+          if (args.weight === undefined) {
+            throw new Error('Devi specificare il peso (weight) dello sviluppo per la validazione tech')
           }
           break
 
@@ -420,6 +426,20 @@ export const updateStatus = mutation({
           }
           break
 
+        case 'Draft':
+          // Requester o admin possono riportare un Rejected in Draft
+          if (keydev.status !== 'Rejected') {
+            throw new Error('Transizione non valida: solo da Rejected a Draft')
+          }
+          // Verifica che l'utente sia il requester o admin
+          if (!userIsAdmin && keydev.requesterId !== user._id) {
+            throw new Error('Solo il requester o un admin possono riportare in Bozza')
+          }
+          // Pulisci i dati di rifiuto quando si torna in Draft
+          updates.rejectionReason = undefined
+          updates.rejectedById = undefined
+          break
+
         default:
           throw new Error('Transizione di stato non valida')
       }
@@ -435,10 +455,15 @@ export const updateStatus = mutation({
 
     // Applica gli aggiornamenti specifici per ogni stato
     if (args.status === 'Approved') {
+      // Validazione che weight sia presente (obbligatorio anche per admin)
+      if (args.weight === undefined) {
+        throw new Error('Devi specificare il peso (weight) dello sviluppo per la validazione tech')
+      }
       const now = Date.now()
       updates.approvedAt = now
       updates.techValidatedAt = now // Traccia timestamp validazione tecnica
       updates.techValidatorId = user._id
+      updates.weight = args.weight // Salva il peso dello sviluppo
       // Pulisci eventuali dati di rifiuto precedenti
       updates.rejectionReason = undefined
       updates.rejectedById = undefined

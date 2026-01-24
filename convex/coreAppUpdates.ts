@@ -110,10 +110,12 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const { id, ...updates } = args
     
-    // Verifica se dobbiamo cancellare qualche campo (stringa vuota per title/notes)
+    // Verifica se dobbiamo cancellare qualche campo (stringa vuota per title/notes/monthRef/loomUrl)
     const needsDeletion = 
       (updates.title !== undefined && updates.title.trim() === '') ||
-      (updates.notes !== undefined && updates.notes.trim() === '')
+      (updates.notes !== undefined && updates.notes.trim() === '') ||
+      (updates.monthRef !== undefined && updates.monthRef.trim() === '') ||
+      (updates.loomUrl !== undefined && updates.loomUrl.trim() === '')
     
     if (needsDeletion) {
       // Se dobbiamo cancellare campi, usa replace per poter impostare i campi a undefined
@@ -127,8 +129,8 @@ export const update = mutation({
       const { _id: _unusedId, _creationTime: _unusedCreationTime, ...docWithoutSystemFields } = existing
       const updatedDoc = {
         ...docWithoutSystemFields,
-        monthRef: updates.monthRef !== undefined ? (updates.monthRef || undefined) : existing.monthRef,
-        loomUrl: updates.loomUrl !== undefined ? (updates.loomUrl || undefined) : existing.loomUrl,
+        monthRef: updates.monthRef !== undefined ? (updates.monthRef.trim() === '' ? undefined : updates.monthRef.trim()) : existing.monthRef,
+        loomUrl: updates.loomUrl !== undefined ? (updates.loomUrl.trim() === '' ? undefined : updates.loomUrl.trim()) : existing.loomUrl,
         title: updates.title !== undefined ? (updates.title.trim() === '' ? undefined : updates.title.trim()) : existing.title,
         notes: updates.notes !== undefined ? (updates.notes.trim() === '' ? undefined : updates.notes.trim()) : existing.notes
       }
@@ -136,6 +138,7 @@ export const update = mutation({
       await ctx.db.replace(id, updatedDoc)
     } else {
       // Altrimenti usa patch per aggiornare solo i campi modificati
+      // IMPORTANTE: non includere campi con valori undefined, patch non li accetta
       const filteredUpdates: {
         monthRef?: string
         loomUrl?: string
@@ -143,16 +146,16 @@ export const update = mutation({
         notes?: string
       } = {}
       
-      if (updates.monthRef !== undefined) {
-        filteredUpdates.monthRef = updates.monthRef || undefined
+      if (updates.monthRef !== undefined && updates.monthRef.trim() !== '') {
+        filteredUpdates.monthRef = updates.monthRef.trim()
       }
-      if (updates.loomUrl !== undefined) {
-        filteredUpdates.loomUrl = updates.loomUrl || undefined
+      if (updates.loomUrl !== undefined && updates.loomUrl.trim() !== '') {
+        filteredUpdates.loomUrl = updates.loomUrl.trim()
       }
-      if (updates.title !== undefined) {
+      if (updates.title !== undefined && updates.title.trim() !== '') {
         filteredUpdates.title = updates.title.trim()
       }
-      if (updates.notes !== undefined) {
+      if (updates.notes !== undefined && updates.notes.trim() !== '') {
         filteredUpdates.notes = updates.notes.trim()
       }
       

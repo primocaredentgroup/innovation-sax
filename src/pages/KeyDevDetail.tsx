@@ -105,6 +105,22 @@ export default function KeyDevDetailPage() {
   const [releaseCommit, setReleaseCommit] = useState('')
   const [penaltyWeight, setPenaltyWeight] = useState('')
   const [penaltyDescription, setPenaltyDescription] = useState('')
+  // Inizializza techWeight con il valore esistente del keydev o 1 come default
+  const [techWeight, setTechWeight] = useState<0 | 0.25 | 0.5 | 0.75 | 1>(() => {
+    if (keydev?.weight !== undefined) {
+      return keydev.weight as 0 | 0.25 | 0.5 | 0.75 | 1
+    }
+    return 1
+  })
+  
+  // Aggiorna techWeight quando cambia il keydev
+  useEffect(() => {
+    if (keydev?.weight !== undefined) {
+      setTechWeight(keydev.weight as 0 | 0.25 | 0.5 | 0.75 | 1)
+    } else {
+      setTechWeight(1)
+    }
+  }, [keydev?.weight])
   
   // Calcola i valori iniziali per dipartimento e team in base all'utente
   const getInitialDeptId = () => {
@@ -196,6 +212,9 @@ export default function KeyDevDetailPage() {
   
   // Verifica se l'utente è l'owner
   const isOwner = keydev?.ownerId === currentUser?._id
+  
+  // Verifica se l'utente è il requester
+  const isRequester = keydev?.requesterId === currentUser?._id
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -315,9 +334,24 @@ export default function KeyDevDetailPage() {
             <span className="px-3 py-1 rounded-md text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
               {keydev.readableId}
             </span>
-            <span className={`px-3 py-1 rounded-full text-sm ${statusColors[keydev.status]}`}>
-              {statusLabels[keydev.status]}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className={`px-3 py-1 rounded-full text-sm ${statusColors[keydev.status]}`}>
+                {statusLabels[keydev.status]}
+              </span>
+              {/* Pulsante per riportare in Bozza quando rifiutato */}
+              {keydev.status === 'Rejected' && (isRequester || userIsAdmin) && (
+                <button
+                  onClick={async () => {
+                    if (!confirm('Sei sicuro di voler riportare questo sviluppo in Bozza? Potrai modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato".')) return
+                    await updateStatus({ id: keydev._id, status: 'Draft' })
+                  }}
+                  className="px-4 py-1 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm font-medium"
+                  title="Riporta in Bozza per modificare il mockup"
+                >
+                  ↶ Riporta in Bozza
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -435,6 +469,14 @@ export default function KeyDevDetailPage() {
                         Rifiutato da: {users?.find((u) => u._id === keydev.rejectedById)?.name || 'N/A'}
                       </p>
                     )}
+                    {/* Messaggio per requester/admin */}
+                    {(isRequester || userIsAdmin) && (
+                      <div className="mt-3 p-2 bg-blue-100 dark:bg-blue-900/30 rounded border border-blue-200 dark:border-blue-800">
+                        <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                          💡 Puoi riportare questo sviluppo in Bozza per modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato"
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -474,19 +516,54 @@ export default function KeyDevDetailPage() {
                     </p>
                     
                     {!showRejectForm ? (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => updateStatus({ id: keydev._id, status: 'Approved' })}
-                          className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
-                        >
-                          Approva Mockup
-                        </button>
-                        <button
-                          onClick={() => setShowRejectForm(true)}
-                          className="px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600"
-                        >
-                          Rifiuta
-                        </button>
+                      <div className="space-y-4">
+                        {/* Campo obbligatorio per il peso dello sviluppo */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Peso dello sviluppo per validazione tech <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={techWeight}
+                            onChange={(e) => setTechWeight(parseFloat(e.target.value) as 0 | 0.25 | 0.5 | 0.75 | 1)}
+                            className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 ${
+                              techWeight === undefined 
+                                ? 'border-red-300 dark:border-red-600' 
+                                : 'border-gray-300 dark:border-gray-600'
+                            }`}
+                            required
+                          >
+                            <option value={1}>1.00 - Sviluppo completo (100%)</option>
+                            <option value={0.75}>0.75 - Sviluppo significativo (75%)</option>
+                            <option value={0.5}>0.50 - Sviluppo medio (50%)</option>
+                            <option value={0.25}>0.25 - Sviluppo leggero (25%)</option>
+                            <option value={0}>0.00 - Nessuno sviluppo (0%)</option>
+                          </select>
+                          <p className={`mt-1 text-xs ${
+                            techWeight === undefined 
+                              ? 'text-red-500 dark:text-red-400' 
+                              : 'text-gray-500 dark:text-gray-400'
+                          }`}>
+                            {techWeight === undefined 
+                              ? 'Obbligatorio: seleziona il peso dello sviluppo per la validazione tech'
+                              : 'Seleziona quanto è "pesante" lo sviluppo per la validazione tech'}
+                          </p>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => updateStatus({ id: keydev._id, status: 'Approved', weight: techWeight })}
+                            disabled={techWeight === undefined}
+                            className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Approva Mockup
+                          </button>
+                          <button
+                            onClick={() => setShowRejectForm(true)}
+                            className="px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600"
+                          >
+                            Rifiuta
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -551,9 +628,25 @@ export default function KeyDevDetailPage() {
                       </div>
                       
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Commit Validato <span className="text-red-500">*</span>
-                        </label>
+                        <div className="flex items-center gap-2 mb-1">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Commit Validato dal Business <span className="text-red-500">*</span>
+                          </label>
+                          {keydev.mockupRepoUrl && (
+                            <a
+                              href={`${keydev.mockupRepoUrl.replace(/\/+$/, '')}/commits/`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                              title="Vai alla pagina dei commit, clicca il bottone 'Copia' dell'ultimo commit (dove apparirà 'Copy full SHA for [xxx]') e incollalo qui: sarà il patto tra sviluppatori e dipartimento richiedente."
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              Open on a new tab
+                            </a>
+                          )}
+                        </div>
                         <input
                           type="text"
                           value={validationCommit}
@@ -941,7 +1034,7 @@ export default function KeyDevDetailPage() {
                 {keydev.validatedMockupCommit && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Commit Validato
+                      Commit Validato dal Business
                     </label>
                     <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono">
                       {keydev.validatedMockupCommit}
@@ -1100,6 +1193,14 @@ export default function KeyDevDetailPage() {
                     <dt className="text-sm text-gray-500 dark:text-gray-400">Completato il</dt>
                     <dd className="font-medium text-emerald-700 dark:text-emerald-400">
                       {new Date(keydev.releasedAt).toLocaleDateString('it-IT')}
+                    </dd>
+                  </div>
+                )}
+                {keydev.weight !== undefined && (
+                  <div>
+                    <dt className="text-sm text-gray-500 dark:text-gray-400">Peso sviluppo</dt>
+                    <dd className="font-medium text-gray-900 dark:text-gray-100">
+                      {keydev.weight} ({(keydev.weight * 100).toFixed(0)}%)
                     </dd>
                   </div>
                 )}

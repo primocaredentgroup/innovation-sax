@@ -44,6 +44,15 @@ export const blockingLabelStatusValidator = v.union(
   v.literal('Closed')
 )
 
+// Weight validator per keydevs (peso dello sviluppo per validazione tech)
+export const keydevWeightValidator = v.union(
+  v.literal(0),
+  v.literal(0.25),
+  v.literal(0.50),
+  v.literal(0.75),
+  v.literal(1)
+)
+
 export default defineSchema({
   // Users & Roles
   users: defineTable({
@@ -103,6 +112,8 @@ export default defineSchema({
     repoUrl: v.optional(v.string()),
     repoTag: v.optional(v.string()),
     releaseCommit: v.optional(v.string()), // Commit rilasciato dall'owner quando completa lo sviluppo
+    // Weight (peso dello sviluppo per validazione tech)
+    weight: v.optional(keydevWeightValidator), // Peso da 0 a 1 (0, 0.25, 0.50, 0.75, 1)
     // Timestamps
     approvedAt: v.optional(v.number()),
     frontValidatedAt: v.optional(v.number()),
