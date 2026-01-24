@@ -105,27 +105,41 @@ export default function PlanningPage() {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Budget Totale:</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Numero sviluppatori:</span>
             <span className="ml-2 font-semibold">{totalBudget}</span>
           </div>
           <div>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Allocato:</span>
-            <span className={`ml-2 font-semibold ${totalAllocated > totalBudget ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Slot allocati:</span>
+            <span className="ml-2 font-semibold text-blue-600 dark:text-blue-400">
               {totalAllocated}
             </span>
           </div>
           <div>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Rimanente:</span>
-            <span className={`ml-2 font-semibold ${totalBudget - totalAllocated < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
-              {totalBudget - totalAllocated}
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {totalAllocated > totalBudget ? 'Competizione:' : 'Slot liberi:'}
+            </span>
+            <span className={`ml-2 font-semibold ${
+              totalAllocated > totalBudget 
+                ? 'text-green-600 dark:text-green-400' 
+                : totalAllocated < totalBudget 
+                  ? 'text-yellow-600 dark:text-yellow-400' 
+                  : ''
+            }`}>
+              {totalAllocated > totalBudget 
+                ? `+${totalAllocated - totalBudget}` 
+                : totalBudget - totalAllocated}
             </span>
           </div>
         </div>
         {totalAllocated !== totalBudget && (
-          <div className={`mt-2 text-sm ${totalAllocated > totalBudget ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+          <div className={`mt-2 text-sm ${
+            totalAllocated > totalBudget 
+              ? 'text-green-600 dark:text-green-400' 
+              : 'text-yellow-600 dark:text-yellow-400'
+          }`}>
             {totalAllocated > totalBudget
-              ? `Attenzione: allocazione supera il budget di ${totalAllocated - totalBudget}`
-              : `Mancano ${totalBudget - totalAllocated} KeyDev da allocare`}
+              ? `I dipartimenti competono per ${totalAllocated - totalBudget} slot extra`
+              : `${totalBudget - totalAllocated} slot rimarranno inutilizzati dai dipartimenti`}
           </div>
         )}
       </div>

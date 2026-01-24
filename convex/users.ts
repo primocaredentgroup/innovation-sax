@@ -85,7 +85,8 @@ export const getCurrentUser = query({
       picture: v.optional(v.string()),
       sub: v.string(),
       roles: v.optional(rolesValidator),
-      deptId: v.optional(v.id('departments'))
+      deptId: v.optional(v.id('departments')),
+      teamId: v.optional(v.id('teams'))
     }),
     v.null()
   ),
@@ -279,11 +280,92 @@ export const listUsers = query({
       picture: v.optional(v.string()),
       sub: v.string(),
       roles: v.optional(rolesValidator),
-      deptId: v.optional(v.id('departments'))
+      deptId: v.optional(v.id('departments')),
+      teamId: v.optional(v.id('teams'))
     })
   ),
   handler: async (ctx) => {
     const users = await ctx.db.query('users').collect()
     return users
+  }
+})
+
+/**
+ * Aggiorna il nome di un utente (solo Admin può farlo).
+ */
+export const updateUserName = mutation({
+  args: {
+    userId: v.id('users'),
+    name: v.string()
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+
+    // Verifica che l'utente corrente sia Admin
+    const currentUser = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+
+    if (!currentUser || !isAdmin(currentUser.roles)) {
+      throw new Error('Solo gli Admin possono modificare il nome')
+    }
+
+    // Verifica che l'utente esista
+    const targetUser = await ctx.db.get(args.userId)
+    if (!targetUser) {
+      throw new Error('Utente non trovato')
+    }
+
+    await ctx.db.patch(args.userId, { name: args.name })
+    return null
+  }
+})
+
+/**
+ * Aggiorna il team di un utente (solo Admin può farlo).
+ */
+export const updateUserTeam = mutation({
+  args: {
+    userId: v.id('users'),
+    teamId: v.union(v.id('teams'), v.null())
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+
+    // Verifica che l'utente corrente sia Admin
+    const currentUser = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+
+    if (!currentUser || !isAdmin(currentUser.roles)) {
+      throw new Error('Solo gli Admin possono modificare il team')
+    }
+
+    // Verifica che l'utente esista
+    const targetUser = await ctx.db.get(args.userId)
+    if (!targetUser) {
+      throw new Error('Utente non trovato')
+    }
+
+    // Se teamId è fornito, verifica che il team esista
+    if (args.teamId !== null) {
+      const team = await ctx.db.get(args.teamId)
+      if (!team) {
+        throw new Error('Team non trovato')
+      }
+    }
+
+    await ctx.db.patch(args.userId, { teamId: args.teamId ?? undefined })
+    return null
   }
 })

@@ -23,10 +23,14 @@ export default function UsersManagementPage() {
 
   const updateUserRoles = useMutation(api.users.updateUserRoles)
   const updateUserDepartment = useMutation(api.users.updateUserDepartment)
+  const updateUserName = useMutation(api.users.updateUserName)
+  const updateUserTeam = useMutation(api.users.updateUserTeam)
 
   const [editingUser, setEditingUser] = useState<Id<'users'> | null>(null)
   const [selectedDeptId, setSelectedDeptId] = useState<Id<'departments'> | ''>('')
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([])
+  const [editedName, setEditedName] = useState<string>('')
+  const [selectedTeamId, setSelectedTeamId] = useState<Id<'teams'> | ''>('')
 
   // Solo Admin può accedere
   if (!currentUser?.roles?.includes('Admin')) {
@@ -37,10 +41,18 @@ export default function UsersManagementPage() {
     )
   }
 
-  const handleEditUser = (userId: Id<'users'>, currentDeptId?: Id<'departments'>, currentRoles?: Role[]) => {
+  const handleEditUser = (
+    userId: Id<'users'>,
+    currentName: string,
+    currentDeptId?: Id<'departments'>,
+    currentRoles?: Role[],
+    currentTeamId?: Id<'teams'>
+  ) => {
     setEditingUser(userId)
+    setEditedName(currentName)
     setSelectedDeptId(currentDeptId || '')
     setSelectedRoles(currentRoles || ['Requester'])
+    setSelectedTeamId(currentTeamId || '')
   }
 
   const handleToggleRole = (role: Role) => {
@@ -56,21 +68,40 @@ export default function UsersManagementPage() {
   }
 
   const handleSaveUser = async (userId: Id<'users'>) => {
+    // Aggiorna il nome se modificato
+    if (editedName.trim() !== '') {
+      await updateUserName({ userId, name: editedName.trim() })
+    }
+    
+    // Aggiorna il dipartimento se modificato
     if (selectedDeptId && selectedDeptId !== '') {
       await updateUserDepartment({ userId, deptId: selectedDeptId as Id<'departments'> })
     }
+    
+    // Aggiorna i ruoli se modificati
     if (selectedRoles.length > 0) {
       await updateUserRoles({ userId, roles: selectedRoles })
     }
+    
+    // Aggiorna il team se modificato
+    await updateUserTeam({ 
+      userId, 
+      teamId: selectedTeamId === '' ? null : (selectedTeamId as Id<'teams'>)
+    })
+    
     setEditingUser(null)
+    setEditedName('')
     setSelectedDeptId('')
     setSelectedRoles([])
+    setSelectedTeamId('')
   }
 
   const handleCancelEdit = () => {
     setEditingUser(null)
+    setEditedName('')
     setSelectedDeptId('')
     setSelectedRoles([])
+    setSelectedTeamId('')
   }
 
   return (
@@ -96,14 +127,22 @@ export default function UsersManagementPage() {
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {users?.map((user) => {
                   const userDept = departments?.find((d) => d._id === user.deptId)
-                  const userTeams = userDept
-                    ? teams?.filter((t) => userDept.teamIds.includes(t._id))
-                    : []
                   const isEditing = editingUser === user._id
 
                   return (
                     <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-700">
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">{user.name}</td>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editedName}
+                            onChange={(e) => setEditedName(e.target.value)}
+                            className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                          />
+                        ) : (
+                          <span className="text-gray-900 dark:text-gray-100">{user.name}</span>
+                        )}
+                      </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-600 dark:text-gray-400 truncate max-w-[150px] lg:max-w-none">{user.email || '-'}</td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm">
                         {isEditing ? (
@@ -160,19 +199,36 @@ export default function UsersManagementPage() {
                         )}
                       </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm">
-                        {userTeams && userTeams.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {userTeams.map((team) => (
-                              <span
-                                key={team._id}
-                                className="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
-                              >
+                        {isEditing ? (
+                          <select
+                            value={selectedTeamId}
+                            onChange={(e) => setSelectedTeamId(e.target.value as Id<'teams'> | '')}
+                            className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                          >
+                            <option value="">Nessun team</option>
+                            {teams?.map((team) => (
+                              <option key={team._id} value={team._id}>
                                 {team.name}
-                              </span>
+                              </option>
                             ))}
-                          </div>
+                          </select>
                         ) : (
-                          <span className="text-gray-400 dark:text-gray-500">-</span>
+                          <>
+                            {user.teamId ? (
+                              (() => {
+                                const userTeam = teams?.find((t) => t._id === user.teamId)
+                                return userTeam ? (
+                                  <span className="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                                    {userTeam.name}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 dark:text-gray-500">-</span>
+                                )
+                              })()
+                            ) : (
+                              <span className="text-gray-400 dark:text-gray-500">-</span>
+                            )}
+                          </>
                         )}
                       </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-center">
@@ -193,7 +249,7 @@ export default function UsersManagementPage() {
                           </div>
                         ) : (
                           <button
-                            onClick={() => handleEditUser(user._id, user.deptId, (user.roles || ['Requester']) as Role[])}
+                            onClick={() => handleEditUser(user._id, user.name, user.deptId, (user.roles || ['Requester']) as Role[], user.teamId ?? undefined)}
                             className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
                           >
                             Modifica

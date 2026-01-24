@@ -541,14 +541,12 @@ export const updateStatus = mutation({
         throw new Error('KeyDev non trovato')
       }
       
-      // Costruisce il documento aggiornato rimuovendo i campi di sistema
+      // Costruisce il documento aggiornato rimuovendo i campi di sistema e i campi da cancellare
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { _id: _unusedId, _creationTime: _unusedCreationTime, ...docWithoutSystemFields } = existing
+      const { _id: _unusedId, _creationTime: _unusedCreationTime, rejectionReason: _unusedRejectionReason, rejectedById: _unusedRejectedById, ...docWithoutSystemFields } = existing
       const updatedDoc = {
         ...docWithoutSystemFields,
-        ...updates,
-        rejectionReason: undefined,
-        rejectedById: undefined
+        ...updates
       }
       
       await ctx.db.replace(args.id, updatedDoc)
@@ -703,6 +701,56 @@ export const linkMockupRepo = mutation({
     }
     
     await ctx.db.patch(args.id, updates)
+    return null
+  }
+})
+
+/**
+ * Assegna un owner a un KeyDev.
+ * Solo Admin o TechValidator possono assegnare l'owner in qualsiasi momento.
+ */
+export const assignOwner = mutation({
+  args: {
+    id: v.id('keydevs'),
+    ownerId: v.id('users')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const keydev = await ctx.db.get(args.id)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+
+    if (!user) {
+      throw new Error('Utente non trovato')
+    }
+
+    const userRoles = user.roles as Role[] | undefined
+    const userIsAdmin = isAdmin(userRoles)
+
+    if (!userIsAdmin && !hasRole(userRoles, 'TechValidator')) {
+      throw new Error('Solo Admin o TechValidator possono assegnare l\'owner')
+    }
+
+    // Verifica che l'ownerId esista
+    const owner = await ctx.db.get(args.ownerId)
+    if (!owner) {
+      throw new Error('Utente owner non trovato')
+    }
+
+    await ctx.db.patch(args.id, {
+      ownerId: args.ownerId
+    })
     return null
   }
 })

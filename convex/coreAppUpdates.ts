@@ -118,21 +118,63 @@ export const update = mutation({
       (updates.loomUrl !== undefined && updates.loomUrl.trim() === '')
     
     if (needsDeletion) {
-      // Se dobbiamo cancellare campi, usa replace per poter impostare i campi a undefined
+      // Se dobbiamo cancellare campi, usa replace per poter rimuovere i campi opzionali
       const existing = await ctx.db.get(id)
       if (!existing) {
         throw new Error('Update non trovato')
       }
       
-      // Costruisce il documento aggiornato rimuovendo i campi di sistema
+      // Costruisce il documento aggiornato rimuovendo i campi di sistema e i campi da cancellare
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { _id: _unusedId, _creationTime: _unusedCreationTime, ...docWithoutSystemFields } = existing
-      const updatedDoc = {
-        ...docWithoutSystemFields,
-        monthRef: updates.monthRef !== undefined ? (updates.monthRef.trim() === '' ? undefined : updates.monthRef.trim()) : existing.monthRef,
-        loomUrl: updates.loomUrl !== undefined ? (updates.loomUrl.trim() === '' ? undefined : updates.loomUrl.trim()) : existing.loomUrl,
-        title: updates.title !== undefined ? (updates.title.trim() === '' ? undefined : updates.title.trim()) : existing.title,
-        notes: updates.notes !== undefined ? (updates.notes.trim() === '' ? undefined : updates.notes.trim()) : existing.notes
+      
+      // Costruisce l'oggetto aggiornato, omettendo i campi che devono essere cancellati (stringa vuota)
+      const updatedDoc: {
+        coreAppId: typeof existing.coreAppId
+        weekRef: typeof existing.weekRef
+        createdAt: typeof existing.createdAt
+        monthRef?: string
+        loomUrl?: string
+        title?: string
+        notes?: string
+      } = {
+        coreAppId: docWithoutSystemFields.coreAppId,
+        weekRef: docWithoutSystemFields.weekRef,
+        createdAt: docWithoutSystemFields.createdAt
+      }
+      
+      // Aggiungi solo i campi che non devono essere cancellati
+      if (updates.monthRef !== undefined) {
+        if (updates.monthRef.trim() !== '') {
+          updatedDoc.monthRef = updates.monthRef.trim()
+        }
+        // Se è stringa vuota, ometti il campo (verrà cancellato)
+      } else if (existing.monthRef !== undefined) {
+        updatedDoc.monthRef = existing.monthRef
+      }
+      
+      if (updates.loomUrl !== undefined) {
+        if (updates.loomUrl.trim() !== '') {
+          updatedDoc.loomUrl = updates.loomUrl.trim()
+        }
+      } else if (existing.loomUrl !== undefined) {
+        updatedDoc.loomUrl = existing.loomUrl
+      }
+      
+      if (updates.title !== undefined) {
+        if (updates.title.trim() !== '') {
+          updatedDoc.title = updates.title.trim()
+        }
+      } else if (existing.title !== undefined) {
+        updatedDoc.title = existing.title
+      }
+      
+      if (updates.notes !== undefined) {
+        if (updates.notes.trim() !== '') {
+          updatedDoc.notes = updates.notes.trim()
+        }
+      } else if (existing.notes !== undefined) {
+        updatedDoc.notes = existing.notes
       }
       
       await ctx.db.replace(id, updatedDoc)

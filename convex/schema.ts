@@ -35,7 +35,9 @@ export const keydevStatusValidator = v.union(
 
 export const noteTypeValidator = v.union(
   v.literal('Comment'),
-  v.literal('Mention')
+  v.literal('Mention'),
+  v.literal('Task'), // Deprecato, mantenuto per retrocompatibilità
+  v.literal('Improvement') // Deprecato, mantenuto per retrocompatibilità
 )
 
 export const blockingLabelStatusValidator = v.union(
@@ -52,6 +54,31 @@ export const keydevWeightValidator = v.union(
   v.literal(1)
 )
 
+// Weight validator per penalità (peso della penalità da 0 a 1, multipli di 0.05)
+export const penaltyWeightValidator = v.union(
+  v.literal(0),
+  v.literal(0.05),
+  v.literal(0.10),
+  v.literal(0.15),
+  v.literal(0.20),
+  v.literal(0.25),
+  v.literal(0.30),
+  v.literal(0.35),
+  v.literal(0.40),
+  v.literal(0.45),
+  v.literal(0.50),
+  v.literal(0.55),
+  v.literal(0.60),
+  v.literal(0.65),
+  v.literal(0.70),
+  v.literal(0.75),
+  v.literal(0.80),
+  v.literal(0.85),
+  v.literal(0.90),
+  v.literal(0.95),
+  v.literal(1)
+)
+
 export default defineSchema({
   // Users & Roles
   users: defineTable({
@@ -60,10 +87,12 @@ export default defineSchema({
     picture: v.optional(v.string()),
     sub: v.string(), // Auth0 user ID
     roles: v.optional(rolesValidator), // Array di ruoli (utenti possono avere più ruoli)
-    deptId: v.optional(v.id('departments'))
+    deptId: v.optional(v.id('departments')),
+    teamId: v.optional(v.id('teams'))
   })
     .index('by_sub', ['sub'])
-    .index('by_dept', ['deptId']),
+    .index('by_dept', ['deptId'])
+    .index('by_team', ['teamId']),
 
   // Teams (ex Categories - rappresentano i team aziendali)
   teams: defineTable({
@@ -193,7 +222,7 @@ export default defineSchema({
   // Penalties (penalità applicate dall'admin aziendale dopo il controllo)
   penalties: defineTable({
     keyDevId: v.id('keydevs'),
-    weight: v.number(), // Peso della penalità da 0 a 1 (es. 0.10, 0.20, ecc.)
+    weight: penaltyWeightValidator, // Peso della penalità da 0 a 1 (multipli di 0.05)
     description: v.optional(v.string()), // Descrizione della penalità
     createdById: v.id('users'), // Admin che ha creato la penalità
     createdAt: v.number()

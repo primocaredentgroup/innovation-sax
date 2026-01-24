@@ -87,6 +87,7 @@ export default function KeyDevDetailPage() {
   const updateKeyDev = useMutation(api.keydevs.update)
   const updateStatus = useMutation(api.keydevs.updateStatus)
   const takeOwnership = useMutation(api.keydevs.takeOwnership)
+  const assignOwner = useMutation(api.keydevs.assignOwner)
   const markAsDone = useMutation(api.keydevs.markAsDone)
   const linkMockupRepo = useMutation(api.keydevs.linkMockupRepo)
   const addNote = useMutation(api.notes.create)
@@ -116,7 +117,6 @@ export default function KeyDevDetailPage() {
   const [mentionQuery, setMentionQuery] = useState('')
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionPosition, setMentionPosition] = useState<{ start: number; end: number } | null>(null)
-  const [selectedMentionedUserIds, setSelectedMentionedUserIds] = useState<Id<'users'>[]>([])
   
   // Stati per modifica ed eliminazione note
   const [editingNoteId, setEditingNoteId] = useState<Id<'notes'> | null>(null)
@@ -166,6 +166,7 @@ export default function KeyDevDetailPage() {
   })
   const [penaltyWeight, setPenaltyWeight] = useState('')
   const [penaltyDescription, setPenaltyDescription] = useState('')
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string>('')
   // Inizializza techWeight con il valore esistente del keydev o 1 come default
   const [techWeight, setTechWeight] = useState<0 | 0.25 | 0.5 | 0.75 | 1>(() => {
     if (keydev?.weight !== undefined) {
@@ -173,6 +174,15 @@ export default function KeyDevDetailPage() {
     }
     return 1
   })
+  
+  // Aggiorna selectedOwnerId quando cambia il keydev
+  useEffect(() => {
+    if (keydev?.ownerId) {
+      setSelectedOwnerId(keydev.ownerId)
+    } else {
+      setSelectedOwnerId('')
+    }
+  }, [keydev?.ownerId])
   
   // Aggiorna techWeight quando cambia il keydev
   useEffect(() => {
@@ -373,7 +383,7 @@ export default function KeyDevDetailPage() {
   }, [users, mentionQuery])
 
   // Gestisce la selezione di un utente dal dropdown
-  const handleSelectMention = (userId: Id<'users'>, userName: string) => {
+  const handleSelectMention = (userName: string) => {
     if (!mentionPosition) return
     
     // Rimuovi spazi dal nome per la visualizzazione
@@ -387,14 +397,6 @@ export default function KeyDevDetailPage() {
     setShowMentionDropdown(false)
     setMentionQuery('')
     setMentionPosition(null)
-    
-    // Aggiungi l'utente all'array se non è già presente
-    setSelectedMentionedUserIds(prev => {
-      if (!prev.includes(userId)) {
-        return [...prev, userId]
-      }
-      return prev
-    })
     
     // Focus sulla textarea dopo un breve delay per aggiornare il cursore
     setTimeout(() => {
@@ -436,13 +438,6 @@ export default function KeyDevDetailPage() {
       }
     }
     
-    // Aggiungi anche gli utenti già selezionati che potrebbero non essere nel testo
-    selectedMentionedUserIds.forEach(userId => {
-      if (!mentionedUserIds.includes(userId)) {
-        mentionedUserIds.push(userId)
-      }
-    })
-    
     // Determina il tipo di nota: se ci sono menzioni valide, usa "Mention", altrimenti "Comment"
     const noteType: 'Comment' | 'Mention' = mentionedUserIds.length > 0 ? 'Mention' : 'Comment'
     
@@ -453,7 +448,6 @@ export default function KeyDevDetailPage() {
       mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
     })
     setNewNote('')
-    setSelectedMentionedUserIds([])
     setShowMentionDropdown(false)
     setMentionQuery('')
     setMentionPosition(null)
@@ -475,7 +469,6 @@ export default function KeyDevDetailPage() {
     setShowMentionDropdown(false)
     setMentionQuery('')
     setMentionPosition(null)
-    setSelectedMentionedUserIds([])
   }
 
   // Gestisce il salvataggio della modifica
@@ -525,7 +518,6 @@ export default function KeyDevDetailPage() {
     setShowMentionDropdown(false)
     setMentionQuery('')
     setMentionPosition(null)
-    setSelectedMentionedUserIds([])
   }
 
   // Gestisce il click sul pulsante elimina (mostra conferma)
@@ -794,7 +786,7 @@ export default function KeyDevDetailPage() {
                                   }
                                   if (e.key === 'Enter' && showMentionDropdown && filteredUsersForMention.length > 0 && !e.shiftKey) {
                                     e.preventDefault()
-                                    handleSelectMention(filteredUsersForMention[0]._id, filteredUsersForMention[0].name)
+                                    handleSelectMention(filteredUsersForMention[0].name)
                                   }
                                 }}
                                 rows={3}
@@ -822,13 +814,6 @@ export default function KeyDevDetailPage() {
                                         setShowMentionDropdown(false)
                                         setMentionQuery('')
                                         setMentionPosition(null)
-                                        
-                                        setSelectedMentionedUserIds(prev => {
-                                          if (!prev.includes(user._id)) {
-                                            return [...prev, user._id]
-                                          }
-                                          return prev
-                                        })
                                       }}
                                       className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                                     >
@@ -909,7 +894,7 @@ export default function KeyDevDetailPage() {
                             // Gestisci Enter per selezionare il primo utente nel dropdown
                             if (e.key === 'Enter' && showMentionDropdown && filteredUsersForMention.length > 0 && !e.shiftKey) {
                               e.preventDefault()
-                              handleSelectMention(filteredUsersForMention[0]._id, filteredUsersForMention[0].name)
+                              handleSelectMention(filteredUsersForMention[0].name)
                             }
                           }}
                           placeholder="Aggiungi un commento... Usa @ per menzionare un utente"
@@ -923,7 +908,7 @@ export default function KeyDevDetailPage() {
                               <button
                                 key={user._id}
                                 type="button"
-                                onClick={() => handleSelectMention(user._id, user.name)}
+                                onClick={() => handleSelectMention(user.name)}
                                 className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                               >
                                 <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
@@ -1557,10 +1542,19 @@ export default function KeyDevDetailPage() {
                         alert('Inserisci un peso valido tra 0 e 1')
                         return
                       }
+                      // Arrotonda al multiplo di 0.05 più vicino per rispettare il validator
+                      const weight = parseFloat(penaltyWeight)
+                      const roundedWeight = Math.round(weight * 20) / 20
+                      const validWeights = [0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1] as const
+                      const validWeight = validWeights.find(w => Math.abs(w - roundedWeight) < 0.001)
+                      if (validWeight === undefined) {
+                        alert('Il peso deve essere un multiplo di 0.05 (es. 0.05, 0.10, 0.15, ecc.)')
+                        return
+                      }
                       try {
                         await createPenalty({
                           keyDevId: keydev._id,
-                          weight: parseFloat(penaltyWeight),
+                          weight: validWeight,
                           description: penaltyDescription.trim() || undefined
                         })
                         setPenaltyWeight('')
@@ -1722,22 +1716,42 @@ export default function KeyDevDetailPage() {
                     {users?.find((u) => u._id === keydev.requesterId)?.name || 'N/A'}
                   </dd>
                 </div>
-                {keydev.mockupRepoUrl && (
-                  <div>
-                    <dt className="text-sm text-gray-500 dark:text-gray-400">RepoMockup</dt>
-                    <dd className="font-medium text-gray-900 dark:text-gray-100">
+                <div>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">RepoMockup</dt>
+                  <dd className="font-medium text-gray-900 dark:text-gray-100">
+                    {keydev.mockupRepoUrl ? (
                       <a
                         href={keydev.mockupRepoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline break-all"
+                        className="text-blue-600 dark:text-blue-400 hover:underline block truncate"
                         title={keydev.mockupRepoUrl}
                       >
                         {truncateUrl(keydev.mockupRepoUrl, 50)}
                       </a>
-                    </dd>
-                  </div>
-                )}
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">RepoUrl ufficiale</dt>
+                  <dd className="font-medium text-gray-900 dark:text-gray-100">
+                    {keydev.repoUrl ? (
+                      <a
+                        href={keydev.repoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline block truncate"
+                        title={keydev.repoUrl}
+                      >
+                        {truncateUrl(keydev.repoUrl, 50)}
+                      </a>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
+                    )}
+                  </dd>
+                </div>
               </dl>
             </div>
 
@@ -1745,71 +1759,116 @@ export default function KeyDevDetailPage() {
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Attori del Flusso</h3>
               <dl className="space-y-3">
-                {keydev.techValidatorId && (
-                  <div>
-                    <dt className="text-sm text-gray-500 dark:text-gray-400">Approvato da (TechValidator)</dt>
-                    <dd className="font-medium text-gray-900 dark:text-gray-100">
-                      {users?.find((u) => u._id === keydev.techValidatorId)?.name || 'N/A'}
-                    </dd>
-                    {(keydev.techValidatedAt || keydev.approvedAt) && (
-                      <dd className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(keydev.techValidatedAt || keydev.approvedAt!).toLocaleDateString('it-IT', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </dd>
+                <div>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">Approvato da (TechValidator)</dt>
+                  <dd className="font-medium text-gray-900 dark:text-gray-100">
+                    {keydev.techValidatorId ? (
+                      users?.find((u) => u._id === keydev.techValidatorId)?.name || 'N/A'
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
                     )}
-                  </div>
-                )}
-                {keydev.businessValidatorId && (
-                  <div>
-                    <dt className="text-sm text-gray-500 dark:text-gray-400">Validato da (BusinessValidator)</dt>
-                    <dd className="font-medium text-gray-900 dark:text-gray-100">
-                      {users?.find((u) => u._id === keydev.businessValidatorId)?.name || 'N/A'}
+                  </dd>
+                  {(keydev.techValidatedAt || keydev.approvedAt) && (
+                    <dd className="text-xs text-gray-400 dark:text-gray-500">
+                      {new Date(keydev.techValidatedAt || keydev.approvedAt!).toLocaleDateString('it-IT', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
                     </dd>
-                    {(keydev.businessValidatedAt || keydev.frontValidatedAt) && (
-                      <dd className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(keydev.businessValidatedAt || keydev.frontValidatedAt!).toLocaleDateString('it-IT', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </dd>
+                  )}
+                </div>
+                <div>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">Validato da (BusinessValidator)</dt>
+                  <dd className="font-medium text-gray-900 dark:text-gray-100">
+                    {keydev.businessValidatorId ? (
+                      users?.find((u) => u._id === keydev.businessValidatorId)?.name || 'N/A'
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
                     )}
-                  </div>
-                )}
-                {keydev.ownerId && (
-                  <div>
-                    <dt className="text-sm text-gray-500 dark:text-gray-400">Owner (Sviluppatore)</dt>
+                  </dd>
+                  {(keydev.businessValidatedAt || keydev.frontValidatedAt) && (
+                    <dd className="text-xs text-gray-400 dark:text-gray-500">
+                      {new Date(keydev.businessValidatedAt || keydev.frontValidatedAt!).toLocaleDateString('it-IT', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </dd>
+                  )}
+                </div>
+                <div>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">Owner (Sviluppatore)</dt>
+                  {(userIsAdmin || userIsTechValidator) ? (
+                    <div className="space-y-2">
+                      <select
+                        value={selectedOwnerId}
+                        onChange={(e) => setSelectedOwnerId(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+                      >
+                        <option value="">Seleziona owner...</option>
+                        {users?.filter(u => hasRole(u.roles as Role[] | undefined, 'TechValidator') || isAdmin(u.roles as Role[] | undefined))
+                          .map((u) => (
+                            <option key={u._id} value={u._id}>
+                              {u.name}
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        onClick={async () => {
+                          if (!selectedOwnerId) {
+                            alert('Seleziona un owner')
+                            return
+                          }
+                          try {
+                            await assignOwner({
+                              id: keydev._id,
+                              ownerId: selectedOwnerId as Id<'users'>
+                            })
+                          } catch (error) {
+                            alert(error instanceof Error ? error.message : 'Errore nell\'assegnazione dell\'owner')
+                          }
+                        }}
+                        disabled={!selectedOwnerId || selectedOwnerId === keydev.ownerId}
+                        className="w-full px-3 py-1 text-sm bg-purple-600 dark:bg-purple-700 text-white rounded-md hover:bg-purple-700 dark:hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {keydev.ownerId ? 'Aggiorna Owner' : 'Assegna Owner'}
+                      </button>
+                    </div>
+                  ) : (
                     <dd className="font-medium text-purple-700 dark:text-purple-400">
-                      {users?.find((u) => u._id === keydev.ownerId)?.name || 'N/A'}
+                      {keydev.ownerId ? (
+                        users?.find((u) => u._id === keydev.ownerId)?.name || 'N/A'
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
+                      )}
                     </dd>
-                  </div>
-                )}
-                {keydev.releasedAt && (
-                  <div>
-                    <dt className="text-sm text-gray-500 dark:text-gray-400">Completato il</dt>
-                    <dd className="font-medium text-emerald-700 dark:text-emerald-400">
-                      {new Date(keydev.releasedAt).toLocaleDateString('it-IT')}
-                    </dd>
-                  </div>
-                )}
-                {keydev.weight !== undefined && (
-                  <div>
-                    <dt className="text-sm text-gray-500 dark:text-gray-400">Peso sviluppo</dt>
-                    <dd className="font-medium text-gray-900 dark:text-gray-100">
-                      {keydev.weight} ({(keydev.weight * 100).toFixed(0)}%)
-                    </dd>
-                  </div>
-                )}
-                {!keydev.techValidatorId && !keydev.businessValidatorId && !keydev.ownerId && (
-                  <p className="text-sm text-gray-400 dark:text-gray-500 italic">Nessun attore ancora coinvolto</p>
-                )}
+                  )}
+                </div>
+                <div>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">Completato il</dt>
+                  <dd className="font-medium text-emerald-700 dark:text-emerald-400">
+                    {keydev.releasedAt ? (
+                      new Date(keydev.releasedAt).toLocaleDateString('it-IT')
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500 italic">Non completato</span>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">Peso sviluppo</dt>
+                  <dd className="font-medium text-gray-900 dark:text-gray-100">
+                    {keydev.weight !== undefined ? (
+                      `${keydev.weight} (${(keydev.weight * 100).toFixed(0)}%)`
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
+                    )}
+                  </dd>
+                </div>
               </dl>
             </div>
 

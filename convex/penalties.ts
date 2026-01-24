@@ -1,6 +1,7 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
 import { isAdmin } from './users'
+import { penaltyWeightValidator } from './schema'
 
 /**
  * Lista tutte le penalità per un KeyDev.
@@ -14,7 +15,7 @@ export const listByKeyDev = query({
       _id: v.id('penalties'),
       _creationTime: v.number(),
       keyDevId: v.id('keydevs'),
-      weight: v.number(),
+      weight: penaltyWeightValidator,
       description: v.optional(v.string()),
       createdById: v.id('users'),
       createdAt: v.number()
@@ -36,7 +37,7 @@ export const listByKeyDev = query({
 export const create = mutation({
   args: {
     keyDevId: v.id('keydevs'),
-    weight: v.number(),
+    weight: penaltyWeightValidator,
     description: v.optional(v.string())
   },
   returns: v.id('penalties'),
@@ -64,17 +65,6 @@ export const create = mutation({
     const keydev = await ctx.db.get(args.keyDevId)
     if (!keydev) {
       throw new Error('KeyDev non trovato')
-    }
-
-    // Valida il weight (deve essere tra 0 e 1)
-    if (args.weight < 0 || args.weight > 1) {
-      throw new Error('Il peso della penalità deve essere tra 0 e 1')
-    }
-
-    // Valida che il peso sia un multiplo di 0.10 (opzionale, ma meglio controllare)
-    const roundedWeight = Math.round(args.weight * 100) / 100
-    if (Math.abs(args.weight - roundedWeight) > 0.001) {
-      throw new Error('Il peso della penalità deve essere un valore con massimo 2 decimali (es. 0.10, 0.20, ecc.)')
     }
 
     const penaltyId = await ctx.db.insert('penalties', {

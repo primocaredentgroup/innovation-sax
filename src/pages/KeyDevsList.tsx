@@ -47,35 +47,15 @@ export default function KeyDevsListPage() {
   const keydevsByMonth = useQuery(api.keydevs.listByMonth, { monthRef: selectedMonth })
   // Query per keydevs senza filtro mese (MockupDone, Rejected, Approved)
   const keydevsWithoutMonth = useQuery(api.keydevs.listWithoutMonthFilter)
-  // Contatori per mese
-  const statusCountsByMonth = useQuery(api.keydevs.getStatusCounts, { monthRef: selectedMonth })
-  // Contatori senza filtro mese
-  const statusCountsWithoutMonth = useQuery(api.keydevs.getStatusCountsWithoutMonth)
   
   const departments = useQuery(api.departments.list)
   const teams = useQuery(api.teams.list)
   const allBlockingLabels = useQuery(api.blockingLabels.list)
   const users = useQuery(api.users.listUsers)
   
-  // Combina i contatori
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {}
-    // Contatori per stati con filtro mese
-    if (statusCountsByMonth) {
-      for (const [status, count] of Object.entries(statusCountsByMonth)) {
-        if (!statusesWithoutMonthFilter.includes(status)) {
-          counts[status] = count
-        }
-      }
-    }
-    // Contatori per stati senza filtro mese
-    if (statusCountsWithoutMonth) {
-      for (const [status, count] of Object.entries(statusCountsWithoutMonth)) {
-        counts[status] = count
-      }
-    }
-    return counts
-  }, [statusCountsByMonth, statusCountsWithoutMonth])
+  // Query per budget e mese
+  const budgetAllocations = useQuery(api.budget.getByMonth, { monthRef: selectedMonth })
+  const monthData = useQuery(api.months.getByRef, { monthRef: selectedMonth })
   
   // Combina i keydevs
   const keydevs = useMemo(() => {
@@ -85,6 +65,29 @@ export default function KeyDevsListPage() {
     const withoutMonth = keydevsWithoutMonth || []
     return [...byMonthFiltered, ...withoutMonth]
   }, [keydevsByMonth, keydevsWithoutMonth])
+  
+  // Calcola i contatori basandosi sui keydevs filtrati per team/dipartimento
+  // Questo assicura che i contatori corrispondano ai keydevs visibili nella lista
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    
+    // Applica i filtri base (mese, dept, team) per calcolare i contatori corretti
+    let filteredForCounts = keydevs || []
+    
+    if (search.dept) {
+      filteredForCounts = filteredForCounts.filter((kd) => kd.deptId === search.dept)
+    }
+    if (search.team) {
+      filteredForCounts = filteredForCounts.filter((kd) => kd.teamId === search.team)
+    }
+    
+    // Conta gli stati nei keydevs filtrati
+    for (const kd of filteredForCounts) {
+      counts[kd.status] = (counts[kd.status] || 0) + 1
+    }
+    
+    return counts
+  }, [keydevs, search.dept, search.team])
 
   // Normalizza gli status selezionati (può essere stringa o array)
   const selectedStatuses = useMemo(() => {
@@ -164,6 +167,42 @@ export default function KeyDevsListPage() {
     return result
   }, [baseFilteredKeyDevs, search.blockingLabel, blockingLabelsByKeyDev])
 
+  // Calcola l'utilizzo del budget (slot occupati vs slot massimi disponibili)
+  const budgetUtilization = useMemo(() => {
+    const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked']
+    
+    // Filtra keydevs per stati che occupano slot E per dipartimento/team se selezionati
+    // Usa keydevsByMonth per avere solo i keydevs del mese corrente
+    const relevantKeydevs = (keydevsByMonth || []).filter(kd => 
+      occupiedStatuses.includes(kd.status) && 
+      (!search.dept || kd.deptId === search.dept) &&
+      (!search.team || kd.teamId === search.team)
+    )
+    
+    // Somma pesi (default weight = 1 se non specificato)
+    const occupiedSlots = relevantKeydevs.reduce((sum, kd) => sum + (kd.weight ?? 1), 0)
+    
+    // Budget assegnato ai dipartimenti (filtrato per dipartimento/team se selezionati)
+    const budgetAssigned = budgetAllocations?.filter(b => 
+      (!search.dept || b.deptId === search.dept) &&
+      (!search.team || b.teamId === search.team)
+    ).reduce((sum, b) => sum + b.maxAlloc, 0) ?? 0
+    
+    // Slot massimi disponibili (totalKeyDev del mese) - numero sviluppatori
+    const maxSlots = monthData?.totalKeyDev ?? 0
+    
+    // Slot in competizione: differenza tra allocati e massimi (se allocati > massimi)
+    const competitionSlots = Math.max(0, budgetAssigned - maxSlots)
+    
+    // Percentuale basata sui slot massimi reali (non sul budget assegnato)
+    const percentage = maxSlots > 0 ? (occupiedSlots / maxSlots) * 100 : 0
+    
+    // Slot rimanenti per raggiungere il massimo
+    const remainingSlots = Math.max(0, maxSlots - occupiedSlots)
+    
+    return { occupiedSlots, budgetAssigned, maxSlots, competitionSlots, percentage, remainingSlots }
+  }, [keydevsByMonth, budgetAllocations, monthData, search.dept, search.team])
+
   // Generate month options
   const monthOptions = useMemo(() => {
     const options = []
@@ -198,7 +237,7 @@ export default function KeyDevsListPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Sviluppi Chiave di</h1>
           <select
             value={selectedMonth}
@@ -208,6 +247,19 @@ export default function KeyDevsListPage() {
             {monthOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
+              </option>
+            ))}
+          </select>
+          <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">per</span>
+          <select
+            value={search.dept || ''}
+            onChange={(e) => updateSearch({ dept: e.target.value || undefined })}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-lg font-semibold"
+          >
+            <option value="">Tutti i dipartimenti</option>
+            {departments?.map((d) => (
+              <option key={d._id} value={d._id}>
+                {d.name}
               </option>
             ))}
           </select>
@@ -221,63 +273,117 @@ export default function KeyDevsListPage() {
         </Link>
       </div>
 
-      {/* Team Tabs */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex overflow-x-auto">
-          <button
-            onClick={() => updateSearch({ team: undefined })}
-            className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-              selectedTeam === null
-                ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+      {/* Budget Utilization Card */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-6">
+            <div>
+              <span className="text-sm text-gray-500 dark:text-gray-400">Slot occupati:</span>
+              <span className="ml-2 font-semibold text-gray-900 dark:text-gray-100">
+                {budgetUtilization.occupiedSlots % 1 === 0 
+                  ? budgetUtilization.occupiedSlots 
+                  : budgetUtilization.occupiedSlots.toFixed(2)}
+                <span className="text-gray-400 dark:text-gray-500">/{budgetUtilization.maxSlots}</span>
+              </span>
+            </div>
+            <div>
+              <span className="text-sm text-gray-500 dark:text-gray-400">Slot allocati:</span>
+              <span className="ml-2 font-semibold text-gray-900 dark:text-gray-100">
+                {budgetUtilization.budgetAssigned}
+              </span>
+              {budgetUtilization.competitionSlots > 0 && (
+                <span className="ml-2 text-sm font-medium text-orange-600 dark:text-orange-400">
+                  ({budgetUtilization.competitionSlots} in competizione)
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500 dark:text-gray-400">Utilizzo:</span>
+            <span className={`text-lg font-bold ${
+              budgetUtilization.percentage >= 100 
+                ? 'text-green-600 dark:text-green-400' 
+                : budgetUtilization.percentage >= 50
+                  ? 'text-yellow-600 dark:text-yellow-400'
+                  : 'text-red-600 dark:text-red-400'
+            }`}>
+              {budgetUtilization.percentage.toFixed(0)}%
+            </span>
+          </div>
+        </div>
+        {/* Progress bar */}
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div 
+            className={`h-full transition-all duration-300 ${
+              budgetUtilization.percentage >= 100 
+                ? 'bg-green-500' 
+                : budgetUtilization.percentage >= 50
+                  ? 'bg-yellow-500'
+                  : 'bg-red-500'
             }`}
-          >
-            Tutti i team
-          </button>
-          {teams?.map((team) => (
+            style={{ width: `${Math.min(budgetUtilization.percentage, 100)}%` }}
+          />
+        </div>
+        {budgetUtilization.percentage < 100 && budgetUtilization.maxSlots > 0 && (
+          <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
+            {budgetUtilization.competitionSlots > 0 ? (
+              <>
+                <span className="font-medium">Attenzione:</span> {budgetUtilization.competitionSlots} dipartiment{budgetUtilization.competitionSlots === 1 ? 'o' : 'i'} perderanno lo slot. 
+                Valida il front rapidamente per assicurarti di non essere tra quelli esclusi!
+              </>
+            ) : (
+              <>
+                Rimangono {budgetUtilization.remainingSlots % 1 === 0 
+                  ? budgetUtilization.remainingSlots 
+                  : budgetUtilization.remainingSlots.toFixed(2)} slot disponibili. 
+                Valida il front per occupare il tuo slot!
+              </>
+            )}
+          </p>
+        )}
+        {budgetUtilization.percentage >= 100 && (
+          <p className="mt-2 text-sm text-green-600 dark:text-green-400 font-medium">
+            Tutti gli slot disponibili sono stati occupati!
+          </p>
+        )}
+      </div>
+
+      {/* Team Tabs and Blocking Label Filter */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <div className="flex overflow-x-auto flex-1">
             <button
-              key={team._id}
-              onClick={() => updateSearch({ team: team._id })}
+              onClick={() => updateSearch({ team: undefined })}
               className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                selectedTeam === team._id
+                selectedTeam === null
                   ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
                   : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
-              {team.name}
+              Tutti i team
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Dipartimento richiedente
-            </label>
-            <select
-              value={search.dept || ''}
-              onChange={(e) => updateSearch({ dept: e.target.value || undefined })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-            >
-              <option value="">Tutti</option>
-              {departments?.map((d) => (
-                <option key={d._id} value={d._id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+            {teams?.map((team) => (
+              <button
+                key={team._id}
+                onClick={() => updateSearch({ team: team._id })}
+                className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  selectedTeam === team._id
+                    ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+                }`}
+              >
+                {team.name}
+              </button>
+            ))}
           </div>
-          <div>
+          <div className="ml-4 px-4 py-3">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Filtra per Blocking Label
             </label>
             <select
               value={search.blockingLabel || ''}
               onChange={(e) => updateSearch({ blockingLabel: e.target.value || undefined })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
             >
               <option value="">Tutti</option>
               {Array.from(blockingLabelCounts.entries())
@@ -290,6 +396,10 @@ export default function KeyDevsListPage() {
             </select>
           </div>
         </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6 space-y-4">
 
         {/* Status Filters - Tag Style */}
         <div>
