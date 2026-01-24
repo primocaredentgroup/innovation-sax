@@ -192,7 +192,7 @@ export const getKeyDevsByStatus = query({
       .collect()
 
     // Filtra solo quelli con status >= FrontValidated
-    const validStatuses = ['FrontValidated', 'InProgress', 'Done'] as const
+    const validStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked'] as const
     const filteredKeydevs = keydevsByMonth.filter((kd) =>
       validStatuses.includes(kd.status as typeof validStatuses[number])
     )
@@ -242,7 +242,7 @@ export const getKeyDevsByTeamAndStatus = query({
       .collect()
 
     // Filtra solo quelli con status >= FrontValidated
-    const validStatuses = ['FrontValidated', 'InProgress', 'Done'] as const
+    const validStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked'] as const
     const filteredKeydevs = keydevsByMonth.filter((kd) =>
       validStatuses.includes(kd.status as typeof validStatuses[number])
     )
@@ -319,7 +319,8 @@ export const getCoreAppsStats = query({
 })
 
 /**
- * Ottiene i KeyDev passati (Done di mesi precedenti).
+ * Ottiene i KeyDev scaduti (mese precedente all'attuale e non ancora in stato "Checked").
+ * Mostra sempre tutti i keydevs scaduti, indipendentemente dal mese selezionato.
  */
 export const getPastKeyDevs = query({
   args: { currentMonth: v.string() },
@@ -338,7 +339,7 @@ export const getPastKeyDevs = query({
     const allKeyDevs = await ctx.db.query('keydevs').collect()
 
     return allKeyDevs
-      .filter((kd) => kd.status === 'Done' && kd.monthRef && kd.monthRef < args.currentMonth)
+      .filter((kd) => kd.monthRef && kd.monthRef < args.currentMonth && kd.status !== 'Checked')
       .map((kd) => ({
         _id: kd._id,
         readableId: kd.readableId,

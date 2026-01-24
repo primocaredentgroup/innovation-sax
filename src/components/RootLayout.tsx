@@ -240,7 +240,7 @@ export default function RootLayout() {
       <main
         className={`transition-all duration-300 ${
           sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
-        } pt-16 lg:pt-4 p-4 lg:p-8`}
+        } pt-16 lg:pt-4 p-4 lg:p-8 overflow-x-hidden max-w-full`}
       >
         {/* Mobile menu button */}
         <button
