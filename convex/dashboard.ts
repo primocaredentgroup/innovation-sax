@@ -355,7 +355,7 @@ export const getPastKeyDevs = query({
  * Ottiene tutti gli update divisi per settimana.
  */
 export const getUpdatesByWeek = query({
-  args: {},
+  args: { monthRef: v.optional(v.string()) },
   returns: v.array(
     v.object({
       weekRef: v.string(),
@@ -373,8 +373,17 @@ export const getUpdatesByWeek = query({
       )
     })
   ),
-  handler: async (ctx) => {
-    const allUpdates = await ctx.db.query('coreAppUpdates').collect()
+  handler: async (ctx, args) => {
+    let allUpdates
+    if (args.monthRef) {
+      allUpdates = await ctx.db
+        .query('coreAppUpdates')
+        .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
+        .collect()
+    } else {
+      allUpdates = await ctx.db.query('coreAppUpdates').collect()
+    }
+    
     const coreApps = await ctx.db.query('coreApps').collect()
     const coreAppsMap = new Map(coreApps.map((app) => [app._id, { name: app.name, percentComplete: app.percentComplete }]))
 

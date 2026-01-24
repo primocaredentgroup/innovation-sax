@@ -168,6 +168,7 @@ export default defineSchema({
   coreAppUpdates: defineTable({
     coreAppId: v.id('coreApps'),
     weekRef: v.string(), // formato "2026-W04"
+    monthRef: v.optional(v.string()), // formato "2026-01"
     loomUrl: v.optional(v.string()),
     title: v.optional(v.string()),
     notes: v.optional(v.string()),
@@ -175,4 +176,6 @@ export default defineSchema({
   })
     .index('by_coreApp', ['coreAppId'])
     .index('by_week', ['weekRef'])
+    .index('by_month', ['monthRef'])
+    .index('by_coreApp_and_month', ['coreAppId', 'monthRef'])
 })

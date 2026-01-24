@@ -6,6 +6,7 @@ const coreAppUpdateReturnValidator = v.object({
   _creationTime: v.number(),
   coreAppId: v.id('coreApps'),
   weekRef: v.string(),
+  monthRef: v.optional(v.string()),
   loomUrl: v.optional(v.string()),
   title: v.optional(v.string()),
   notes: v.optional(v.string()),
@@ -16,9 +17,21 @@ const coreAppUpdateReturnValidator = v.object({
  * Lista gli aggiornamenti di una Core App.
  */
 export const listByCoreApp = query({
-  args: { coreAppId: v.id('coreApps') },
+  args: { 
+    coreAppId: v.id('coreApps'),
+    monthRef: v.optional(v.string())
+  },
   returns: v.array(coreAppUpdateReturnValidator),
   handler: async (ctx, args) => {
+    if (args.monthRef) {
+      return await ctx.db
+        .query('coreAppUpdates')
+        .withIndex('by_coreApp_and_month', (q) => 
+          q.eq('coreAppId', args.coreAppId).eq('monthRef', args.monthRef)
+        )
+        .order('desc')
+        .collect()
+    }
     return await ctx.db
       .query('coreAppUpdates')
       .withIndex('by_coreApp', (q) => q.eq('coreAppId', args.coreAppId))
@@ -42,12 +55,28 @@ export const listByWeek = query({
 })
 
 /**
+ * Lista tutti gli aggiornamenti di un mese.
+ */
+export const listByMonth = query({
+  args: { monthRef: v.string() },
+  returns: v.array(coreAppUpdateReturnValidator),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('coreAppUpdates')
+      .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
+      .order('desc')
+      .collect()
+  }
+})
+
+/**
  * Crea un nuovo aggiornamento settimanale.
  */
 export const create = mutation({
   args: {
     coreAppId: v.id('coreApps'),
     weekRef: v.string(),
+    monthRef: v.optional(v.string()),
     loomUrl: v.optional(v.string()),
     title: v.optional(v.string()),
     notes: v.optional(v.string())
@@ -57,6 +86,7 @@ export const create = mutation({
     return await ctx.db.insert('coreAppUpdates', {
       coreAppId: args.coreAppId,
       weekRef: args.weekRef,
+      monthRef: args.monthRef,
       loomUrl: args.loomUrl,
       title: args.title,
       notes: args.notes,
@@ -71,6 +101,7 @@ export const create = mutation({
 export const update = mutation({
   args: {
     id: v.id('coreAppUpdates'),
+    monthRef: v.optional(v.string()),
     loomUrl: v.optional(v.string()),
     title: v.optional(v.string()),
     notes: v.optional(v.string())

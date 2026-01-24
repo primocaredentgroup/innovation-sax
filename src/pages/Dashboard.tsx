@@ -197,7 +197,7 @@ export default function DashboardPage() {
   const delayedKeyDevs = useQuery(api.dashboard.getDelayedKeyDevs, { currentMonth })
   const pastKeyDevs = useQuery(api.dashboard.getPastKeyDevs, { currentMonth })
   const keyDevsByCategory = useQuery(api.dashboard.getKeyDevsByCategoryAndStatus, { monthRef: selectedMonth })
-  const updatesByWeek = useQuery(api.dashboard.getUpdatesByWeek)
+  const updatesByWeek = useQuery(api.dashboard.getUpdatesByWeek, { monthRef: selectedMonth })
   
   // Calcola il counter per Weekly Loom (totale update con loomUrl)
   const weeklyLoomCount = useMemo(() => {
@@ -338,7 +338,7 @@ export default function DashboardPage() {
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
-            Sviluppi Chiave Passati ({pastKeyDevsCount})
+            Sviluppi Chiave Scaduti ({pastKeyDevsCount})
           </button>
           {hasDelayedKeyDevs && (
             <button
@@ -392,7 +392,7 @@ export default function DashboardPage() {
           {/* Grafico KeyDev per Stato con divisione per categoria */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-              Sviluppi Chiave per Stato e Categoria - {selectedMonth}
+              Sviluppi Chiave per Stato - {selectedMonth}
             </h2>
             {keyDevsByCategory ? (
               <div className="space-y-6">
@@ -455,7 +455,7 @@ export default function DashboardPage() {
           {/* Monthly Progress by Category */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-              Progress per Categoria
+              Completati per Categoria - {selectedMonth}
             </h2>
             {okrData?.byCategory && okrData.byCategory.length > 0 ? (
               <div className="space-y-4">
@@ -577,7 +577,7 @@ export default function DashboardPage() {
       {activeTab === 'pastKeyDevs' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-            Sviluppi Chiave Passati
+            Sviluppi Chiave Scaduti
           </h2>
           {pastKeyDevs && pastKeyDevs.length > 0 ? (
             <div className="space-y-3">

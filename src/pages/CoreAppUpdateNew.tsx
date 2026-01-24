@@ -4,6 +4,20 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { oembed } from '@loomhq/loom-embed'
 
+// Helper per calcolare il mese dalla settimana ISO (usa il lunedì della settimana)
+function getMonthFromWeekRef(weekRef: string): string {
+  const match = weekRef.match(/^(\d{4})-W(\d{2})$/)
+  if (!match) {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  }
+  const year = parseInt(match[1], 10)
+  const week = parseInt(match[2], 10)
+  const monday = getMondayOfISOWeek(year, week)
+  const month = monday.getMonth() + 1
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
 // Helper per calcolare il numero della settimana ISO
 function getISOWeek(date: Date): { year: number; week: number } {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
@@ -154,15 +168,60 @@ export default function CoreAppUpdateNewPage() {
   const navigate = useNavigate()
   
   const coreApp = useQuery(api.coreApps.getBySlug, { slug })
+  const months = useQuery(api.months.list)
   const createUpdate = useMutation(api.coreAppUpdates.create)
   
   const [selectedWeek, setSelectedWeek] = useState(getCurrentWeekRef())
+  const [selectedMonth, setSelectedMonth] = useState<string>(getMonthFromWeekRef(getCurrentWeekRef()))
   const [notes, setNotes] = useState('')
   const [loomUrl, setLoomUrl] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Genera le opzioni delle settimane
   const weekOptions = useMemo(() => generateWeekOptions(), [])
+  
+  // Genera le opzioni per i mesi (6 mesi passati + mese corrente + mesi futuri dal DB)
+  const monthOptions = useMemo(() => {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonthNum = now.getMonth() + 1
+    
+    // Genera i 6 mesi passati
+    const pastMonths: string[] = []
+    for (let i = 6; i >= 1; i--) {
+      const date = new Date(currentYear, currentMonthNum - 1 - i, 1)
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      pastMonths.push(`${year}-${String(month).padStart(2, '0')}`)
+    }
+    
+    // Mese corrente
+    const currentMonthRef = `${currentYear}-${String(currentMonthNum).padStart(2, '0')}`
+    
+    // Mesi futuri dal database
+    const futureMonths = months 
+      ? months
+          .map((m) => m.monthRef)
+          .filter((m) => m > currentMonthRef)
+          .sort()
+      : []
+    
+    // Combina tutto: mesi passati + mese corrente + mesi futuri
+    const allMonths = [...pastMonths, currentMonthRef, ...futureMonths]
+    
+    // Rimuovi duplicati e ordina (decrescente)
+    const uniqueMonths = Array.from(new Set(allMonths)).sort().reverse()
+    
+    return uniqueMonths
+  }, [months])
+  
+  // Quando cambia la settimana, aggiorna automaticamente il mese
+  useEffect(() => {
+    const calculatedMonth = getMonthFromWeekRef(selectedWeek)
+    if (calculatedMonth !== selectedMonth && monthOptions.includes(calculatedMonth)) {
+      setSelectedMonth(calculatedMonth)
+    }
+  }, [selectedWeek, monthOptions, selectedMonth])
   
   // Genera il titolo automatico basato sulla settimana e sul nome del prodotto Core
   const autoTitle = useMemo(() => {
@@ -179,6 +238,7 @@ export default function CoreAppUpdateNewPage() {
       await createUpdate({
         coreAppId: coreApp._id,
         weekRef: selectedWeek,
+        monthRef: selectedMonth || undefined,
         title: autoTitle,
         notes: notes.trim() || undefined,
         loomUrl: loomUrl.trim() || undefined
@@ -233,6 +293,26 @@ export default function CoreAppUpdateNewPage() {
                 </option>
               ))}
             </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Mese di Riferimento
+            </label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+            >
+              {monthOptions.map((monthRef) => (
+                <option key={monthRef} value={monthRef}>
+                  {monthRef}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Il mese viene calcolato automaticamente dalla settimana selezionata, ma può essere modificato manualmente
+            </p>
           </div>
           
           <div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
@@ -93,18 +93,50 @@ function UpdateDialogForm({
   isEditing
 }: {
   onClose: () => void
-  onSave: (data: { loomUrl?: string; title: string; notes: string; weekRef: string }) => void
-  initialData?: { loomUrl?: string; title: string; notes: string; weekRef: string }
+  onSave: (data: { loomUrl?: string; title: string; notes: string; weekRef: string; monthRef?: string }) => void
+  initialData?: { loomUrl?: string; title: string; notes: string; weekRef: string; monthRef?: string }
   isEditing: boolean
 }) {
   const [loomUrl, setLoomUrl] = useState(initialData?.loomUrl || '')
   const [title, setTitle] = useState(initialData?.title || '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [weekRef, setWeekRef] = useState(initialData?.weekRef || getCurrentWeekRef())
+  const [monthRef, setMonthRef] = useState(initialData?.monthRef || '')
+  
+  const months = useQuery(api.months.list)
+  
+  // Genera le opzioni per i mesi
+  const monthOptions = useMemo(() => {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonthNum = now.getMonth() + 1
+    
+    const pastMonths: string[] = []
+    for (let i = 6; i >= 1; i--) {
+      const date = new Date(currentYear, currentMonthNum - 1 - i, 1)
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      pastMonths.push(`${year}-${String(month).padStart(2, '0')}`)
+    }
+    
+    const currentMonthRef = `${currentYear}-${String(currentMonthNum).padStart(2, '0')}`
+    
+    const futureMonths = months 
+      ? months
+          .map((m) => m.monthRef)
+          .filter((m) => m > currentMonthRef)
+          .sort()
+      : []
+    
+    const allMonths = [...pastMonths, currentMonthRef, ...futureMonths]
+    const uniqueMonths = Array.from(new Set(allMonths)).sort().reverse()
+    
+    return uniqueMonths
+  }, [months])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSave({ loomUrl: loomUrl || undefined, title, notes, weekRef })
+    onSave({ loomUrl: loomUrl || undefined, title, notes, weekRef, monthRef: monthRef || undefined })
   }
 
   return (
@@ -129,6 +161,24 @@ function UpdateDialogForm({
               className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               required
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Mese di Riferimento
+            </label>
+            <select
+              value={monthRef}
+              onChange={(e) => setMonthRef(e.target.value)}
+              className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            >
+              <option value="">Nessun mese</option>
+              {monthOptions.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -211,8 +261,8 @@ function UpdateDialog({
 }: {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: { loomUrl?: string; title: string; notes: string; weekRef: string }) => void
-  initialData?: { loomUrl?: string; title: string; notes: string; weekRef: string }
+  onSave: (data: { loomUrl?: string; title: string; notes: string; weekRef: string; monthRef?: string }) => void
+  initialData?: { loomUrl?: string; title: string; notes: string; weekRef: string; monthRef?: string }
   isEditing: boolean
 }) {
   if (!isOpen) return null
@@ -244,6 +294,7 @@ function ViewUpdateDialog({
   update: {
     _id: Id<'coreAppUpdates'>
     weekRef: string
+    monthRef?: string
     loomUrl?: string
     title?: string
     notes?: string
@@ -328,9 +379,16 @@ export default function CoreAppDetailPage() {
   const { slug } = useParams({ strict: false }) as { slug: string }
 
   const coreApp = useQuery(api.coreApps.getBySlug, { slug })
+  const months = useQuery(api.months.list)
+  
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
+  
   const updates = useQuery(
     api.coreAppUpdates.listByCoreApp,
-    coreApp ? { coreAppId: coreApp._id } : 'skip'
+    coreApp ? { 
+      coreAppId: coreApp._id,
+      monthRef: selectedMonth || undefined
+    } : 'skip'
   )
 
   const updateUpdate = useMutation(api.coreAppUpdates.update)
@@ -348,6 +406,41 @@ export default function CoreAppDetailPage() {
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false)
   const [tempPercent, setTempPercent] = useState<number>(0)
   const [tempHubUrl, setTempHubUrl] = useState<string>('')
+  
+  // Genera le opzioni per i mesi (6 mesi passati + mese corrente + mesi futuri dal DB)
+  const monthOptions = useMemo(() => {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonthNum = now.getMonth() + 1
+    
+    // Genera i 6 mesi passati
+    const pastMonths: string[] = []
+    for (let i = 6; i >= 1; i--) {
+      const date = new Date(currentYear, currentMonthNum - 1 - i, 1)
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      pastMonths.push(`${year}-${String(month).padStart(2, '0')}`)
+    }
+    
+    // Mese corrente
+    const currentMonthRef = `${currentYear}-${String(currentMonthNum).padStart(2, '0')}`
+    
+    // Mesi futuri dal database
+    const futureMonths = months 
+      ? months
+          .map((m) => m.monthRef)
+          .filter((m) => m > currentMonthRef)
+          .sort()
+      : []
+    
+    // Combina tutto: mesi passati + mese corrente + mesi futuri
+    const allMonths = [...pastMonths, currentMonthRef, ...futureMonths]
+    
+    // Rimuovi duplicati e ordina (decrescente)
+    const uniqueMonths = Array.from(new Set(allMonths)).sort().reverse()
+    
+    return uniqueMonths
+  }, [months])
 
   // Usa valori derivati quando non si sta editando, altrimenti usa lo stato locale
   const currentPercent = isEditingPercent ? tempPercent : (coreApp?.percentComplete || 0)
@@ -368,13 +461,14 @@ export default function CoreAppDetailPage() {
     }
   }, [coreApp])
 
-  const handleEditUpdate = useCallback(async (data: { loomUrl?: string; title: string; notes: string; weekRef: string }) => {
+  const handleEditUpdate = useCallback(async (data: { loomUrl?: string; title: string; notes: string; weekRef: string; monthRef?: string }) => {
     if (!selectedUpdate) return
     await updateUpdate({
       id: selectedUpdate._id,
       loomUrl: data.loomUrl,
       title: data.title || undefined,
-      notes: data.notes || undefined
+      notes: data.notes || undefined,
+      monthRef: data.monthRef
     })
     setIsEditDialogOpen(false)
     setIsViewDialogOpen(false)
@@ -502,13 +596,27 @@ export default function CoreAppDetailPage() {
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
                 Aggiornamenti Settimanali
               </h2>
-              <Link
-                to="/core-apps/$slug/updates/new"
-                params={{ slug }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm inline-block"
-              >
-                + Nuovo Aggiornamento
-              </Link>
+              <div className="flex items-center gap-3">
+                <select
+                  value={selectedMonth || ''}
+                  onChange={(e) => setSelectedMonth(e.target.value || null)}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Tutti i mesi</option>
+                  {monthOptions.map((monthRef) => (
+                    <option key={monthRef} value={monthRef}>
+                      {monthRef}
+                    </option>
+                  ))}
+                </select>
+                <Link
+                  to="/core-apps/$slug/updates/new"
+                  params={{ slug }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm inline-block"
+                >
+                  + Nuovo Aggiornamento
+                </Link>
+              </div>
             </div>
 
             {updates && updates.length > 0 ? (
@@ -726,7 +834,8 @@ export default function CoreAppDetailPage() {
           loomUrl: selectedUpdate.loomUrl || '',
           title: selectedUpdate.title || '',
           notes: selectedUpdate.notes || '',
-          weekRef: selectedUpdate.weekRef
+          weekRef: selectedUpdate.weekRef,
+          monthRef: selectedUpdate.monthRef || ''
         } : undefined}
         isEditing={true}
       />
