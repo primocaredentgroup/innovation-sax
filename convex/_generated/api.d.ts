@@ -19,6 +19,7 @@ import type * as keydevs from "../keydevs.js";
 import type * as labels from "../labels.js";
 import type * as months from "../months.js";
 import type * as notes from "../notes.js";
+import type * as penalties from "../penalties.js";
 import type * as teams from "../teams.js";
 import type * as users from "../users.js";
 
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   labels: typeof labels;
   months: typeof months;
   notes: typeof notes;
+  penalties: typeof penalties;
   teams: typeof teams;
   users: typeof users;
 }>;

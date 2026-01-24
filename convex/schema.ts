@@ -21,6 +21,7 @@ export const rolesValidator = v.array(singleRoleValidator)
 // 5. FrontValidated (Front Validato) - dopo validazione BusinessValidator del dipartimento
 // 6. InProgress (In Corso) - quando un TechValidator diventa owner
 // 7. Done (Completato) - quando l'owner dichiara completato
+// 8. Checked (Controllato) - quando l'admin aziendale ha controllato e applicato eventuali penalità
 export const keydevStatusValidator = v.union(
   v.literal('Draft'),
   v.literal('MockupDone'),
@@ -28,7 +29,8 @@ export const keydevStatusValidator = v.union(
   v.literal('Rejected'),
   v.literal('FrontValidated'),
   v.literal('InProgress'),
-  v.literal('Done')
+  v.literal('Done'),
+  v.literal('Checked')
 )
 
 export const noteTypeValidator = v.union(
@@ -100,6 +102,7 @@ export default defineSchema({
     // Real development repo
     repoUrl: v.optional(v.string()),
     repoTag: v.optional(v.string()),
+    releaseCommit: v.optional(v.string()), // Commit rilasciato dall'owner quando completa lo sviluppo
     // Timestamps
     approvedAt: v.optional(v.number()),
     frontValidatedAt: v.optional(v.number()),
@@ -175,5 +178,15 @@ export default defineSchema({
     .index('by_coreApp', ['coreAppId'])
     .index('by_week', ['weekRef'])
     .index('by_month', ['monthRef'])
-    .index('by_coreApp_and_month', ['coreAppId', 'monthRef'])
+    .index('by_coreApp_and_month', ['coreAppId', 'monthRef']),
+
+  // Penalties (penalità applicate dall'admin aziendale dopo il controllo)
+  penalties: defineTable({
+    keyDevId: v.id('keydevs'),
+    weight: v.number(), // Peso della penalità da 0 a 1 (es. 0.10, 0.20, ecc.)
+    description: v.optional(v.string()), // Descrizione della penalità
+    createdById: v.id('users'), // Admin che ha creato la penalità
+    createdAt: v.number()
+  })
+    .index('by_keydev', ['keyDevId'])
 })

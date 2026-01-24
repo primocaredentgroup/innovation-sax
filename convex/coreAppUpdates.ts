@@ -109,19 +109,56 @@ export const update = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const { id, ...updates } = args
-    // Filtra i campi undefined per evitare di cancellare valori esistenti
-    // Le stringhe vuote vengono accettate per permettere la cancellazione di campi opzionali
-    const filteredUpdates: {
-      monthRef?: string
-      loomUrl?: string
-      title?: string
-      notes?: string
-    } = {}
-    if (updates.monthRef !== undefined) filteredUpdates.monthRef = updates.monthRef
-    if (updates.loomUrl !== undefined) filteredUpdates.loomUrl = updates.loomUrl
-    if (updates.title !== undefined) filteredUpdates.title = updates.title
-    if (updates.notes !== undefined) filteredUpdates.notes = updates.notes
-    await ctx.db.patch(id, filteredUpdates)
+    
+    // Verifica se dobbiamo cancellare qualche campo (stringa vuota per title/notes)
+    const needsDeletion = 
+      (updates.title !== undefined && updates.title.trim() === '') ||
+      (updates.notes !== undefined && updates.notes.trim() === '')
+    
+    if (needsDeletion) {
+      // Se dobbiamo cancellare campi, usa replace per poter impostare i campi a undefined
+      const existing = await ctx.db.get(id)
+      if (!existing) {
+        throw new Error('Update non trovato')
+      }
+      
+      // Costruisce il documento aggiornato rimuovendo i campi di sistema
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { _id: _unusedId, _creationTime: _unusedCreationTime, ...docWithoutSystemFields } = existing
+      const updatedDoc = {
+        ...docWithoutSystemFields,
+        monthRef: updates.monthRef !== undefined ? (updates.monthRef || undefined) : existing.monthRef,
+        loomUrl: updates.loomUrl !== undefined ? (updates.loomUrl || undefined) : existing.loomUrl,
+        title: updates.title !== undefined ? (updates.title.trim() === '' ? undefined : updates.title.trim()) : existing.title,
+        notes: updates.notes !== undefined ? (updates.notes.trim() === '' ? undefined : updates.notes.trim()) : existing.notes
+      }
+      
+      await ctx.db.replace(id, updatedDoc)
+    } else {
+      // Altrimenti usa patch per aggiornare solo i campi modificati
+      const filteredUpdates: {
+        monthRef?: string
+        loomUrl?: string
+        title?: string
+        notes?: string
+      } = {}
+      
+      if (updates.monthRef !== undefined) {
+        filteredUpdates.monthRef = updates.monthRef || undefined
+      }
+      if (updates.loomUrl !== undefined) {
+        filteredUpdates.loomUrl = updates.loomUrl || undefined
+      }
+      if (updates.title !== undefined) {
+        filteredUpdates.title = updates.title.trim()
+      }
+      if (updates.notes !== undefined) {
+        filteredUpdates.notes = updates.notes.trim()
+      }
+      
+      await ctx.db.patch(id, filteredUpdates)
+    }
+    
     return null
   }
 })

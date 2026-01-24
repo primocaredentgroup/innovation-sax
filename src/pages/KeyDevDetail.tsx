@@ -22,7 +22,8 @@ const statusColors: Record<string, string> = {
   Rejected: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300',
   FrontValidated: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
   InProgress: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300',
-  Done: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300'
+  Done: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300',
+  Checked: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
 }
 
 const statusLabels: Record<string, string> = {
@@ -32,7 +33,8 @@ const statusLabels: Record<string, string> = {
   Rejected: 'Rifiutato',
   FrontValidated: 'Front Validato',
   InProgress: 'In Corso',
-  Done: 'Completato'
+  Done: 'Completato',
+  Checked: 'Controllato'
 }
 
 // Descrizioni del flusso per ogni stato
@@ -43,7 +45,8 @@ const statusDescriptions: Record<string, string> = {
   Rejected: 'Rifiutato dal TechValidator - vedere motivo',
   FrontValidated: 'In attesa che un TechValidator prenda in carico lo sviluppo',
   InProgress: 'In sviluppo - l\'owner può dichiararlo completato',
-  Done: 'Completato'
+  Done: 'Completato',
+  Checked: 'Controllato dall\'admin aziendale'
 }
 
 export default function KeyDevDetailPage() {
@@ -80,6 +83,12 @@ export default function KeyDevDetailPage() {
   const addNote = useMutation(api.notes.create)
   const createBlockingLabel = useMutation(api.blockingLabels.create)
   const removeBlockingLabel = useMutation(api.blockingLabels.remove)
+  const penalties = useQuery(
+    api.penalties.listByKeyDev,
+    isNew || !keydev ? 'skip' : { keyDevId: keydev._id }
+  )
+  const createPenalty = useMutation(api.penalties.create)
+  const removePenalty = useMutation(api.penalties.remove)
 
   const currentMonth = useMemo(() => {
     const now = new Date()
@@ -93,6 +102,9 @@ export default function KeyDevDetailPage() {
   const [validationMonth, setValidationMonth] = useState(currentMonth)
   const [validationCommit, setValidationCommit] = useState('')
   const [validationError, setValidationError] = useState('')
+  const [releaseCommit, setReleaseCommit] = useState('')
+  const [penaltyWeight, setPenaltyWeight] = useState('')
+  const [penaltyDescription, setPenaltyDescription] = useState('')
   
   // Calcola i valori iniziali per dipartimento e team in base all'utente
   const getInitialDeptId = () => {
@@ -269,7 +281,12 @@ export default function KeyDevDetailPage() {
   // Handler per dichiarare completato
   const handleMarkAsDone = async () => {
     if (!keydev) return
-    await markAsDone({ id: keydev._id })
+    if (!releaseCommit.trim()) {
+      alert('Devi specificare il commit di rilascio')
+      return
+    }
+    await markAsDone({ id: keydev._id, releaseCommit: releaseCommit.trim() })
+    setReleaseCommit('')
   }
 
   if (!isNew && !keydev) {
@@ -638,22 +655,243 @@ export default function KeyDevDetailPage() {
                       {isOwner ? 'Sei l\'owner di questo Sviluppo Chiave. ' : ''}
                       Puoi dichiararlo completato quando lo sviluppo è terminato.
                     </p>
-                    <button
-                      onClick={handleMarkAsDone}
-                      className="px-4 py-2 bg-emerald-600 dark:bg-emerald-700 text-white rounded-md hover:bg-emerald-700 dark:hover:bg-emerald-600"
-                    >
-                      Dichiara Completato
-                    </button>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Commit di Rilascio <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={releaseCommit}
+                          onChange={(e) => setReleaseCommit(e.target.value)}
+                          placeholder="es. abc1234 o hash completo del commit"
+                          className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 font-mono text-sm ${
+                            !releaseCommit.trim() 
+                              ? 'border-red-300 dark:border-red-600' 
+                              : 'border-gray-300 dark:border-gray-600'
+                          }`}
+                          required
+                        />
+                        <p className={`mt-1 text-xs ${
+                          !releaseCommit.trim() 
+                            ? 'text-red-500 dark:text-red-400' 
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}>
+                          {!releaseCommit.trim() 
+                            ? 'Obbligatorio: inserisci l\'hash del commit di rilascio'
+                            : 'Inserisci l\'hash del commit di rilascio quando completi lo sviluppo'
+                          }
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleMarkAsDone}
+                        disabled={!releaseCommit.trim()}
+                        className="px-4 py-2 bg-emerald-600 dark:bg-emerald-700 text-white rounded-md hover:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Dichiara Completato
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {/* Done: Messaggio di completamento */}
                 {keydev.status === 'Done' && (
                   <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
-                    <p className="text-sm text-emerald-800 dark:text-emerald-300">
+                    <p className="text-sm text-emerald-800 dark:text-emerald-300 mb-4">
                       Questo Sviluppo Chiave è stato completato con successo!
                     </p>
+                    {userIsAdmin && (
+                      <button
+                        onClick={() => updateStatus({ id: keydev._id, status: 'Checked' })}
+                        className="px-4 py-2 bg-orange-600 dark:bg-orange-700 text-white rounded-md hover:bg-orange-700 dark:hover:bg-orange-600"
+                      >
+                        Contrassegna come Controllato
+                      </button>
+                    )}
                   </div>
+                )}
+
+                {/* Checked: Messaggio di controllo completato */}
+                {keydev.status === 'Checked' && (
+                  <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                    <p className="text-sm text-orange-800 dark:text-orange-300">
+                      Questo Sviluppo Chiave è stato controllato dall'admin aziendale.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Sezione Penalità per Admin quando status è Done o Checked */}
+          {!isNew && keydev && (keydev.status === 'Done' || keydev.status === 'Checked') && userIsAdmin && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
+                Controllo e Penalità
+              </h2>
+
+              {/* Riferimenti ai commit */}
+              <div className="mb-6 space-y-4">
+                {keydev.validatedMockupCommit && keydev.mockupRepoUrl && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Commit Mockup Validato
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono">
+                        {keydev.validatedMockupCommit}
+                      </span>
+                      <a
+                        href={`${keydev.mockupRepoUrl}/commit/${keydev.validatedMockupCommit}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                      >
+                        Vedi su GitHub
+                      </a>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Repository: {keydev.mockupRepoUrl}
+                    </p>
+                  </div>
+                )}
+
+                {keydev.releaseCommit && keydev.repoUrl && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Commit di Rilascio
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono">
+                        {keydev.releaseCommit}
+                      </span>
+                      <a
+                        href={`${keydev.repoUrl}/commit/${keydev.releaseCommit}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                      >
+                        Vedi su GitHub
+                      </a>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Repository: {keydev.repoUrl}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Form per aggiungere penalità */}
+              <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-4">
+                  Aggiungi Penalità
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Peso (0.00 - 1.00) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.10"
+                      min="0"
+                      max="1"
+                      value={penaltyWeight}
+                      onChange={(e) => setPenaltyWeight(e.target.value)}
+                      placeholder="es. 0.10, 0.20, 0.50"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Valore da 0 a 1 (es. 0.10 per 10%, 0.20 per 20%)
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Descrizione (opzionale)
+                    </label>
+                    <textarea
+                      value={penaltyDescription}
+                      onChange={(e) => setPenaltyDescription(e.target.value)}
+                      placeholder="Descrizione della penalità..."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!penaltyWeight || parseFloat(penaltyWeight) < 0 || parseFloat(penaltyWeight) > 1) {
+                        alert('Inserisci un peso valido tra 0 e 1')
+                        return
+                      }
+                      try {
+                        await createPenalty({
+                          keyDevId: keydev._id,
+                          weight: parseFloat(penaltyWeight),
+                          description: penaltyDescription.trim() || undefined
+                        })
+                        setPenaltyWeight('')
+                        setPenaltyDescription('')
+                      } catch (error) {
+                        alert(error instanceof Error ? error.message : 'Errore nell\'aggiunta della penalità')
+                      }
+                    }}
+                    disabled={!penaltyWeight || parseFloat(penaltyWeight) < 0 || parseFloat(penaltyWeight) > 1}
+                    className="px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Aggiungi Penalità
+                  </button>
+                </div>
+              </div>
+
+              {/* Lista penalità esistenti */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-4">
+                  Penalità Applicate
+                </h3>
+                {penalties && penalties.length > 0 ? (
+                  <div className="space-y-2">
+                    {penalties.map((penalty) => (
+                      <div
+                        key={penalty._id}
+                        className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-red-800 dark:text-red-300">
+                              {(penalty.weight * 100).toFixed(0)}%
+                            </span>
+                            {penalty.description && (
+                              <span className="text-sm text-gray-700 dark:text-gray-300">
+                                - {penalty.description}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Aggiunta il {new Date(penalty.createdAt).toLocaleDateString('it-IT', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!confirm('Sei sicuro di voler rimuovere questa penalità?')) return
+                            await removePenalty({ id: penalty._id })
+                          }}
+                          className="ml-4 px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+                        >
+                          Rimuovi
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Nessuna penalità applicata
+                  </p>
                 )}
               </div>
             </div>

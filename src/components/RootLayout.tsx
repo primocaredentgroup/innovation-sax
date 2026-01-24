@@ -5,7 +5,7 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../convex/_generated/api'
 import DarkModeToggle from './DarkModeToggle'
-import { Menu, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Menu, X, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 
 export default function RootLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth()
@@ -175,10 +175,10 @@ export default function RootLayout() {
                   className={`flex items-center gap-3 px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400 ${
                     sidebarCollapsed ? 'justify-center' : ''
                   }`}
-                  title="Planning"
+                  title="Budget KD"
                 >
-                  <span className="text-lg">📅</span>
-                  {!sidebarCollapsed && <span>Planning</span>}
+                  <Clock size={20} />
+                  {!sidebarCollapsed && <span>Budget KD</span>}
                 </Link>
                 <Link
                   to="/admin/users"

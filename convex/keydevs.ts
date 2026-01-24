@@ -27,6 +27,7 @@ const keydevReturnValidator = v.object({
   validatedMockupCommit: v.optional(v.string()),
   repoUrl: v.optional(v.string()),
   repoTag: v.optional(v.string()),
+  releaseCommit: v.optional(v.string()),
   approvedAt: v.optional(v.number()),
   frontValidatedAt: v.optional(v.number()),
   techValidatedAt: v.optional(v.number()),
@@ -291,6 +292,7 @@ export const update = mutation({
  * 4. Approved → FrontValidated (BusinessValidator del dipartimento)
  * 5. FrontValidated → InProgress (TechValidator prende ownership)
  * 6. InProgress → Done (solo owner)
+ * 7. Done → Checked (solo admin)
  * 
  * Admin può fare qualsiasi transizione.
  */
@@ -405,6 +407,16 @@ export const updateStatus = mutation({
           }
           if (keydev.ownerId !== user._id) {
             throw new Error('Solo l\'owner può dichiarare completato')
+          }
+          break
+
+        case 'Checked':
+          // Solo admin può passare a Checked
+          if (keydev.status !== 'Done') {
+            throw new Error('Transizione non valida: solo da Done a Checked')
+          }
+          if (!userIsAdmin) {
+            throw new Error('Solo gli admin possono contrassegnare come controllato')
           }
           break
 
@@ -551,10 +563,12 @@ export const takeOwnership = mutation({
 
 /**
  * Dichiara completato un KeyDev (solo owner o admin).
+ * Richiede il releaseCommit che l'owner deve fornire quando completa lo sviluppo.
  */
 export const markAsDone = mutation({
   args: {
-    id: v.id('keydevs')
+    id: v.id('keydevs'),
+    releaseCommit: v.string()
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -588,8 +602,13 @@ export const markAsDone = mutation({
       throw new Error('Il KeyDev deve essere in stato InProgress')
     }
 
+    if (!args.releaseCommit || args.releaseCommit.trim() === '') {
+      throw new Error('Devi specificare il commit di rilascio')
+    }
+
     await ctx.db.patch(args.id, {
       status: 'Done',
+      releaseCommit: args.releaseCommit.trim(),
       releasedAt: Date.now()
     })
     return null

@@ -11,7 +11,8 @@ const statusColors: Record<string, string> = {
   Rejected: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300',
   FrontValidated: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
   InProgress: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300',
-  Done: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300'
+  Done: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300',
+  Checked: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
 }
 
 const statusLabels: Record<string, string> = {
@@ -21,14 +22,15 @@ const statusLabels: Record<string, string> = {
   Approved: 'Approvato',
   FrontValidated: 'Front Validato',
   InProgress: 'In Corso',
-  Done: 'Completato'
+  Done: 'Completato',
+  Checked: 'Controllato'
 }
 
 // Stati che non hanno filtro per mese (appaiono sempre)
 const statusesWithoutMonthFilter = ['MockupDone', 'Rejected', 'Approved']
 
 // Ordine degli stati per la visualizzazione
-const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done']
+const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
 
 export default function KeyDevsListPage() {
   const search = useSearch({ strict: false })
