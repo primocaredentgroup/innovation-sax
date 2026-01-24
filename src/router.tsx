@@ -45,7 +45,10 @@ const keydevsRoute = createRoute({
 const keydevDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/keydevs/$id',
-  component: KeyDevDetailPage
+  component: KeyDevDetailPage,
+  validateSearch: z.object({
+    notes: z.union([z.literal('true'), z.literal('false')]).optional()
+  })
 })
 
 const planningRoute = createRoute({

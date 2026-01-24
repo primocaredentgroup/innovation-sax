@@ -26,7 +26,6 @@ const keydevReturnValidator = v.object({
   mockupRepoUrl: v.optional(v.string()),
   validatedMockupCommit: v.optional(v.string()),
   repoUrl: v.optional(v.string()),
-  repoTag: v.optional(v.string()),
   releaseCommit: v.optional(v.string()),
   weight: v.optional(keydevWeightValidator),
   approvedAt: v.optional(v.number()),
@@ -416,16 +415,6 @@ export const updateStatus = mutation({
           }
           break
 
-        case 'Checked':
-          // Solo admin può passare a Checked
-          if (keydev.status !== 'Done') {
-            throw new Error('Transizione non valida: solo da Done a Checked')
-          }
-          if (!userIsAdmin) {
-            throw new Error('Solo gli admin possono contrassegnare come controllato')
-          }
-          break
-
         case 'Draft':
           // Requester o admin possono riportare un Rejected in Draft
           if (keydev.status !== 'Rejected') {
@@ -446,6 +435,16 @@ export const updateStatus = mutation({
     }
 
     // Validazioni obbligatorie che si applicano anche agli admin
+    if (args.status === 'Checked') {
+      // Solo admin può passare a Checked, e solo da Done
+      if (keydev.status !== 'Done') {
+        throw new Error('Transizione non valida: solo da Done a Checked')
+      }
+      if (!userIsAdmin) {
+        throw new Error('Solo gli admin possono contrassegnare come controllato')
+      }
+    }
+
     if (args.status === 'FrontValidated') {
       // Verifica che sia stato specificato il commit validato (obbligatorio anche per admin)
       if (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '') {
@@ -533,7 +532,29 @@ export const updateStatus = mutation({
       updates.releasedAt = Date.now()
     }
 
-    await ctx.db.patch(args.id, updates)
+    // Se stiamo passando da Rejected a Draft, dobbiamo cancellare i campi rejectionReason e rejectedById
+    // Usiamo replace() invece di patch() perché patch() ignora i valori undefined
+    if (args.status === 'Draft' && keydev.status === 'Rejected') {
+      // Ottieni il documento esistente
+      const existing = await ctx.db.get(args.id)
+      if (!existing) {
+        throw new Error('KeyDev non trovato')
+      }
+      
+      // Costruisce il documento aggiornato rimuovendo i campi di sistema
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { _id: _unusedId, _creationTime: _unusedCreationTime, ...docWithoutSystemFields } = existing
+      const updatedDoc = {
+        ...docWithoutSystemFields,
+        ...updates,
+        rejectionReason: undefined,
+        rejectedById: undefined
+      }
+      
+      await ctx.db.replace(args.id, updatedDoc)
+    } else {
+      await ctx.db.patch(args.id, updates)
+    }
     return null
   }
 })
@@ -541,10 +562,12 @@ export const updateStatus = mutation({
 /**
  * Prende in carico un KeyDev (diventa owner).
  * Solo TechValidator può farlo su KeyDev in stato FrontValidated.
+ * Permette di confermare/modificare il peso sviluppo (weight).
  */
 export const takeOwnership = mutation({
   args: {
-    id: v.id('keydevs')
+    id: v.id('keydevs'),
+    weight: v.optional(keydevWeightValidator) // Peso opzionale per confermare/modificare
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -578,10 +601,17 @@ export const takeOwnership = mutation({
       throw new Error('Il KeyDev deve essere in stato FrontValidated')
     }
 
-    await ctx.db.patch(args.id, {
+    const updates: Record<string, unknown> = {
       ownerId: user._id,
       status: 'InProgress'
-    })
+    }
+
+    // Se viene fornito un weight, aggiornalo
+    if (args.weight !== undefined) {
+      updates.weight = args.weight
+    }
+
+    await ctx.db.patch(args.id, updates)
     return null
   }
 })
@@ -589,10 +619,12 @@ export const takeOwnership = mutation({
 /**
  * Dichiara completato un KeyDev (solo owner o admin).
  * Richiede il releaseCommit che l'owner deve fornire quando completa lo sviluppo.
+ * Richiede anche la repoUrl definitiva del repository di sviluppo.
  */
 export const markAsDone = mutation({
   args: {
     id: v.id('keydevs'),
+    repoUrl: v.string(), // URL del repository definitivo di sviluppo
     releaseCommit: v.string()
   },
   returns: v.null(),
@@ -627,12 +659,17 @@ export const markAsDone = mutation({
       throw new Error('Il KeyDev deve essere in stato InProgress')
     }
 
+    if (!args.repoUrl || args.repoUrl.trim() === '') {
+      throw new Error('Devi specificare l\'URL del repository definitivo')
+    }
+
     if (!args.releaseCommit || args.releaseCommit.trim() === '') {
       throw new Error('Devi specificare il commit di rilascio')
     }
 
     await ctx.db.patch(args.id, {
       status: 'Done',
+      repoUrl: args.repoUrl.trim(),
       releaseCommit: args.releaseCommit.trim(),
       releasedAt: Date.now()
     })

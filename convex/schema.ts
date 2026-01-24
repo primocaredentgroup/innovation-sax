@@ -35,8 +35,7 @@ export const keydevStatusValidator = v.union(
 
 export const noteTypeValidator = v.union(
   v.literal('Comment'),
-  v.literal('Task'),
-  v.literal('Improvement')
+  v.literal('Mention')
 )
 
 export const blockingLabelStatusValidator = v.union(
@@ -110,7 +109,6 @@ export default defineSchema({
     validatedMockupCommit: v.optional(v.string()), // Commit validato dal BusinessValidator
     // Real development repo
     repoUrl: v.optional(v.string()),
-    repoTag: v.optional(v.string()),
     releaseCommit: v.optional(v.string()), // Commit rilasciato dall'owner quando completa lo sviluppo
     // Weight (peso dello sviluppo per validazione tech)
     weight: v.optional(keydevWeightValidator), // Peso da 0 a 1 (0, 0.25, 0.50, 0.75, 1)
@@ -130,13 +128,14 @@ export default defineSchema({
     .index('by_owner', ['ownerId'])
     .index('by_readableId', ['readableId']),
 
-  // Notes (commenti, task, improvement)
+  // Notes (commenti, menzioni)
   notes: defineTable({
     keyDevId: v.id('keydevs'),
     authorId: v.id('users'),
     body: v.string(),
     ts: v.number(),
-    type: noteTypeValidator
+    type: noteTypeValidator,
+    mentionedUserIds: v.optional(v.array(v.id('users'))) // Utenti menzionati (solo per type='Mention')
   })
     .index('by_keydev', ['keyDevId'])
     .index('by_author', ['authorId']),

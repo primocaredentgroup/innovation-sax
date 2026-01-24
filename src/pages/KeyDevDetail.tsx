@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useState, useMemo, useEffect } from 'react'
@@ -37,6 +37,14 @@ const statusLabels: Record<string, string> = {
   Checked: 'Controllato'
 }
 
+// Helper per troncare URL mantenendo inizio e fine
+const truncateUrl = (url: string, maxLength: number = 50): string => {
+  if (url.length <= maxLength) return url
+  const start = url.substring(0, Math.floor(maxLength / 2) - 3)
+  const end = url.substring(url.length - Math.floor(maxLength / 2) + 3)
+  return `${start}...${end}`
+}
+
 // Descrizioni del flusso per ogni stato
 const statusDescriptions: Record<string, string> = {
   Draft: 'Aggiungi il mockupRepoUrl per passare a "Mockup Terminato"',
@@ -52,6 +60,7 @@ const statusDescriptions: Record<string, string> = {
 export default function KeyDevDetailPage() {
   const { id } = useParams({ strict: false }) as { id: string }
   const navigate = useNavigate()
+  const search = useSearch({ strict: false }) as { notes?: string }
   const isNew = id === 'new'
 
   // Usa getByReadableId se l'id è un readableId (formato KD-XXX), altrimenti usa getById per retrocompatibilità
@@ -81,6 +90,8 @@ export default function KeyDevDetailPage() {
   const markAsDone = useMutation(api.keydevs.markAsDone)
   const linkMockupRepo = useMutation(api.keydevs.linkMockupRepo)
   const addNote = useMutation(api.notes.create)
+  const updateNote = useMutation(api.notes.update)
+  const removeNote = useMutation(api.notes.remove)
   const createBlockingLabel = useMutation(api.blockingLabels.create)
   const removeBlockingLabel = useMutation(api.blockingLabels.remove)
   const penalties = useQuery(
@@ -98,11 +109,61 @@ export default function KeyDevDetailPage() {
   const [newNote, setNewNote] = useState('')
   const [rejectionReason, setRejectionReason] = useState('')
   const [showRejectForm, setShowRejectForm] = useState(false)
+  // Inizializza showNotesPage dal parametro URL
+  const [showNotesPage, setShowNotesPage] = useState(() => search.notes === 'true')
+  
+  // Stati per la funzionalità di menzione
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false)
+  const [mentionPosition, setMentionPosition] = useState<{ start: number; end: number } | null>(null)
+  const [selectedMentionedUserIds, setSelectedMentionedUserIds] = useState<Id<'users'>[]>([])
+  
+  // Stati per modifica ed eliminazione note
+  const [editingNoteId, setEditingNoteId] = useState<Id<'notes'> | null>(null)
+  const [editingNoteText, setEditingNoteText] = useState('')
+  const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<Id<'notes'> | null>(null)
+  
+  // Helper per rimuovere spazi dai nomi utente nella visualizzazione
+  const formatUserName = (name: string | undefined): string => {
+    if (!name) return 'Utente'
+    return name.replace(/\s+/g, '')
+  }
+  
+  // Sincronizza lo stato con l'URL quando cambia il parametro
+  useEffect(() => {
+    setShowNotesPage(search.notes === 'true')
+  }, [search.notes])
+
+  // Chiudi il dropdown quando si clicca fuori
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (showMentionDropdown && !target.closest('.mention-dropdown-container')) {
+        setShowMentionDropdown(false)
+        setMentionQuery('')
+        setMentionPosition(null)
+      }
+    }
+
+    if (showMentionDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }
+  }, [showMentionDropdown])
   const [mockupRepoUrlInput, setMockupRepoUrlInput] = useState('')
   const [validationMonth, setValidationMonth] = useState(currentMonth)
   const [validationCommit, setValidationCommit] = useState('')
   const [validationError, setValidationError] = useState('')
+  const [repoUrl, setRepoUrl] = useState('')
   const [releaseCommit, setReleaseCommit] = useState('')
+  const [ownershipWeight, setOwnershipWeight] = useState<0 | 0.25 | 0.5 | 0.75 | 1>(() => {
+    if (keydev?.weight !== undefined) {
+      return keydev.weight as 0 | 0.25 | 0.5 | 0.75 | 1
+    }
+    return 1
+  })
   const [penaltyWeight, setPenaltyWeight] = useState('')
   const [penaltyDescription, setPenaltyDescription] = useState('')
   // Inizializza techWeight con il valore esistente del keydev o 1 come default
@@ -119,6 +180,15 @@ export default function KeyDevDetailPage() {
       setTechWeight(keydev.weight as 0 | 0.25 | 0.5 | 0.75 | 1)
     } else {
       setTechWeight(1)
+    }
+  }, [keydev?.weight])
+
+  // Aggiorna ownershipWeight quando cambia il keydev
+  useEffect(() => {
+    if (keydev?.weight !== undefined) {
+      setOwnershipWeight(keydev.weight as 0 | 0.25 | 0.5 | 0.75 | 1)
+    } else {
+      setOwnershipWeight(1)
     }
   }, [keydev?.weight])
   
@@ -252,14 +322,226 @@ export default function KeyDevDetailPage() {
     setMockupRepoUrlInput('')
   }
 
+  // Gestisce l'input della textarea per rilevare "@" (per nuova nota)
+  const handleNoteInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    const cursorPosition = e.target.selectionStart
+    
+    setNewNote(value)
+    
+    // Cerca "@" prima del cursore
+    const textBeforeCursor = value.substring(0, cursorPosition)
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+    
+    if (lastAtIndex !== -1) {
+      // Verifica che "@" non sia parte di una parola già completata (deve essere seguito da spazio o essere l'ultimo carattere)
+      const charAfterAt = textBeforeCursor[lastAtIndex + 1]
+      const isAtWordBoundary = lastAtIndex === 0 || textBeforeCursor[lastAtIndex - 1] === ' ' || textBeforeCursor[lastAtIndex - 1] === '\n'
+      
+      if (isAtWordBoundary && (charAfterAt === undefined || charAfterAt === ' ' || charAfterAt === '\n' || /[a-zA-Z0-9]/.test(charAfterAt))) {
+        const query = textBeforeCursor.substring(lastAtIndex + 1)
+        // Se c'è uno spazio dopo "@", chiudi il dropdown
+        if (query.includes(' ') || query.includes('\n')) {
+          setShowMentionDropdown(false)
+          setMentionQuery('')
+          setMentionPosition(null)
+        } else {
+          setMentionQuery(query)
+          setShowMentionDropdown(true)
+          setMentionPosition({ start: lastAtIndex, end: cursorPosition })
+        }
+      } else {
+        setShowMentionDropdown(false)
+        setMentionQuery('')
+        setMentionPosition(null)
+      }
+    } else {
+      setShowMentionDropdown(false)
+      setMentionQuery('')
+      setMentionPosition(null)
+    }
+  }
+
+  // Filtra gli utenti in base alla query di menzione
+  const filteredUsersForMention = useMemo(() => {
+    if (!users || !mentionQuery) return users || []
+    const query = mentionQuery.toLowerCase()
+    return users.filter(user => 
+      user.name.toLowerCase().includes(query) || 
+      user.email?.toLowerCase().includes(query)
+    ).slice(0, 10) // Limita a 10 risultati
+  }, [users, mentionQuery])
+
+  // Gestisce la selezione di un utente dal dropdown
+  const handleSelectMention = (userId: Id<'users'>, userName: string) => {
+    if (!mentionPosition) return
+    
+    // Rimuovi spazi dal nome per la visualizzazione
+    const formattedUserName = formatUserName(userName)
+    
+    const beforeMention = newNote.substring(0, mentionPosition.start)
+    const afterMention = newNote.substring(mentionPosition.end)
+    const newText = `${beforeMention}@${formattedUserName} ${afterMention}`
+    
+    setNewNote(newText)
+    setShowMentionDropdown(false)
+    setMentionQuery('')
+    setMentionPosition(null)
+    
+    // Aggiungi l'utente all'array se non è già presente
+    setSelectedMentionedUserIds(prev => {
+      if (!prev.includes(userId)) {
+        return [...prev, userId]
+      }
+      return prev
+    })
+    
+    // Focus sulla textarea dopo un breve delay per aggiornare il cursore
+    setTimeout(() => {
+      const textarea = document.querySelector('textarea[placeholder*="commento"]') as HTMLTextAreaElement
+      if (textarea) {
+        const newCursorPos = mentionPosition.start + formattedUserName.length + 2 // +2 per "@" e spazio
+        textarea.focus()
+        textarea.setSelectionRange(newCursorPos, newCursorPos)
+      }
+    }, 0)
+  }
+
   const handleAddNote = async () => {
     if (!newNote.trim() || isNew || !keydev) return
+    
+    // Cerca tutte le menzioni nel testo pattern "@NomeUtente"
+    const mentionedUserIds: Id<'users'>[] = []
+    if (users) {
+      const mentionPattern = /@(\w+)/g
+      const matches = newNote.match(mentionPattern)
+      if (matches) {
+        const foundUserIds = new Set<Id<'users'>>()
+        for (const match of matches) {
+          const userName = match.substring(1) // Rimuovi "@"
+          // Cerca l'utente sia con il nome originale che senza spazi
+          const user = users.find(u => {
+            const originalName = u.name.toLowerCase()
+            const formattedName = formatUserName(u.name).toLowerCase()
+            const emailMatch = u.email?.toLowerCase()
+            return originalName === userName.toLowerCase() || 
+                   formattedName === userName.toLowerCase() ||
+                   emailMatch === userName.toLowerCase()
+          })
+          if (user && !foundUserIds.has(user._id)) {
+            foundUserIds.add(user._id)
+            mentionedUserIds.push(user._id)
+          }
+        }
+      }
+    }
+    
+    // Aggiungi anche gli utenti già selezionati che potrebbero non essere nel testo
+    selectedMentionedUserIds.forEach(userId => {
+      if (!mentionedUserIds.includes(userId)) {
+        mentionedUserIds.push(userId)
+      }
+    })
+    
+    // Determina il tipo di nota: se ci sono menzioni valide, usa "Mention", altrimenti "Comment"
+    const noteType: 'Comment' | 'Mention' = mentionedUserIds.length > 0 ? 'Mention' : 'Comment'
+    
     await addNote({
       keyDevId: keydev._id,
       body: newNote,
-      type: 'Comment'
+      type: noteType,
+      mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
     })
     setNewNote('')
+    setSelectedMentionedUserIds([])
+    setShowMentionDropdown(false)
+    setMentionQuery('')
+    setMentionPosition(null)
+  }
+
+  // Gestisce l'inizio della modifica di una nota
+  const handleStartEditNote = (noteId: Id<'notes'>) => {
+    const note = notes?.find(n => n._id === noteId)
+    if (note) {
+      setEditingNoteId(noteId)
+      setEditingNoteText(note.body)
+    }
+  }
+
+  // Gestisce l'annullamento della modifica
+  const handleCancelEditNote = () => {
+    setEditingNoteId(null)
+    setEditingNoteText('')
+    setShowMentionDropdown(false)
+    setMentionQuery('')
+    setMentionPosition(null)
+    setSelectedMentionedUserIds([])
+  }
+
+  // Gestisce il salvataggio della modifica
+  const handleSaveEditNote = async (noteId: Id<'notes'>) => {
+    if (!editingNoteText.trim() || !keydev) return
+    
+    const note = notes?.find(n => n._id === noteId)
+    if (!note) return
+
+    // Cerca tutte le menzioni nel testo
+    const mentionedUserIds: Id<'users'>[] = []
+    if (users) {
+      const mentionPattern = /@(\w+)/g
+      const matches = editingNoteText.match(mentionPattern)
+      if (matches) {
+        const foundUserIds = new Set<Id<'users'>>()
+        for (const match of matches) {
+          const userName = match.substring(1)
+          // Cerca l'utente sia con il nome originale che senza spazi
+          const user = users.find(u => {
+            const originalName = u.name.toLowerCase()
+            const formattedName = formatUserName(u.name).toLowerCase()
+            const emailMatch = u.email?.toLowerCase()
+            return originalName === userName.toLowerCase() || 
+                   formattedName === userName.toLowerCase() ||
+                   emailMatch === userName.toLowerCase()
+          })
+          if (user && !foundUserIds.has(user._id)) {
+            foundUserIds.add(user._id)
+            mentionedUserIds.push(user._id)
+          }
+        }
+      }
+    }
+
+    const noteType: 'Comment' | 'Mention' = mentionedUserIds.length > 0 ? 'Mention' : 'Comment'
+
+    await updateNote({
+      id: noteId,
+      body: editingNoteText,
+      type: noteType,
+      mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
+    })
+    
+    setEditingNoteId(null)
+    setEditingNoteText('')
+    setShowMentionDropdown(false)
+    setMentionQuery('')
+    setMentionPosition(null)
+    setSelectedMentionedUserIds([])
+  }
+
+  // Gestisce il click sul pulsante elimina (mostra conferma)
+  const handleDeleteNoteClick = (noteId: Id<'notes'>) => {
+    setConfirmDeleteNoteId(noteId)
+  }
+
+  // Gestisce l'annullamento dell'eliminazione
+  const handleCancelDeleteNote = () => {
+    setConfirmDeleteNoteId(null)
+  }
+
+  // Gestisce la conferma dell'eliminazione
+  const handleConfirmDeleteNote = async (noteId: Id<'notes'>) => {
+    await removeNote({ id: noteId })
+    setConfirmDeleteNoteId(null)
   }
 
   const handleAddBlockingLabel = async (labelId: Id<'labels'>) => {
@@ -294,17 +576,26 @@ export default function KeyDevDetailPage() {
   // Handler per prendere in carico
   const handleTakeOwnership = async () => {
     if (!keydev) return
-    await takeOwnership({ id: keydev._id })
+    await takeOwnership({ id: keydev._id, weight: ownershipWeight })
   }
 
   // Handler per dichiarare completato
   const handleMarkAsDone = async () => {
     if (!keydev) return
+    if (!repoUrl.trim()) {
+      alert('Devi specificare l\'URL del repository definitivo')
+      return
+    }
     if (!releaseCommit.trim()) {
       alert('Devi specificare il commit di rilascio')
       return
     }
-    await markAsDone({ id: keydev._id, releaseCommit: releaseCommit.trim() })
+    await markAsDone({ 
+      id: keydev._id, 
+      repoUrl: repoUrl.trim(),
+      releaseCommit: releaseCommit.trim() 
+    })
+    setRepoUrl('')
     setReleaseCommit('')
   }
 
@@ -318,47 +609,346 @@ export default function KeyDevDetailPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-4 mb-6">
-        <Link
-          to="/keydevs"
-          search={{ month: keydev?.monthRef || currentMonth }}
-          className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-        >
-          ← Torna alla lista
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {isNew ? 'Nuovo Sviluppo Chiave' : keydev?.title}
-        </h1>
-        {!isNew && keydev && (
-          <>
-            <span className="px-3 py-1 rounded-md text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-              {keydev.readableId}
-            </span>
-            <div className="flex items-center gap-3">
-              <span className={`px-3 py-1 rounded-full text-sm ${statusColors[keydev.status]}`}>
-                {statusLabels[keydev.status]}
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-4">
+          <Link
+            to="/keydevs"
+            search={{ month: keydev?.monthRef || currentMonth }}
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+          >
+            ← Torna alla lista
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {isNew ? 'Nuovo Sviluppo Chiave' : keydev?.title}
+          </h1>
+          {!isNew && keydev && (
+            <>
+              <span className="px-3 py-1 rounded-md text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                {keydev.readableId}
               </span>
-              {/* Pulsante per riportare in Bozza quando rifiutato */}
-              {keydev.status === 'Rejected' && (isRequester || userIsAdmin) && (
-                <button
-                  onClick={async () => {
-                    if (!confirm('Sei sicuro di voler riportare questo sviluppo in Bozza? Potrai modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato".')) return
-                    await updateStatus({ id: keydev._id, status: 'Draft' })
-                  }}
-                  className="px-4 py-1 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm font-medium"
-                  title="Riporta in Bozza per modificare il mockup"
-                >
-                  ↶ Riporta in Bozza
-                </button>
-              )}
-            </div>
-          </>
+              <div className="flex items-center gap-3">
+                <span className={`px-3 py-1 rounded-full text-sm ${statusColors[keydev.status]}`}>
+                  {statusLabels[keydev.status]}
+                </span>
+                {/* Pulsante per riportare in Bozza quando rifiutato */}
+                {keydev.status === 'Rejected' && (isRequester || userIsAdmin) && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Sei sicuro di voler riportare questo sviluppo in Bozza? Potrai modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato".')) return
+                      await updateStatus({ id: keydev._id, status: 'Draft' })
+                    }}
+                    className="px-4 py-1 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm font-medium"
+                    title="Riporta in Bozza per modificare il mockup"
+                  >
+                    ↶ Riporta in Bozza
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        {!isNew && keydev && (
+          <button
+            onClick={() => {
+              const newShowNotesPage = !showNotesPage
+              navigate({
+                to: '/keydevs/$id',
+                params: { id },
+                search: newShowNotesPage ? { notes: 'true' } : {}
+              })
+            }}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              showNotesPage
+                ? 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            {showNotesPage ? '← Torna ai Dettagli' : '📝 Note'}
+          </button>
         )}
       </div>
 
       <div className="grid grid-cols-3 gap-6">
         {/* Main Form */}
         <div className="col-span-2 space-y-6">
+          {showNotesPage ? (
+            /* Sottopagina Note */
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Note</h2>
+
+              <div className="space-y-4">
+                {notes && notes.length > 0 ? (
+                  notes.map((note) => {
+                    const mentionedUsers = note.mentionedUserIds 
+                      ? note.mentionedUserIds.map(userId => users?.find(u => u._id === userId)).filter(Boolean)
+                      : []
+                    const isAuthor = note.authorId === currentUser?._id
+                    const canEdit = isAuthor || userIsAdmin
+                    const isEditing = editingNoteId === note._id
+                    const isConfirmDelete = confirmDeleteNoteId === note._id
+                    
+                    return (
+                      <div key={note._id} className={`p-4 rounded-lg ${
+                        note.type === 'Mention' 
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' 
+                          : 'bg-gray-50 dark:bg-gray-700/50'
+                      }`}>
+                        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                              {formatUserName(users?.find((u) => u._id === note.authorId)?.name)}
+                            </span>
+                            {note.type === 'Mention' && mentionedUsers.length > 0 && (
+                              <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded">
+                                Menzione → {mentionedUsers.map(u => formatUserName(u?.name)).filter(Boolean).join(', ')}
+                              </span>
+                            )}
+                            <span className="text-sm text-gray-400 dark:text-gray-500">
+                              {new Date(note.ts).toLocaleString('it-IT')}
+                            </span>
+                          </div>
+                          {canEdit && !isEditing && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleStartEditNote(note._id)}
+                                className="text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                                title="Modifica nota"
+                              >
+                                ✏️ Modifica
+                              </button>
+                              {!isConfirmDelete && (
+                                <button
+                                  onClick={() => handleDeleteNoteClick(note._id)}
+                                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  title="Elimina nota"
+                                >
+                                  🗑️ Elimina
+                                </button>
+                              )}
+                              {isConfirmDelete && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-red-600 dark:text-red-400">Confermi eliminazione?</span>
+                                  <button
+                                    onClick={() => handleConfirmDeleteNote(note._id)}
+                                    className="text-xs bg-red-600 dark:bg-red-700 text-white px-2 py-1 rounded hover:bg-red-700 dark:hover:bg-red-600"
+                                  >
+                                    Sì, elimina
+                                  </button>
+                                  <button
+                                    onClick={handleCancelDeleteNote}
+                                    className="text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 px-2 py-1 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
+                                  >
+                                    Annulla
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <div className="relative mention-dropdown-container">
+                              <textarea
+                                value={editingNoteText}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  const cursorPosition = e.target.selectionStart
+                                  
+                                  setEditingNoteText(value)
+                                  
+                                  // Cerca "@" prima del cursore
+                                  const textBeforeCursor = value.substring(0, cursorPosition)
+                                  const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+                                  
+                                  if (lastAtIndex !== -1) {
+                                    const charAfterAt = textBeforeCursor[lastAtIndex + 1]
+                                    const isAtWordBoundary = lastAtIndex === 0 || textBeforeCursor[lastAtIndex - 1] === ' ' || textBeforeCursor[lastAtIndex - 1] === '\n'
+                                    
+                                    if (isAtWordBoundary && (charAfterAt === undefined || charAfterAt === ' ' || charAfterAt === '\n' || /[a-zA-Z0-9]/.test(charAfterAt))) {
+                                      const query = textBeforeCursor.substring(lastAtIndex + 1)
+                                      if (query.includes(' ') || query.includes('\n')) {
+                                        setShowMentionDropdown(false)
+                                        setMentionQuery('')
+                                        setMentionPosition(null)
+                                      } else {
+                                        setMentionQuery(query)
+                                        setShowMentionDropdown(true)
+                                        setMentionPosition({ start: lastAtIndex, end: cursorPosition })
+                                      }
+                                    } else {
+                                      setShowMentionDropdown(false)
+                                      setMentionQuery('')
+                                      setMentionPosition(null)
+                                    }
+                                  } else {
+                                    setShowMentionDropdown(false)
+                                    setMentionQuery('')
+                                    setMentionPosition(null)
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape' && showMentionDropdown) {
+                                    setShowMentionDropdown(false)
+                                    setMentionQuery('')
+                                    setMentionPosition(null)
+                                  }
+                                  if (e.key === 'Enter' && showMentionDropdown && filteredUsersForMention.length > 0 && !e.shiftKey) {
+                                    e.preventDefault()
+                                    handleSelectMention(filteredUsersForMention[0]._id, filteredUsersForMention[0].name)
+                                  }
+                                }}
+                                rows={3}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                                placeholder="Modifica il testo della nota... Usa @ per menzionare un utente"
+                              />
+                              {/* Dropdown per selezionare utenti durante la modifica */}
+                              {showMentionDropdown && filteredUsersForMention && filteredUsersForMention.length > 0 && (
+                                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                                  {filteredUsersForMention.map((user) => (
+                                    <button
+                                      key={user._id}
+                                      type="button"
+                                      onClick={() => {
+                                        if (!mentionPosition) return
+                                        
+                                        // Rimuovi spazi dal nome per la visualizzazione
+                                        const formattedUserName = formatUserName(user.name)
+                                        
+                                        const beforeMention = editingNoteText.substring(0, mentionPosition.start)
+                                        const afterMention = editingNoteText.substring(mentionPosition.end)
+                                        const newText = `${beforeMention}@${formattedUserName} ${afterMention}`
+                                        
+                                        setEditingNoteText(newText)
+                                        setShowMentionDropdown(false)
+                                        setMentionQuery('')
+                                        setMentionPosition(null)
+                                        
+                                        setSelectedMentionedUserIds(prev => {
+                                          if (!prev.includes(user._id)) {
+                                            return [...prev, user._id]
+                                          }
+                                          return prev
+                                        })
+                                      }}
+                                      className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                                    >
+                                      <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
+                                      {user.email && (
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">({user.email})</span>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleSaveEditNote(note._id)}
+                                disabled={!editingNoteText.trim()}
+                                className="px-3 py-1 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50"
+                              >
+                                Salva
+                              </button>
+                              <button
+                                onClick={handleCancelEditNote}
+                                className="px-3 py-1 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
+                              >
+                                Annulla
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-gray-700 dark:text-gray-300">
+                            {note.body.split(/(@\w+)/g).map((part, idx) => {
+                              if (part.startsWith('@')) {
+                                const userName = part.substring(1)
+                                // Cerca l'utente sia con il nome originale che senza spazi
+                                const user = users?.find(u => {
+                                  const originalName = u.name.toLowerCase()
+                                  const formattedName = formatUserName(u.name).toLowerCase()
+                                  const emailMatch = u.email?.toLowerCase()
+                                  return originalName === userName.toLowerCase() || 
+                                         formattedName === userName.toLowerCase() ||
+                                         emailMatch === userName.toLowerCase()
+                                })
+                                return user ? (
+                                  <span key={idx} className="font-medium text-blue-600 dark:text-blue-400">
+                                    {part}
+                                  </span>
+                                ) : (
+                                  <span key={idx}>{part}</span>
+                                )
+                              }
+                              return <span key={idx}>{part}</span>
+                            })}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                    Nessuna nota presente. Aggiungi la prima nota utilizzando il form qui sotto.
+                  </p>
+                )}
+
+                <div className="border-t dark:border-gray-700 pt-4">
+                  <div className="relative">
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative mention-dropdown-container">
+                        <textarea
+                          value={newNote}
+                          onChange={handleNoteInput}
+                          onKeyDown={(e) => {
+                            // Gestisci Escape per chiudere il dropdown
+                            if (e.key === 'Escape' && showMentionDropdown) {
+                              setShowMentionDropdown(false)
+                              setMentionQuery('')
+                              setMentionPosition(null)
+                            }
+                            // Gestisci Enter per selezionare il primo utente nel dropdown
+                            if (e.key === 'Enter' && showMentionDropdown && filteredUsersForMention.length > 0 && !e.shiftKey) {
+                              e.preventDefault()
+                              handleSelectMention(filteredUsersForMention[0]._id, filteredUsersForMention[0].name)
+                            }
+                          }}
+                          placeholder="Aggiungi un commento... Usa @ per menzionare un utente"
+                          rows={2}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                        />
+                        {/* Dropdown per selezionare utenti */}
+                        {showMentionDropdown && filteredUsersForMention && filteredUsersForMention.length > 0 && (
+                          <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                            {filteredUsersForMention.map((user) => (
+                              <button
+                                key={user._id}
+                                type="button"
+                                onClick={() => handleSelectMention(user._id, user.name)}
+                                className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                              >
+                                <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
+                                {user.email && (
+                                  <span className="text-sm text-gray-500 dark:text-gray-400">({user.email})</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={handleAddNote}
+                        disabled={!newNote.trim()}
+                        className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50"
+                      >
+                        Aggiungi
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
           <form key={formKey} onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Dettagli</h2>
 
@@ -731,13 +1321,37 @@ export default function KeyDevDetailPage() {
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <p className="text-sm text-blue-800 dark:text-blue-300 mb-4">
                       Come TechValidator, puoi prendere in carico questo Sviluppo Chiave e iniziare lo sviluppo.
+                      Puoi confermare o modificare il peso sviluppo dichiarato in fase di approvazione.
                     </p>
-                    <button
-                      onClick={handleTakeOwnership}
-                      className="px-4 py-2 bg-purple-600 dark:bg-purple-700 text-white rounded-md hover:bg-purple-700 dark:hover:bg-purple-600"
-                    >
-                      Prendi in Carico e Inizia Sviluppo
-                    </button>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Peso dello sviluppo per validazione tech
+                        </label>
+                        <select
+                          value={ownershipWeight}
+                          onChange={(e) => setOwnershipWeight(parseFloat(e.target.value) as 0 | 0.25 | 0.5 | 0.75 | 1)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                        >
+                          <option value={1}>1.00 - Sviluppo completo (100%)</option>
+                          <option value={0.75}>0.75 - Sviluppo significativo (75%)</option>
+                          <option value={0.5}>0.50 - Sviluppo medio (50%)</option>
+                          <option value={0.25}>0.25 - Sviluppo leggero (25%)</option>
+                          <option value={0}>0.00 - Nessuno sviluppo (0%)</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {keydev.weight !== undefined 
+                            ? `Peso attualmente dichiarato: ${keydev.weight} (${(keydev.weight * 100).toFixed(0)}%)`
+                            : 'Nessun peso dichiarato'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleTakeOwnership}
+                        className="px-4 py-2 bg-purple-600 dark:bg-purple-700 text-white rounded-md hover:bg-purple-700 dark:hover:bg-purple-600"
+                      >
+                        Prendi in Carico e Inizia Sviluppo
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -749,6 +1363,33 @@ export default function KeyDevDetailPage() {
                       Puoi dichiararlo completato quando lo sviluppo è terminato.
                     </p>
                     <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Repository URL definitivo <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={repoUrl}
+                          onChange={(e) => setRepoUrl(e.target.value)}
+                          placeholder="https://github.com/..."
+                          className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 font-mono text-sm ${
+                            !repoUrl.trim() 
+                              ? 'border-red-300 dark:border-red-600' 
+                              : 'border-gray-300 dark:border-gray-600'
+                          }`}
+                          required
+                        />
+                        <p className={`mt-1 text-xs ${
+                          !repoUrl.trim() 
+                            ? 'text-red-500 dark:text-red-400' 
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}>
+                          {!repoUrl.trim() 
+                            ? 'Obbligatorio: inserisci l\'URL del repository definitivo di sviluppo'
+                            : 'Inserisci l\'URL del repository definitivo dove è stato sviluppato'
+                          }
+                        </p>
+                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Commit di Rilascio <span className="text-red-500">*</span>
@@ -778,7 +1419,7 @@ export default function KeyDevDetailPage() {
                       </div>
                       <button
                         onClick={handleMarkAsDone}
-                        disabled={!releaseCommit.trim()}
+                        disabled={!repoUrl.trim() || !releaseCommit.trim()}
                         className="px-4 py-2 bg-emerald-600 dark:bg-emerald-700 text-white rounded-md hover:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Dichiara Completato
@@ -1045,46 +1686,7 @@ export default function KeyDevDetailPage() {
             </div>
           )}
 
-          {/* Notes */}
-          {!isNew && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Note</h2>
-
-              <div className="space-y-4">
-                {notes?.map((note) => (
-                  <div key={note._id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {users?.find((u) => u._id === note.authorId)?.name || 'Utente'}
-                      </span>
-                      <span className="text-sm text-gray-400 dark:text-gray-500">
-                        {new Date(note.ts).toLocaleString('it-IT')}
-                      </span>
-                    </div>
-                    <p className="text-gray-700 dark:text-gray-300">{note.body}</p>
-                  </div>
-                ))}
-
-                <div className="border-t dark:border-gray-700 pt-4">
-                  <div className="flex gap-2">
-                    <textarea
-                      value={newNote}
-                      onChange={(e) => setNewNote(e.target.value)}
-                      placeholder="Aggiungi un commento..."
-                      rows={2}
-                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
-                    />
-                    <button
-                      onClick={handleAddNote}
-                      disabled={!newNote.trim()}
-                      className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50"
-                    >
-                      Aggiungi
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            </>
           )}
         </div>
 
@@ -1092,7 +1694,7 @@ export default function KeyDevDetailPage() {
         {!isNew && keydev && (
           <div className="space-y-6">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Informazioni</h3>
+              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Informazioni Sviluppo Chiave</h3>
               <dl className="space-y-3">
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Mese</dt>
@@ -1128,9 +1730,10 @@ export default function KeyDevDetailPage() {
                         href={keydev.mockupRepoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                        className="text-blue-600 dark:text-blue-400 hover:underline break-all"
+                        title={keydev.mockupRepoUrl}
                       >
-                        {keydev.mockupRepoUrl}
+                        {truncateUrl(keydev.mockupRepoUrl, 50)}
                       </a>
                     </dd>
                   </div>
