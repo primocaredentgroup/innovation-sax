@@ -48,7 +48,7 @@ export default function KeyDevsListPage() {
   }, [])
 
   const selectedMonth = search.month === 'all' ? undefined : (search.month || currentMonth)
-  const showAllMonths = search.month === 'all' || !search.month
+  const showAllMonths = search.month === 'all'
 
   // Query per keydevs filtrati per mese (Draft, FrontValidated, InProgress, Done)
   const keydevsByMonth = useQuery(
@@ -76,9 +76,10 @@ export default function KeyDevsListPage() {
   )
   
   // Query per contatori totali quando "Tutti i mesi" è selezionato
+  const selectedDeptId: Id<'departments'> | undefined = search.dept ? (search.dept as Id<'departments'>) : undefined
   const totalPhaseCounts = useQuery(
     api.keydevs.getTotalPhaseCounts, 
-    showAllMonths ? { deptId: search.dept || undefined } : 'skip'
+    showAllMonths ? { deptId: selectedDeptId } : 'skip'
   )
   
   // Combina i keydevs e ordina per priorità (urgenti per primi)
@@ -250,7 +251,7 @@ export default function KeyDevsListPage() {
   const monthRefs = useMemo(() => monthOptions.map(opt => opt.value), [monthOptions])
   const phaseCountsByMonth = useQuery(api.keydevs.getPhaseCountsByMonths, { 
     monthRefs,
-    deptId: search.dept || undefined
+    deptId: selectedDeptId
   })
 
   const updateSearch = (updates: Record<string, string | string[] | undefined>) => {
