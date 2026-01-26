@@ -603,7 +603,7 @@ export default function DashboardPage() {
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
-            OKR Score
+            Sviluppi Chiave del Mese
           </button>
           <button
             onClick={() => setActiveTab('weeklyLoom')}
@@ -613,7 +613,7 @@ export default function DashboardPage() {
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
-            Weekly Loom ({weeklyLoomCount})
+            Applicativi Core ({weeklyLoomCount})
           </button>
           <button
             onClick={() => setActiveTab('pastKeyDevs')}
@@ -636,7 +636,7 @@ export default function DashboardPage() {
           {/* OKR Score Card */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0">
             <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 break-words">
-              OKR Score - {selectedMonth}
+              Sviluppi Chiave - {selectedMonth}
             </h2>
             {okrData ? (
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 min-w-0">
@@ -831,9 +831,21 @@ export default function DashboardPage() {
           <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 sm:mb-4 break-words">
             Sviluppi Chiave Scaduti
           </h2>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 break-words">
-            Mostra tutti gli sviluppi chiave con un mese di riferimento precedente all'attuale che non sono ancora stati controllati (stato diverso da "Checked").
-          </p>
+          <div className="mb-4 p-3 sm:p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-xs sm:text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-1">
+                  Attenzione
+                </p>
+                <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-400 break-words">
+                  Mostra tutti gli sviluppi chiave con un mese di riferimento precedente all'attuale che non sono ancora stati controllati (stato diverso da "Checked").
+                </p>
+              </div>
+            </div>
+          </div>
           {pastKeyDevs && pastKeyDevs.length > 0 ? (
             <div className="space-y-3">
               {pastKeyDevs.map((kd) => (
