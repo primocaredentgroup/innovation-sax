@@ -88,6 +88,18 @@ export const listWithoutMonthFilter = query({
 })
 
 /**
+ * Lista tutti i KeyDevs senza filtro per mese.
+ * Include tutti gli stati e tutti i mesi.
+ */
+export const listAll = query({
+  args: {},
+  returns: v.array(keydevReturnValidator),
+  handler: async (ctx) => {
+    return await ctx.db.query('keydevs').collect()
+  }
+})
+
+/**
  * Ottiene i contatori degli status per gli stati senza filtro mese.
  */
 export const getStatusCountsWithoutMonth = query({
@@ -194,6 +206,116 @@ export const getStatusCounts = query({
     }
     
     return counts
+  }
+})
+
+/**
+ * Ottiene i contatori per le fasi FrontValidated, InProgress e Done per più mesi.
+ * Restituisce un record dove ogni chiave è un monthRef e il valore è un oggetto con i contatori.
+ * Opzionalmente filtra per dipartimento se deptId è fornito.
+ */
+export const getPhaseCountsByMonths = query({
+  args: { 
+    monthRefs: v.array(v.string()),
+    deptId: v.optional(v.id('departments'))
+  },
+  returns: v.record(
+    v.string(),
+    v.object({
+      FrontValidated: v.number(),
+      InProgress: v.number(),
+      Done: v.number()
+    })
+  ),
+  handler: async (ctx, args) => {
+    const result: Record<string, { FrontValidated: number; InProgress: number; Done: number }> = {}
+    
+    // Inizializza tutti i mesi con contatori a zero
+    for (const monthRef of args.monthRefs) {
+      result[monthRef] = { FrontValidated: 0, InProgress: 0, Done: 0 }
+    }
+    
+    // Ottieni tutte le bozze senza mese associato (che compaiono in tutti i mesi)
+    const allDrafts = await ctx.db
+      .query('keydevs')
+      .withIndex('by_status', (q) => q.eq('status', 'Draft'))
+      .collect()
+    let draftsWithoutMonth = allDrafts.filter((kd) => !kd.monthRef)
+    
+    // Filtra per dipartimento se specificato
+    if (args.deptId) {
+      draftsWithoutMonth = draftsWithoutMonth.filter((kd) => kd.deptId === args.deptId)
+    }
+    
+    // Per ogni mese, conta i keydevs nelle fasi specificate
+    for (const monthRef of args.monthRefs) {
+      // Ottieni tutte le keydevs per il mese specificato
+      const keydevsByMonth = await ctx.db
+        .query('keydevs')
+        .withIndex('by_month', (q) => q.eq('monthRef', monthRef))
+        .collect()
+      
+      // Filtra per dipartimento se specificato
+      let filteredKeydevsByMonth = keydevsByMonth
+      if (args.deptId) {
+        filteredKeydevsByMonth = keydevsByMonth.filter((kd) => kd.deptId === args.deptId)
+      }
+      
+      // Combina con le bozze senza mese
+      const allKeydevsForMonth = [...filteredKeydevsByMonth, ...draftsWithoutMonth]
+      
+      // Conta solo le fasi richieste
+      for (const kd of allKeydevsForMonth) {
+        if (kd.status === 'FrontValidated') {
+          result[monthRef].FrontValidated++
+        } else if (kd.status === 'InProgress') {
+          result[monthRef].InProgress++
+        } else if (kd.status === 'Done') {
+          result[monthRef].Done++
+        }
+      }
+    }
+    
+    return result
+  }
+})
+
+/**
+ * Ottiene i contatori totali per le fasi FrontValidated, InProgress e Done per tutti i keydevs.
+ * Opzionalmente filtra per dipartimento se deptId è fornito.
+ */
+export const getTotalPhaseCounts = query({
+  args: {
+    deptId: v.optional(v.id('departments'))
+  },
+  returns: v.object({
+    FrontValidated: v.number(),
+    InProgress: v.number(),
+    Done: v.number()
+  }),
+  handler: async (ctx, args) => {
+    let allKeydevs = await ctx.db.query('keydevs').collect()
+    
+    // Filtra per dipartimento se specificato
+    if (args.deptId) {
+      allKeydevs = allKeydevs.filter((kd) => kd.deptId === args.deptId)
+    }
+    
+    let frontValidated = 0
+    let inProgress = 0
+    let done = 0
+    
+    for (const kd of allKeydevs) {
+      if (kd.status === 'FrontValidated') {
+        frontValidated++
+      } else if (kd.status === 'InProgress') {
+        inProgress++
+      } else if (kd.status === 'Done') {
+        done++
+      }
+    }
+    
+    return { FrontValidated: frontValidated, InProgress: inProgress, Done: done }
   }
 })
 

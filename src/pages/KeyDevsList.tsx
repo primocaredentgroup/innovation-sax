@@ -38,36 +38,61 @@ export default function KeyDevsListPage() {
   const navigate = useNavigate()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const [monthDropdownOpen, setMonthDropdownOpen] = useState(false)
+  const monthDropdownRef = useRef<HTMLDivElement>(null)
 
   const currentMonth = useMemo(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   }, [])
 
-  const selectedMonth = search.month || currentMonth
+  const selectedMonth = search.month === 'all' ? undefined : (search.month || currentMonth)
+  const showAllMonths = search.month === 'all' || !search.month
 
   // Query per keydevs filtrati per mese (Draft, FrontValidated, InProgress, Done)
-  const keydevsByMonth = useQuery(api.keydevs.listByMonth, { monthRef: selectedMonth })
+  const keydevsByMonth = useQuery(
+    api.keydevs.listByMonth, 
+    selectedMonth ? { monthRef: selectedMonth } : 'skip'
+  )
   // Query per keydevs senza filtro mese (MockupDone, Rejected, Approved)
   const keydevsWithoutMonth = useQuery(api.keydevs.listWithoutMonthFilter)
+  // Query per tutti i keydevs quando "Tutti i mesi" è selezionato
+  const allKeydevs = useQuery(api.keydevs.listAll, showAllMonths ? {} : 'skip')
   
   const departments = useQuery(api.departments.list)
   const teams = useQuery(api.teams.list)
   const allBlockingLabels = useQuery(api.blockingLabels.list)
   const users = useQuery(api.users.listUsers)
   
-  // Query per budget e mese
-  const budgetAllocations = useQuery(api.budget.getByMonth, { monthRef: selectedMonth })
-  const monthData = useQuery(api.months.getByRef, { monthRef: selectedMonth })
+  // Query per budget e mese (solo se un mese specifico è selezionato)
+  const budgetAllocations = useQuery(
+    api.budget.getByMonth, 
+    selectedMonth ? { monthRef: selectedMonth } : 'skip'
+  )
+  const monthData = useQuery(
+    api.months.getByRef, 
+    selectedMonth ? { monthRef: selectedMonth } : 'skip'
+  )
+  
+  // Query per contatori totali quando "Tutti i mesi" è selezionato
+  const totalPhaseCounts = useQuery(
+    api.keydevs.getTotalPhaseCounts, 
+    showAllMonths ? { deptId: search.dept || undefined } : 'skip'
+  )
   
   // Combina i keydevs
   const keydevs = useMemo(() => {
+    if (showAllMonths) {
+      // Quando "Tutti i mesi" è selezionato, mostra tutti i keydevs
+      return allKeydevs || []
+    }
+    
     const byMonthFiltered = (keydevsByMonth || []).filter(
       (kd) => !statusesWithoutMonthFilter.includes(kd.status)
     )
     const withoutMonth = keydevsWithoutMonth || []
     return [...byMonthFiltered, ...withoutMonth]
-  }, [keydevsByMonth, keydevsWithoutMonth])
+  }, [showAllMonths, allKeydevs, keydevsByMonth, keydevsWithoutMonth])
   
   // Calcola i contatori basandosi sui keydevs filtrati per team/dipartimento
   // Questo assicura che i contatori corrispondano ai keydevs visibili nella lista
@@ -133,11 +158,28 @@ export default function KeyDevsListPage() {
 
   // Filter keydevs based on search params
   const filteredKeyDevs = useMemo(() => {
-    return baseFilteredKeyDevs
-  }, [baseFilteredKeyDevs])
+    let result = baseFilteredKeyDevs
+    
+    // Applica filtro di ricerca testuale se presente
+    if (search.query && search.query.trim()) {
+      const queryLower = search.query.toLowerCase().trim()
+      result = result.filter((kd) => {
+        const titleMatch = kd.title.toLowerCase().includes(queryLower)
+        const readableIdMatch = kd.readableId.toLowerCase().includes(queryLower)
+        return titleMatch || readableIdMatch
+      })
+    }
+    
+    return result
+  }, [baseFilteredKeyDevs, search.query])
 
   // Calcola l'utilizzo del budget (slot occupati vs slot massimi disponibili)
   const budgetUtilization = useMemo(() => {
+    // Se "Tutti i mesi" è selezionato, non mostrare il budget utilization
+    if (showAllMonths) {
+      return { occupiedSlots: 0, budgetAssigned: 0, maxSlots: 0, competitionSlots: 0, percentage: 0, remainingSlots: 0 }
+    }
+    
     const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked']
     
     // Filtra keydevs per stati che occupano slot E per dipartimento/team se selezionati
@@ -170,7 +212,7 @@ export default function KeyDevsListPage() {
     const remainingSlots = Math.max(0, maxSlots - occupiedSlots)
     
     return { occupiedSlots, budgetAssigned, maxSlots, competitionSlots, percentage, remainingSlots }
-  }, [keydevsByMonth, budgetAllocations, monthData, search.dept, search.team])
+  }, [showAllMonths, keydevsByMonth, budgetAllocations, monthData, search.dept, search.team])
 
   // Generate month options
   const monthOptions = useMemo(() => {
@@ -184,6 +226,13 @@ export default function KeyDevsListPage() {
     }
     return options
   }, [])
+
+  // Ottieni i contatori per tutte le fasi per tutti i mesi visibili nel dropdown
+  const monthRefs = useMemo(() => monthOptions.map(opt => opt.value), [monthOptions])
+  const phaseCountsByMonth = useQuery(api.keydevs.getPhaseCountsByMonths, { 
+    monthRefs,
+    deptId: search.dept || undefined
+  })
 
   const updateSearch = (updates: Record<string, string | string[] | undefined>) => {
     navigate({
@@ -209,16 +258,19 @@ export default function KeyDevsListPage() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setDropdownOpen(false)
       }
+      if (monthDropdownRef.current && !monthDropdownRef.current.contains(event.target as Node)) {
+        setMonthDropdownOpen(false)
+      }
     }
 
-    if (dropdownOpen) {
+    if (dropdownOpen || monthDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside)
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [dropdownOpen])
+  }, [dropdownOpen, monthDropdownOpen])
 
   // Testo del pulsante dropdown
   const dropdownButtonText = useMemo(() => {
@@ -237,17 +289,117 @@ export default function KeyDevsListPage() {
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:flex-wrap">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Sviluppi Chiave di</h1>
           <div className="flex items-center gap-2 flex-wrap">
-            <select
-              value={selectedMonth}
-              onChange={(e) => updateSearch({ month: e.target.value })}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-base sm:text-lg font-semibold"
-            >
-              {monthOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <div className="relative" ref={monthDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setMonthDropdownOpen(!monthDropdownOpen)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-base sm:text-lg font-semibold flex items-center gap-2"
+              >
+                <span>
+                  {showAllMonths 
+                    ? 'Tutti i mesi' 
+                    : monthOptions.find(opt => opt.value === selectedMonth)?.label || 'Seleziona mese'}
+                </span>
+                <ChevronDown 
+                  size={20} 
+                  className={`text-gray-500 dark:text-gray-400 transition-transform ${monthDropdownOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {monthDropdownOpen && (
+                <div className="absolute z-50 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-[400px] overflow-y-auto min-w-[280px]">
+                  <div className="p-2 space-y-1">
+                    {/* Opzione "Tutti i mesi" */}
+                    <button
+                      onClick={() => {
+                        updateSearch({ month: 'all' })
+                        setMonthDropdownOpen(false)
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left ${
+                        showAllMonths ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                      }`}
+                    >
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        Tutti i mesi
+                      </span>
+                      <div className="flex items-center gap-2 ml-2">
+                        {totalPhaseCounts && (
+                          <>
+                            {totalPhaseCounts.FrontValidated > 0 && (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 font-semibold">
+                                {totalPhaseCounts.FrontValidated}
+                              </span>
+                            )}
+                            {totalPhaseCounts.InProgress > 0 && (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 font-semibold">
+                                {totalPhaseCounts.InProgress}
+                              </span>
+                            )}
+                            {totalPhaseCounts.Done > 0 && (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 font-semibold">
+                                {totalPhaseCounts.Done}
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {showAllMonths && (
+                          <span className="text-blue-600 dark:text-blue-400">✓</span>
+                        )}
+                      </div>
+                    </button>
+                    
+                    {/* Separatore */}
+                    <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+                    
+                    {/* Opzioni mesi */}
+                    {monthOptions.map((opt) => {
+                      const counts = phaseCountsByMonth?.[opt.value]
+                      const frontValidated = counts?.FrontValidated || 0
+                      const inProgress = counts?.InProgress || 0
+                      const done = counts?.Done || 0
+                      const isSelected = !showAllMonths && selectedMonth === opt.value
+                      
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            updateSearch({ month: opt.value })
+                            setMonthDropdownOpen(false)
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left ${
+                            isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                          }`}
+                        >
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {opt.label}
+                          </span>
+                          <div className="flex items-center gap-2 ml-2">
+                            {frontValidated > 0 && (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 font-semibold">
+                                {frontValidated}
+                              </span>
+                            )}
+                            {inProgress > 0 && (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 font-semibold">
+                                {inProgress}
+                              </span>
+                            )}
+                            {done > 0 && (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 font-semibold">
+                                {done}
+                              </span>
+                            )}
+                            {isSelected && (
+                              <span className="text-blue-600 dark:text-blue-400">✓</span>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
             <span className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 hidden sm:inline">per</span>
             <select
               value={search.dept || ''}
@@ -272,7 +424,8 @@ export default function KeyDevsListPage() {
         </Link>
       </div>
 
-      {/* Budget Utilization Card */}
+      {/* Budget Utilization Card - Solo quando un mese specifico è selezionato */}
+      {!showAllMonths && (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
@@ -346,33 +499,48 @@ export default function KeyDevsListPage() {
           </p>
         )}
       </div>
+      )}
 
-      {/* Team Tabs */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <button
-            onClick={() => updateSearch({ team: undefined })}
-            className={`px-4 sm:px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-              selectedTeam === null
-                ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
-            }`}
-          >
-            Tutti i team
-          </button>
-          {teams?.map((team) => (
+      {/* Team Tabs and Search */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 p-4 border-b border-gray-200 dark:border-gray-700">
+          {/* Team Tabs */}
+          <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] flex-1 min-w-0">
             <button
-              key={team._id}
-              onClick={() => updateSearch({ team: team._id })}
+              onClick={() => updateSearch({ team: undefined })}
               className={`px-4 sm:px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                selectedTeam === team._id
+                selectedTeam === null
                   ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
                   : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
-              {team.name}
+              Tutti i team
             </button>
-          ))}
+            {teams?.map((team) => (
+              <button
+                key={team._id}
+                onClick={() => updateSearch({ team: team._id })}
+                className={`px-4 sm:px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  selectedTeam === team._id
+                    ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+                }`}
+              >
+                {team.name}
+              </button>
+            ))}
+          </div>
+          
+          {/* Search Input */}
+          <div className="shrink-0 w-full sm:w-auto sm:min-w-[250px]">
+            <input
+              type="text"
+              placeholder="Cerca per titolo o ID..."
+              value={search.query || ''}
+              onChange={(e) => updateSearch({ query: e.target.value || undefined })}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 text-sm"
+            />
+          </div>
         </div>
       </div>
 
