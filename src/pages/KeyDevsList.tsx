@@ -4,6 +4,7 @@ import { api } from '../../convex/_generated/api'
 import { useMemo, useState, useRef, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 import { ChevronDown, X } from 'lucide-react'
+import PrioritySelector from '../components/PrioritySelector'
 
 const statusColors: Record<string, string> = {
   Draft: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
@@ -80,18 +81,36 @@ export default function KeyDevsListPage() {
     showAllMonths ? { deptId: search.dept || undefined } : 'skip'
   )
   
-  // Combina i keydevs
+  // Combina i keydevs e ordina per priorità (urgenti per primi)
   const keydevs = useMemo(() => {
+    let combined: typeof allKeydevs = []
+    
     if (showAllMonths) {
       // Quando "Tutti i mesi" è selezionato, mostra tutti i keydevs
-      return allKeydevs || []
+      combined = allKeydevs || []
+    } else {
+      const byMonthFiltered = (keydevsByMonth || []).filter(
+        (kd) => !statusesWithoutMonthFilter.includes(kd.status)
+      )
+      const withoutMonth = keydevsWithoutMonth || []
+      combined = [...byMonthFiltered, ...withoutMonth]
     }
     
-    const byMonthFiltered = (keydevsByMonth || []).filter(
-      (kd) => !statusesWithoutMonthFilter.includes(kd.status)
-    )
-    const withoutMonth = keydevsWithoutMonth || []
-    return [...byMonthFiltered, ...withoutMonth]
+    // Ordina per priorità: 1 (Urgent) per primi, poi 2, 3, 4, 0 (No priority)
+    // Se la priorità è undefined, trattala come 0 (No priority)
+    return [...combined].sort((a, b) => {
+      const priorityA = a.priority ?? 0
+      const priorityB = b.priority ?? 0
+      
+      // Ordine: 1, 2, 3, 4, 0
+      // Se la priorità è 0, va alla fine
+      if (priorityA === 0 && priorityB !== 0) return 1
+      if (priorityB === 0 && priorityA !== 0) return -1
+      if (priorityA === 0 && priorityB === 0) return 0
+      
+      // Altrimenti ordina normalmente (1, 2, 3, 4)
+      return priorityA - priorityB
+    })
   }, [showAllMonths, allKeydevs, keydevsByMonth, keydevsWithoutMonth])
   
   // Calcola i contatori basandosi sui keydevs filtrati per team/dipartimento
@@ -705,6 +724,13 @@ export default function KeyDevsListPage() {
                       <span className={`px-2 py-1 text-xs rounded-full ${statusColors[kd.status]}`}>
                         {statusLabels[kd.status]}
                       </span>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <PrioritySelector 
+                          keyDevId={kd._id} 
+                          currentPriority={kd.priority}
+                          compact={true}
+                        />
+                      </div>
                     </div>
                     <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 wrap-break-word">
                       {kd.title}
@@ -769,6 +795,7 @@ export default function KeyDevsListPage() {
               <tr className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Titolo</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Stato</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Priorità</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Team</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 hidden lg:table-cell">Owner</th>
@@ -792,6 +819,13 @@ export default function KeyDevsListPage() {
                     <span className={`px-2 py-1 text-xs rounded-full ${statusColors[kd.status]}`}>
                       {statusLabels[kd.status]}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                    <PrioritySelector 
+                      keyDevId={kd._id} 
+                      currentPriority={kd.priority}
+                      compact={true}
+                    />
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {departments?.find((d) => d._id === kd.deptId)?.name || 'N/A'}

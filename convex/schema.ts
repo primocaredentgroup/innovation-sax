@@ -79,6 +79,16 @@ export const penaltyWeightValidator = v.union(
   v.literal(1)
 )
 
+// Priority validator per keydevs (priorità da 0 a 4)
+// 0 = No priority, 1 = Urgent, 2 = High, 3 = Medium, 4 = Low
+export const keydevPriorityValidator = v.union(
+  v.literal(0),
+  v.literal(1),
+  v.literal(2),
+  v.literal(3),
+  v.literal(4)
+)
+
 export default defineSchema({
   // Users & Roles
   users: defineTable({
@@ -141,6 +151,8 @@ export default defineSchema({
     releaseCommit: v.optional(v.string()), // Commit rilasciato dall'owner quando completa lo sviluppo
     // Weight (peso dello sviluppo per validazione tech)
     weight: v.optional(keydevWeightValidator), // Peso da 0 a 1 (0, 0.25, 0.50, 0.75, 1)
+    // Priority (priorità del keydev)
+    priority: v.optional(keydevPriorityValidator), // Priorità da 0 a 4 (0 = No priority, 1 = Urgent, 2 = High, 3 = Medium, 4 = Low)
     // Timestamps
     approvedAt: v.optional(v.number()),
     frontValidatedAt: v.optional(v.number()),

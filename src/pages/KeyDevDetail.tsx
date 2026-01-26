@@ -3,6 +3,7 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useState, useMemo, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
+import PrioritySelector from '../components/PrioritySelector'
 
 // Tipo per i ruoli
 type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
@@ -1720,6 +1721,15 @@ export default function KeyDevDetailPage() {
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Requester</dt>
                   <dd className="font-medium text-gray-900 dark:text-gray-100">
                     {users?.find((u) => u._id === keydev.requesterId)?.name || 'N/A'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400 mb-2">Priorità</dt>
+                  <dd>
+                    <PrioritySelector 
+                      keyDevId={keydev._id} 
+                      currentPriority={keydev.priority}
+                    />
                   </dd>
                 </div>
                 <div>

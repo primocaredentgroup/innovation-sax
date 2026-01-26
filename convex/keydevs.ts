@@ -1,6 +1,6 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
-import { keydevStatusValidator, keydevWeightValidator } from './schema'
+import { keydevStatusValidator, keydevWeightValidator, keydevPriorityValidator } from './schema'
 import { hasRole, isAdmin } from './users'
 import type { Doc } from './_generated/dataModel'
 
@@ -28,6 +28,7 @@ const keydevReturnValidator = v.object({
   repoUrl: v.optional(v.string()),
   releaseCommit: v.optional(v.string()),
   weight: v.optional(keydevWeightValidator),
+  priority: v.optional(keydevPriorityValidator),
   approvedAt: v.optional(v.number()),
   frontValidatedAt: v.optional(v.number()),
   techValidatedAt: v.optional(v.number()),
@@ -874,6 +875,29 @@ export const assignOwner = mutation({
 
     await ctx.db.patch(args.id, {
       ownerId: args.ownerId
+    })
+    return null
+  }
+})
+
+/**
+ * Aggiorna la priorità di un KeyDev.
+ * Chiunque può modificare la priorità.
+ */
+export const updatePriority = mutation({
+  args: {
+    id: v.id('keydevs'),
+    priority: keydevPriorityValidator
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const keydev = await ctx.db.get(args.id)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+
+    await ctx.db.patch(args.id, {
+      priority: args.priority
     })
     return null
   }
