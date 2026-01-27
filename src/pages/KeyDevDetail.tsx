@@ -8,6 +8,9 @@ import PrioritySelector from '../components/PrioritySelector'
 // Tipo per i ruoli
 type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
 
+// Tipo per lo status
+type KeyDevStatus = 'Draft' | 'MockupDone' | 'Approved' | 'Rejected' | 'FrontValidated' | 'InProgress' | 'Done' | 'Checked'
+
 // Helper per verificare ruoli
 const hasRole = (roles: Role[] | undefined, role: Role): boolean => {
   if (!roles) return false
@@ -36,6 +39,16 @@ const statusLabels: Record<string, string> = {
   InProgress: 'In Corso',
   Done: 'Completato',
   Checked: 'Controllato'
+}
+
+// Ordine degli stati per la visualizzazione
+const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
+
+// Helper per ottenere solo gli stati precedenti (incluso quello attuale)
+const getPreviousStatuses = (currentStatus: string): string[] => {
+  const currentIndex = statusOrder.indexOf(currentStatus)
+  if (currentIndex === -1) return statusOrder
+  return statusOrder.slice(0, currentIndex + 1)
 }
 
 // Helper per troncare URL mantenendo inizio e fine
@@ -622,9 +635,23 @@ export default function KeyDevDetailPage() {
                   {keydev.readableId}
                 </span>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm ${statusColors[keydev.status]}`}>
-                    {statusLabels[keydev.status]}
-                  </span>
+                  <select
+                    value={keydev.status}
+                    onChange={async (e) => {
+                      try {
+                        await updateStatus({ id: keydev._id, status: e.target.value as KeyDevStatus })
+                      } catch (error) {
+                        alert(error instanceof Error ? error.message : 'Errore nel cambio di stato')
+                      }
+                    }}
+                    className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm border-0 ${statusColors[keydev.status]} cursor-pointer`}
+                  >
+                    {getPreviousStatuses(keydev.status).map((status) => (
+                      <option key={status} value={status} className="bg-white dark:bg-gray-800">
+                        {statusLabels[status]}
+                      </option>
+                    ))}
+                  </select>
                   {/* Pulsante per riportare in Bozza quando rifiutato */}
                   {keydev.status === 'Rejected' && (isRequester || userIsAdmin) && (
                     <button
@@ -955,7 +982,7 @@ export default function KeyDevDetailPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrizione</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrizione / Obiettivo dello Sviluppo</label>
                 <textarea
                   name="desc"
                   defaultValue={keydev?.desc || ''}
@@ -1819,51 +1846,32 @@ export default function KeyDevDetailPage() {
                 </div>
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Owner (Sviluppatore)</dt>
-                  {(userIsAdmin || userIsTechValidator) ? (
-                    <div className="space-y-2">
-                      <select
-                        value={selectedOwnerId}
-                        onChange={(e) => setSelectedOwnerId(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
-                      >
-                        <option value="">Seleziona owner...</option>
-                        {users?.filter(u => hasRole(u.roles as Role[] | undefined, 'TechValidator') || isAdmin(u.roles as Role[] | undefined))
-                          .map((u) => (
-                            <option key={u._id} value={u._id}>
-                              {u.name}
-                            </option>
-                          ))}
-                      </select>
-                      <button
-                        onClick={async () => {
-                          if (!selectedOwnerId) {
-                            alert('Seleziona un owner')
-                            return
-                          }
-                          try {
-                            await assignOwner({
-                              id: keydev._id,
-                              ownerId: selectedOwnerId as Id<'users'>
-                            })
-                          } catch (error) {
-                            alert(error instanceof Error ? error.message : 'Errore nell\'assegnazione dell\'owner')
-                          }
-                        }}
-                        disabled={!selectedOwnerId || selectedOwnerId === keydev.ownerId}
-                        className="w-full px-3 py-1 text-sm bg-purple-600 dark:bg-purple-700 text-white rounded-md hover:bg-purple-700 dark:hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {keydev.ownerId ? 'Aggiorna Owner' : 'Assegna Owner'}
-                      </button>
-                    </div>
-                  ) : (
-                    <dd className="font-medium text-purple-700 dark:text-purple-400">
-                      {keydev.ownerId ? (
-                        users?.find((u) => u._id === keydev.ownerId)?.name || 'N/A'
-                      ) : (
-                        <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
-                      )}
-                    </dd>
-                  )}
+                  <dd>
+                    <select
+                      value={selectedOwnerId}
+                      onChange={async (e) => {
+                        if (!e.target.value) return
+                        try {
+                          await assignOwner({
+                            id: keydev._id,
+                            ownerId: e.target.value as Id<'users'>
+                          })
+                        } catch (error) {
+                          alert(error instanceof Error ? error.message : 'Errore nell\'assegnazione dell\'owner')
+                        }
+                      }}
+                      disabled={!userIsAdmin && !userIsTechValidator}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Nessun owner</option>
+                      {users?.filter(u => hasRole(u.roles as Role[] | undefined, 'TechValidator') || isAdmin(u.roles as Role[] | undefined))
+                        .map((u) => (
+                          <option key={u._id} value={u._id}>
+                            {u.name}
+                          </option>
+                        ))}
+                    </select>
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Completato il</dt>

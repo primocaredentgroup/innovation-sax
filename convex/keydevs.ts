@@ -7,6 +7,17 @@ import type { Doc } from './_generated/dataModel'
 // Tipo per i ruoli
 type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
 
+// Ordine degli stati nel processo
+const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
+
+// Helper per determinare se si sta andando avanti o indietro nello stato
+const isMovingForward = (currentStatus: string, newStatus: string): boolean => {
+  const currentIndex = statusOrder.indexOf(currentStatus)
+  const newIndex = statusOrder.indexOf(newStatus)
+  if (currentIndex === -1 || newIndex === -1) return false
+  return newIndex > currentIndex
+}
+
 const keydevReturnValidator = v.object({
   _id: v.id('keydevs'),
   _creationTime: v.number(),
@@ -469,19 +480,21 @@ export const updateStatus = mutation({
           }
           break
 
-        case 'Approved':
+        case 'Approved': {
           // Solo TechValidator può approvare un MockupDone
-          if (keydev.status !== 'MockupDone') {
+          const isMovingToApproved = isMovingForward(keydev.status, 'Approved')
+          if (isMovingToApproved && keydev.status !== 'MockupDone') {
             throw new Error('Transizione non valida: solo da MockupDone a Approved')
           }
           if (!hasRole(userRoles, 'TechValidator')) {
             throw new Error('Solo i TechValidator possono approvare')
           }
-          // Weight è obbligatorio quando si approva
-          if (args.weight === undefined) {
+          // Weight è obbligatorio solo quando si va avanti e non esiste già
+          if (isMovingToApproved && args.weight === undefined && keydev.weight === undefined) {
             throw new Error('Devi specificare il peso (weight) dello sviluppo per la validazione tech')
           }
           break
+        }
 
         case 'Rejected':
           // Solo TechValidator può rifiutare un MockupDone
@@ -496,27 +509,29 @@ export const updateStatus = mutation({
           }
           break
 
-        case 'FrontValidated':
+        case 'FrontValidated': {
           // Solo BusinessValidator del dipartimento può validare il front
-          if (keydev.status !== 'Approved') {
+          const isMovingToFrontValidated = isMovingForward(keydev.status, 'FrontValidated')
+          if (isMovingToFrontValidated && keydev.status !== 'Approved') {
             throw new Error('Transizione non valida: solo da Approved a FrontValidated')
           }
           if (!hasRole(userRoles, 'BusinessValidator')) {
             throw new Error('Solo i BusinessValidator possono validare il frontend')
           }
-          // Verifica che il BusinessValidator sia del dipartimento corretto
-          if (user.deptId !== keydev.deptId) {
+          // Verifica che il BusinessValidator sia del dipartimento corretto (solo quando si va avanti)
+          if (isMovingToFrontValidated && user.deptId !== keydev.deptId) {
             throw new Error('Solo il BusinessValidator del dipartimento associato può validare')
           }
-          // Verifica che sia stato specificato un mese
-          if (!args.monthRef) {
+          // Verifica che sia stato specificato un mese (solo quando si va avanti)
+          if (isMovingToFrontValidated && !args.monthRef && !keydev.monthRef) {
             throw new Error('Devi specificare il mese di riferimento per la validazione')
           }
-          // Verifica che sia stato specificato il commit validato (obbligatorio)
-          if (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '') {
+          // Verifica che sia stato specificato il commit validato (solo quando si va avanti)
+          if (isMovingToFrontValidated && (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '') && !keydev.validatedMockupCommit) {
             throw new Error('Devi specificare il commit del mockup validato')
           }
           break
+        }
 
         case 'InProgress':
           // Qualsiasi TechValidator può prendere ownership
@@ -566,24 +581,54 @@ export const updateStatus = mutation({
       }
     }
 
+    // Determina se si sta andando avanti o indietro
+    const movingForward = isMovingForward(keydev.status, args.status)
+    
     if (args.status === 'FrontValidated') {
-      // Verifica che sia stato specificato il commit validato (obbligatorio anche per admin)
-      if (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '') {
-        throw new Error('Devi specificare il commit del mockup validato')
+      // Se si sta andando avanti, richiedi il commit validato
+      // Se si sta tornando indietro, usa quello esistente se disponibile
+      if (movingForward) {
+        if (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '') {
+          throw new Error('Devi specificare il commit del mockup validato')
+        }
+      } else {
+        // Tornando indietro: usa il valore esistente se disponibile
+        if (keydev.validatedMockupCommit && (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '')) {
+          // Mantieni il valore esistente, non passare undefined
+        } else if (args.validatedMockupCommit && args.validatedMockupCommit.trim() !== '') {
+          // Se viene passato un nuovo valore, usalo
+        }
+        // Se non c'è né esistente né nuovo, va bene (stato precedente non richiede questo campo)
       }
     }
 
     // Applica gli aggiornamenti specifici per ogni stato
     if (args.status === 'Approved') {
-      // Validazione che weight sia presente (obbligatorio anche per admin)
-      if (args.weight === undefined) {
-        throw new Error('Devi specificare il peso (weight) dello sviluppo per la validazione tech')
+      // Se si sta andando avanti, richiedi il weight
+      // Se si sta tornando indietro, usa quello esistente se disponibile
+      if (movingForward) {
+        if (args.weight === undefined) {
+          throw new Error('Devi specificare il peso (weight) dello sviluppo per la validazione tech')
+        }
+        const now = Date.now()
+        updates.approvedAt = now
+        updates.techValidatedAt = now // Traccia timestamp validazione tecnica
+        updates.techValidatorId = user._id
+        updates.weight = args.weight // Salva il peso dello sviluppo
+      } else {
+        // Tornando indietro: mantieni i valori esistenti se disponibili
+        if (keydev.weight !== undefined && args.weight === undefined) {
+          // Mantieni il peso esistente
+          updates.weight = keydev.weight
+        } else if (args.weight !== undefined) {
+          // Se viene passato un nuovo peso, usalo
+          updates.weight = args.weight
+        }
+        // Aggiorna i timestamp solo se si sta andando avanti, altrimenti mantieni quelli esistenti
+        if (keydev.approvedAt) updates.approvedAt = keydev.approvedAt
+        if (keydev.techValidatedAt) updates.techValidatedAt = keydev.techValidatedAt
+        if (keydev.techValidatorId) updates.techValidatorId = keydev.techValidatorId
       }
-      const now = Date.now()
-      updates.approvedAt = now
-      updates.techValidatedAt = now // Traccia timestamp validazione tecnica
-      updates.techValidatorId = user._id
-      updates.weight = args.weight // Salva il peso dello sviluppo
       // NOTA: Non impostare rejectionReason e rejectedById a undefined qui
       // perché patch() non accetta valori undefined. La pulizia avviene sotto
       // usando replace() se necessario.
@@ -595,54 +640,68 @@ export const updateStatus = mutation({
     }
 
     if (args.status === 'FrontValidated') {
-      // Verifica budget disponibile per il mese specificato
-      if (args.monthRef) {
+      // Determina il mese di riferimento: usa quello passato o quello esistente se si torna indietro
+      const monthRefToUse = args.monthRef || keydev.monthRef
+      
+      // Verifica budget disponibile per il mese specificato (solo se si va avanti)
+      if (movingForward && monthRefToUse) {
         const budgetAlloc = await ctx.db
           .query('budgetKeyDev')
           .withIndex('by_month_dept_team', (q) =>
             q
-              .eq('monthRef', args.monthRef!)
+              .eq('monthRef', monthRefToUse)
               .eq('deptId', keydev.deptId)
               .eq('teamId', keydev.teamId)
           )
           .first()
         
         if (!budgetAlloc || budgetAlloc.maxAlloc <= 0) {
-          throw new Error(`Nessun budget disponibile per il mese ${args.monthRef}. Contatta l'amministratore per allocare il budget.`)
+          throw new Error(`Nessun budget disponibile per il mese ${monthRefToUse}. Contatta l'amministratore per allocare il budget.`)
         }
         
         // Conta i keydevs già validati per questo mese/dept/team
         const existingKeydevs = await ctx.db
           .query('keydevs')
           .withIndex('by_dept_and_month', (q) =>
-            q.eq('deptId', keydev.deptId).eq('monthRef', args.monthRef!)
+            q.eq('deptId', keydev.deptId).eq('monthRef', monthRefToUse)
           )
           .collect()
         
         const validatedCount = existingKeydevs.filter(
           (kd) => 
+            kd._id !== keydev._id && // Escludi il keydev corrente
             kd.teamId === keydev.teamId && 
             ['FrontValidated', 'InProgress', 'Done'].includes(kd.status)
         ).length
         
         if (validatedCount >= budgetAlloc.maxAlloc) {
-          throw new Error(`Budget esaurito per il mese ${args.monthRef}. Già ${validatedCount}/${budgetAlloc.maxAlloc} KeyDevs validati per questo team/dipartimento.`)
+          throw new Error(`Budget esaurito per il mese ${monthRefToUse}. Già ${validatedCount}/${budgetAlloc.maxAlloc} KeyDevs validati per questo team/dipartimento.`)
         }
-        
-        updates.monthRef = args.monthRef
       }
       
-      // Salva il commit validato (obbligatorio)
-      // La validazione garantisce che validatedMockupCommit esista e non sia vuoto
-      if (!args.validatedMockupCommit) {
-        throw new Error('validatedMockupCommit è obbligatorio per FrontValidated')
+      // Usa il mese esistente o quello passato
+      if (monthRefToUse) {
+        updates.monthRef = monthRefToUse
       }
-      updates.validatedMockupCommit = args.validatedMockupCommit.trim()
       
-      const now = Date.now()
-      updates.frontValidatedAt = now
-      updates.businessValidatedAt = now // Traccia timestamp validazione business
-      updates.businessValidatorId = user._id
+      // Salva il commit validato: usa quello passato o quello esistente se si torna indietro
+      const commitToUse = args.validatedMockupCommit || keydev.validatedMockupCommit
+      if (commitToUse && commitToUse.trim() !== '') {
+        updates.validatedMockupCommit = commitToUse.trim()
+      }
+      
+      // Aggiorna i timestamp solo se si va avanti, altrimenti mantieni quelli esistenti
+      if (movingForward) {
+        const now = Date.now()
+        updates.frontValidatedAt = now
+        updates.businessValidatedAt = now // Traccia timestamp validazione business
+        updates.businessValidatorId = user._id
+      } else {
+        // Mantieni i timestamp esistenti se disponibili
+        if (keydev.frontValidatedAt) updates.frontValidatedAt = keydev.frontValidatedAt
+        if (keydev.businessValidatedAt) updates.businessValidatedAt = keydev.businessValidatedAt
+        if (keydev.businessValidatorId) updates.businessValidatorId = keydev.businessValidatorId
+      }
     }
 
     if (args.status === 'InProgress') {

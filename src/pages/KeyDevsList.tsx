@@ -1,10 +1,24 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useMemo, useState, useRef, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 import { ChevronDown, X } from 'lucide-react'
 import PrioritySelector from '../components/PrioritySelector'
+
+// Tipo per i ruoli
+type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
+
+// Tipo per lo status
+type KeyDevStatus = 'Draft' | 'MockupDone' | 'Approved' | 'Rejected' | 'FrontValidated' | 'InProgress' | 'Done' | 'Checked'
+
+// Helper per verificare ruoli
+const hasRole = (roles: Role[] | undefined, role: Role): boolean => {
+  if (!roles) return false
+  return roles.includes(role)
+}
+
+const isAdmin = (roles: Role[] | undefined): boolean => hasRole(roles, 'Admin')
 
 const statusColors: Record<string, string> = {
   Draft: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
@@ -33,6 +47,13 @@ const statusesWithoutMonthFilter = ['MockupDone', 'Rejected', 'Approved']
 
 // Ordine degli stati per la visualizzazione
 const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
+
+// Helper per ottenere solo gli stati precedenti (incluso quello attuale)
+const getPreviousStatuses = (currentStatus: string): string[] => {
+  const currentIndex = statusOrder.indexOf(currentStatus)
+  if (currentIndex === -1) return statusOrder
+  return statusOrder.slice(0, currentIndex + 1)
+}
 
 export default function KeyDevsListPage() {
   const search = useSearch({ strict: false })
@@ -64,6 +85,15 @@ export default function KeyDevsListPage() {
   const teams = useQuery(api.teams.list)
   const allBlockingLabels = useQuery(api.blockingLabels.list)
   const users = useQuery(api.users.listUsers)
+  const currentUser = useQuery(api.users.getCurrentUser)
+  
+  const assignOwner = useMutation(api.keydevs.assignOwner)
+  const updateStatus = useMutation(api.keydevs.updateStatus)
+  
+  // Ruoli e permessi utente corrente
+  const userRoles = currentUser?.roles as Role[] | undefined
+  const userIsAdmin = isAdmin(userRoles)
+  const userIsTechValidator = hasRole(userRoles, 'TechValidator')
   
   // Query per budget e mese (solo se un mese specifico è selezionato)
   const budgetAllocations = useQuery(
@@ -722,9 +752,26 @@ export default function KeyDevsListPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-gray-500 dark:text-gray-400 font-mono text-xs">{kd.readableId}</span>
-                      <span className={`px-2 py-1 text-xs rounded-full ${statusColors[kd.status]}`}>
-                        {statusLabels[kd.status]}
-                      </span>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={kd.status}
+                          onChange={async (e) => {
+                            try {
+                              await updateStatus({ id: kd._id, status: e.target.value as KeyDevStatus })
+                            } catch (error) {
+                              alert(error instanceof Error ? error.message : 'Errore nel cambio di stato')
+                            }
+                          }}
+                          className={`px-2 py-1 text-xs rounded-full border-0 ${statusColors[kd.status]} cursor-pointer`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {getPreviousStatuses(kd.status).map((status) => (
+                            <option key={status} value={status} className="bg-white dark:bg-gray-800">
+                              {statusLabels[status]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <div onClick={(e) => e.stopPropagation()}>
                         <PrioritySelector 
                           keyDevId={kd._id} 
@@ -749,12 +796,31 @@ export default function KeyDevsListPage() {
                     <span className="font-medium">Team:</span>
                     <span>{teams?.find((t) => t._id === kd.teamId)?.name || 'N/A'}</span>
                   </div>
-                  {kd.ownerId && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                      <span className="font-medium">Owner:</span>
-                      <span>{users?.find((u) => u._id === kd.ownerId)?.name || 'N/A'}</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400" onClick={(e) => e.stopPropagation()}>
+                    <span className="font-medium">Owner:</span>
+                    <select
+                      value={kd.ownerId || ''}
+                      onChange={async (e) => {
+                        if (!e.target.value) return
+                        try {
+                          await assignOwner({ id: kd._id, ownerId: e.target.value as Id<'users'> })
+                        } catch (error) {
+                          alert(error instanceof Error ? error.message : 'Errore nell\'assegnazione dell\'owner')
+                        }
+                      }}
+                      disabled={!userIsAdmin && !userIsTechValidator}
+                      className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <option value="">Nessun owner</option>
+                      {users?.filter(u => hasRole(u.roles as Role[] | undefined, 'TechValidator') || isAdmin(u.roles as Role[] | undefined))
+                        .map((u) => (
+                          <option key={u._id} value={u._id}>
+                            {u.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Blocchi */}
@@ -816,10 +882,25 @@ export default function KeyDevsListPage() {
                       <span>{kd.title}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 text-xs rounded-full ${statusColors[kd.status]}`}>
-                      {statusLabels[kd.status]}
-                    </span>
+                  <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                    <select
+                      value={kd.status}
+                      onChange={async (e) => {
+                        try {
+                          await updateStatus({ id: kd._id, status: e.target.value as KeyDevStatus })
+                        } catch (error) {
+                          alert(error instanceof Error ? error.message : 'Errore nel cambio di stato')
+                        }
+                      }}
+                      className={`px-2 py-1 text-xs rounded-full border-0 ${statusColors[kd.status]} cursor-pointer`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {getPreviousStatuses(kd.status).map((status) => (
+                        <option key={status} value={status} className="bg-white dark:bg-gray-800">
+                          {statusLabels[status]}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
                     <PrioritySelector 
@@ -834,8 +915,29 @@ export default function KeyDevsListPage() {
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {teams?.find((t) => t._id === kd.teamId)?.name || 'N/A'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 hidden lg:table-cell">
-                    {kd.ownerId ? (users?.find((u) => u._id === kd.ownerId)?.name || 'N/A') : '-'}
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 hidden lg:table-cell" onClick={(e) => e.stopPropagation()}>
+                    <select
+                      value={kd.ownerId || ''}
+                      onChange={async (e) => {
+                        if (!e.target.value) return
+                        try {
+                          await assignOwner({ id: kd._id, ownerId: e.target.value as Id<'users'> })
+                        } catch (error) {
+                          alert(error instanceof Error ? error.message : 'Errore nell\'assegnazione dell\'owner')
+                        }
+                      }}
+                      disabled={!userIsAdmin && !userIsTechValidator}
+                      className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <option value="">Nessun owner</option>
+                      {users?.filter(u => hasRole(u.roles as Role[] | undefined, 'TechValidator') || isAdmin(u.roles as Role[] | undefined))
+                        .map((u) => (
+                          <option key={u._id} value={u._id}>
+                            {u.name}
+                          </option>
+                        ))}
+                    </select>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex flex-wrap gap-2">
