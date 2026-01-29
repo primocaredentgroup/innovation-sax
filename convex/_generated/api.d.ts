@@ -15,6 +15,7 @@ import type * as coreApps from "../coreApps.js";
 import type * as dashboard from "../dashboard.js";
 import type * as departments from "../departments.js";
 import type * as emails from "../emails.js";
+import type * as emailsQueries from "../emailsQueries.js";
 import type * as http from "../http.js";
 import type * as keydevs from "../keydevs.js";
 import type * as labels from "../labels.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
   departments: typeof departments;
   emails: typeof emails;
+  emailsQueries: typeof emailsQueries;
   http: typeof http;
   keydevs: typeof keydevs;
   labels: typeof labels;
