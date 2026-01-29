@@ -236,15 +236,16 @@ export const getPhaseCountsByMonths = query({
     v.object({
       FrontValidated: v.number(),
       InProgress: v.number(),
-      Done: v.number()
+      Done: v.number(),
+      Checked: v.number()
     })
   ),
   handler: async (ctx, args) => {
-    const result: Record<string, { FrontValidated: number; InProgress: number; Done: number }> = {}
+    const result: Record<string, { FrontValidated: number; InProgress: number; Done: number; Checked: number }> = {}
     
     // Inizializza tutti i mesi con contatori a zero
     for (const monthRef of args.monthRefs) {
-      result[monthRef] = { FrontValidated: 0, InProgress: 0, Done: 0 }
+      result[monthRef] = { FrontValidated: 0, InProgress: 0, Done: 0, Checked: 0 }
     }
     
     // Ottieni tutte le bozze senza mese associato (che compaiono in tutti i mesi)
@@ -284,8 +285,89 @@ export const getPhaseCountsByMonths = query({
           result[monthRef].InProgress++
         } else if (kd.status === 'Done') {
           result[monthRef].Done++
+        } else if (kd.status === 'Checked') {
+          result[monthRef].Checked++
         }
       }
+    }
+    
+    return result
+  }
+})
+
+/**
+ * Ottiene i dati di budget e slot occupati per più mesi.
+ * Restituisce per ogni mese: slot occupati, budget assegnato ai dipartimenti, budget massimo del mese.
+ */
+export const getBudgetUtilizationByMonths = query({
+  args: { 
+    monthRefs: v.array(v.string()),
+    deptId: v.optional(v.id('departments')),
+    teamId: v.optional(v.id('teams'))
+  },
+  returns: v.record(
+    v.string(),
+    v.object({
+      occupiedSlots: v.number(),
+      budgetAssigned: v.number(),
+      maxSlots: v.number()
+    })
+  ),
+  handler: async (ctx, args) => {
+    const result: Record<string, { occupiedSlots: number; budgetAssigned: number; maxSlots: number }> = {}
+    
+    // Ottieni tutti i mesi
+    const allMonths = await ctx.db.query('months').collect()
+    const monthsMap = new Map(allMonths.map(m => [m.monthRef, m]))
+    
+    // Ottieni tutte le allocazioni budget
+    const allBudgetAllocations = await ctx.db.query('budgetKeyDev').collect()
+    
+    // Stati che occupano slot
+    const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked']
+    
+    // Inizializza tutti i mesi con valori a zero
+    for (const monthRef of args.monthRefs) {
+      result[monthRef] = { occupiedSlots: 0, budgetAssigned: 0, maxSlots: 0 }
+      
+      // Imposta il budget massimo del mese
+      const month = monthsMap.get(monthRef)
+      if (month) {
+        result[monthRef].maxSlots = month.totalKeyDev
+      }
+      
+      // Calcola budget assegnato ai dipartimenti (filtrato per dept/team se specificati)
+      const budgetForMonth = allBudgetAllocations.filter(b => 
+        b.monthRef === monthRef &&
+        (!args.deptId || b.deptId === args.deptId) &&
+        (!args.teamId || b.teamId === args.teamId)
+      )
+      result[monthRef].budgetAssigned = budgetForMonth.reduce((sum, b) => sum + b.maxAlloc, 0)
+    }
+    
+    // Per ogni mese, calcola gli slot occupati
+    for (const monthRef of args.monthRefs) {
+      // Ottieni tutte le keydevs per il mese specificato
+      const keydevsByMonth = await ctx.db
+        .query('keydevs')
+        .withIndex('by_month', (q) => q.eq('monthRef', monthRef))
+        .collect()
+      
+      // Filtra per dipartimento/team se specificati
+      let filteredKeydevsByMonth = keydevsByMonth
+      if (args.deptId) {
+        filteredKeydevsByMonth = filteredKeydevsByMonth.filter((kd) => kd.deptId === args.deptId)
+      }
+      if (args.teamId) {
+        filteredKeydevsByMonth = filteredKeydevsByMonth.filter((kd) => kd.teamId === args.teamId)
+      }
+      
+      // Calcola slot occupati (somma dei weight, default 1)
+      const occupiedSlots = filteredKeydevsByMonth
+        .filter(kd => occupiedStatuses.includes(kd.status))
+        .reduce((sum, kd) => sum + (kd.weight ?? 1), 0)
+      
+      result[monthRef].occupiedSlots = occupiedSlots
     }
     
     return result
@@ -303,7 +385,8 @@ export const getTotalPhaseCounts = query({
   returns: v.object({
     FrontValidated: v.number(),
     InProgress: v.number(),
-    Done: v.number()
+    Done: v.number(),
+    Checked: v.number()
   }),
   handler: async (ctx, args) => {
     let allKeydevs = await ctx.db.query('keydevs').collect()
@@ -316,6 +399,7 @@ export const getTotalPhaseCounts = query({
     let frontValidated = 0
     let inProgress = 0
     let done = 0
+    let checked = 0
     
     for (const kd of allKeydevs) {
       if (kd.status === 'FrontValidated') {
@@ -324,10 +408,12 @@ export const getTotalPhaseCounts = query({
         inProgress++
       } else if (kd.status === 'Done') {
         done++
+      } else if (kd.status === 'Checked') {
+        checked++
       }
     }
     
-    return { FrontValidated: frontValidated, InProgress: inProgress, Done: done }
+    return { FrontValidated: frontValidated, InProgress: inProgress, Done: done, Checked: checked }
   }
 })
 

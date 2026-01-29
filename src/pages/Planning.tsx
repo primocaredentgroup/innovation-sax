@@ -2,18 +2,22 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useState, useMemo } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
+import { Pencil } from 'lucide-react'
 
 export default function PlanningPage() {
   const currentUser = useQuery(api.users.getCurrentUser)
 
-  const currentMonth = useMemo(() => {
+  const nextMonth = useMemo(() => {
     const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`
   }, [])
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+  const [selectedMonth, setSelectedMonth] = useState(nextMonth)
   const [editingCell, setEditingCell] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [editingBudget, setEditingBudget] = useState(false)
+  const [editBudgetValue, setEditBudgetValue] = useState('')
 
   const departments = useQuery(api.departments.list)
   const teams = useQuery(api.teams.list)
@@ -21,11 +25,13 @@ export default function PlanningPage() {
   const monthData = useQuery(api.months.getByRef, { monthRef: selectedMonth })
 
   const updateBudget = useMutation(api.budget.upsert)
+  const upsertMonth = useMutation(api.months.upsert)
 
   const monthOptions = useMemo(() => {
     const options = []
     const now = new Date()
-    for (let i = 0; i < 12; i++) {
+    // 6 mesi precedenti + mese corrente + 3 mesi successivi = 10 mesi totali
+    for (let i = -6; i <= 3; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
       const ref = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
       const label = date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
@@ -85,28 +91,91 @@ export default function PlanningPage() {
     setEditingCell(null)
   }
 
+  const handleStartEditBudget = () => {
+    setEditingBudget(true)
+    setEditBudgetValue(String(totalBudget))
+  }
+
+  const handleSaveBudget = async () => {
+    const value = parseInt(editBudgetValue) || 0
+    if (value >= 0) {
+      await upsertMonth({ monthRef: selectedMonth, totalKeyDev: value })
+      setEditingBudget(false)
+      setEditBudgetValue('')
+    }
+  }
+
+  const handleCancelEditBudget = () => {
+    setEditingBudget(false)
+    setEditBudgetValue('')
+  }
+
+  const isAdmin = currentUser?.roles?.includes('Admin')
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Planning Budget KeyDev</h1>
-        <select
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500"
-        >
-          {monthOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 flex-wrap">
+          Assegna budget Sviluppi Chiave di
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 text-2xl font-bold text-gray-900 dark:text-gray-100"
+          >
+            {monthOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </h1>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500 dark:text-gray-400">Numero sviluppatori:</span>
-            <span className="ml-2 font-semibold">{totalBudget}</span>
+            {editingBudget && isAdmin ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  value={editBudgetValue}
+                  onChange={(e) => setEditBudgetValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveBudget()
+                    if (e.key === 'Escape') handleCancelEditBudget()
+                  }}
+                  className="w-20 px-2 py-1 text-sm border border-blue-500 dark:border-blue-400 rounded focus:outline-none dark:bg-gray-700 dark:text-gray-100"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveBudget}
+                  className="px-2 py-1 text-xs bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600"
+                >
+                  Salva
+                </button>
+                <button
+                  onClick={handleCancelEditBudget}
+                  className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-500"
+                >
+                  Annulla
+                </button>
+              </div>
+            ) : (
+              <>
+                <span className="ml-2 font-semibold">{totalBudget}</span>
+                {isAdmin && (
+                  <button
+                    onClick={handleStartEditBudget}
+                    className="ml-1 p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    title="Modifica numero sviluppatori"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                )}
+              </>
+            )}
           </div>
           <div>
             <span className="text-sm text-gray-500 dark:text-gray-400">Slot allocati:</span>

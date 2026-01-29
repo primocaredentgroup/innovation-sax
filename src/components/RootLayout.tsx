@@ -85,7 +85,7 @@ export default function RootLayout() {
             {!sidebarCollapsed && (
               <div>
                 <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Innovation Sax</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Gestione Sviluppi Chiave</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">La musica è cambiata!</p>
               </div>
             )}
             {sidebarCollapsed && (
@@ -145,17 +145,6 @@ export default function RootLayout() {
               <span className="text-lg">💻</span>
               {!sidebarCollapsed && <span>Applicazioni Core</span>}
             </Link>
-            <Link
-              to="/profile"
-              onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400 ${
-                sidebarCollapsed ? 'justify-center' : ''
-              }`}
-              title="Profilo"
-            >
-              <span className="text-lg">👤</span>
-              {!sidebarCollapsed && <span>Profilo</span>}
-            </Link>
             {isAdmin === true && (
               <>
                 <Link
@@ -203,11 +192,35 @@ export default function RootLayout() {
             <Authenticated>
               {!sidebarCollapsed ? (
                 <div className="flex items-center gap-3">
-                  {user?.picture && (
-                    <img src={user.picture} alt="Avatar" className="w-8 h-8 rounded-full" />
+                  {user?.picture ? (
+                    <img 
+                      src={user.picture} 
+                      alt="Avatar" 
+                      className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        navigate({ to: '/profile' })
+                        setSidebarOpen(false)
+                      }}
+                      title="Vai al profilo"
+                    />
+                  ) : (
+                    <div 
+                      className="w-8 h-8 rounded-full bg-green-600 dark:bg-green-700 flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        navigate({ to: '/profile' })
+                        setSidebarOpen(false)
+                      }}
+                      title="Vai al profilo"
+                    >
+                      <span className="text-white text-xs font-semibold">
+                        {(currentUser?.name || user?.name || 'U').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{user?.name}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {currentUser?.name || user?.name || 'Utente'}
+                    </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{currentUser?.roles?.join(', ') || 'Requester'}</p>
                   </div>
                   <button
@@ -219,8 +232,30 @@ export default function RootLayout() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2">
-                  {user?.picture && (
-                    <img src={user.picture} alt="Avatar" className="w-8 h-8 rounded-full" />
+                  {user?.picture ? (
+                    <img 
+                      src={user.picture} 
+                      alt="Avatar" 
+                      className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        navigate({ to: '/profile' })
+                        setSidebarOpen(false)
+                      }}
+                      title="Vai al profilo"
+                    />
+                  ) : (
+                    <div 
+                      className="w-8 h-8 rounded-full bg-green-600 dark:bg-green-700 flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        navigate({ to: '/profile' })
+                        setSidebarOpen(false)
+                      }}
+                      title="Vai al profilo"
+                    >
+                      <span className="text-white text-xs font-semibold">
+                        {(currentUser?.name || user?.name || 'U').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
                   )}
                   <button
                     onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}

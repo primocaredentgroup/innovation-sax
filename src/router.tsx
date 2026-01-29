@@ -7,6 +7,7 @@ import RootLayout from './components/RootLayout'
 // Import pages
 import DashboardPage from './pages/Dashboard'
 import KeyDevsListPage from './pages/KeyDevsList'
+import KeyDevNewPage from './pages/KeyDevNew'
 import KeyDevDetailPage from './pages/KeyDevDetail'
 import PlanningPage from './pages/Planning'
 import CoreAppsListPage from './pages/CoreAppsList'
@@ -41,6 +42,12 @@ const keydevsRoute = createRoute({
     blockingLabel: z.string().optional(),
     query: z.string().optional()
   })
+})
+
+const keydevNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/keydevs/new',
+  component: KeyDevNewPage
 })
 
 const keydevDetailRoute = createRoute({
@@ -110,6 +117,7 @@ const loginRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   keydevsRoute,
+  keydevNewRoute,
   keydevDetailRoute,
   planningRoute,
   coreAppsRoute,

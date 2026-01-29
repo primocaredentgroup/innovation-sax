@@ -189,6 +189,7 @@ export default function KeyDevsListPage() {
   }, [allBlockingLabels])
 
   // Applica i filtri base (mese, dept, team, status) per calcolare i contatori
+  // Di default esclude "Draft" (Bozza) se non ci sono filtri di stato selezionati
   const baseFilteredKeyDevs = useMemo(() => {
     if (!keydevs) return []
     let result = keydevs
@@ -201,18 +202,46 @@ export default function KeyDevsListPage() {
     }
     if (selectedStatuses.length > 0) {
       result = result.filter((kd) => selectedStatuses.includes(kd.status))
+    } else {
+      // Di default escludi "Draft" (Bozza) quando non ci sono filtri di stato selezionati
+      result = result.filter((kd) => kd.status !== 'Draft')
     }
 
     return result
   }, [keydevs, search.dept, search.team, selectedStatuses])
 
   // Filter keydevs based on search params
+  // La ricerca testuale include sempre i Draft anche se sono nascosti dalla tabella
   const filteredKeyDevs = useMemo(() => {
     let result = baseFilteredKeyDevs
     
     // Applica filtro di ricerca testuale se presente
     if (search.query && search.query.trim()) {
       const queryLower = search.query.toLowerCase().trim()
+      
+      // Se non ci sono filtri di stato selezionati, cerca anche nei Draft nascosti
+      if (selectedStatuses.length === 0) {
+        // Crea un set con gli ID già inclusi per evitare duplicati
+        const includedIds = new Set(result.map(kd => kd._id))
+        
+        // Cerca nei Draft che sono stati esclusi di default
+        const draftKeyDevs = (keydevs || []).filter((kd) => {
+          // Applica gli stessi filtri base (dept, team) ma solo per Draft
+          if (kd.status !== 'Draft') return false
+          if (search.dept && kd.deptId !== search.dept) return false
+          if (search.team && kd.teamId !== search.team) return false
+          
+          // Cerca nella query
+          const titleMatch = kd.title.toLowerCase().includes(queryLower)
+          const readableIdMatch = kd.readableId.toLowerCase().includes(queryLower)
+          return titleMatch || readableIdMatch
+        })
+        
+        // Aggiungi i Draft trovati alla ricerca
+        result = [...result, ...draftKeyDevs.filter(kd => !includedIds.has(kd._id))]
+      }
+      
+      // Applica il filtro di ricerca sui risultati visibili
       result = result.filter((kd) => {
         const titleMatch = kd.title.toLowerCase().includes(queryLower)
         const readableIdMatch = kd.readableId.toLowerCase().includes(queryLower)
@@ -221,7 +250,7 @@ export default function KeyDevsListPage() {
     }
     
     return result
-  }, [baseFilteredKeyDevs, search.query])
+  }, [baseFilteredKeyDevs, search.query, search.dept, search.team, selectedStatuses, keydevs])
 
   // Calcola l'utilizzo del budget (slot occupati vs slot massimi disponibili)
   const budgetUtilization = useMemo(() => {
@@ -282,6 +311,14 @@ export default function KeyDevsListPage() {
   const phaseCountsByMonth = useQuery(api.keydevs.getPhaseCountsByMonths, { 
     monthRefs,
     deptId: selectedDeptId
+  })
+  
+  // Ottieni i dati di budget e slot occupati per tutti i mesi visibili nel dropdown
+  const selectedTeamId: Id<'teams'> | undefined = search.team ? (search.team as Id<'teams'>) : undefined
+  const budgetUtilizationByMonth = useQuery(api.keydevs.getBudgetUtilizationByMonths, {
+    monthRefs,
+    deptId: selectedDeptId,
+    teamId: selectedTeamId
   })
 
   const updateSearch = (updates: Record<string, string | string[] | undefined>) => {
@@ -348,7 +385,17 @@ export default function KeyDevsListPage() {
                 <span>
                   {showAllMonths 
                     ? 'Tutti i mesi' 
-                    : monthOptions.find(opt => opt.value === selectedMonth)?.label || 'Seleziona mese'}
+                    : (() => {
+                        const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
+                        const budgetData = budgetUtilizationByMonth?.[selectedMonth || '']
+                        if (monthOpt && budgetData) {
+                          const occupied = budgetData.occupiedSlots % 1 === 0 
+                            ? budgetData.occupiedSlots 
+                            : budgetData.occupiedSlots.toFixed(2)
+                          return `${monthOpt.label} (${occupied} di ${budgetData.maxSlots})`
+                        }
+                        return monthOpt?.label || 'Seleziona mese'
+                      })()}
                 </span>
                 <ChevronDown 
                   size={20} 
@@ -390,6 +437,11 @@ export default function KeyDevsListPage() {
                                 {totalPhaseCounts.Done}
                               </span>
                             )}
+                            {totalPhaseCounts.Checked > 0 && (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 font-semibold">
+                                {totalPhaseCounts.Checked}
+                              </span>
+                            )}
                           </>
                         )}
                         {showAllMonths && (
@@ -407,7 +459,16 @@ export default function KeyDevsListPage() {
                       const frontValidated = counts?.FrontValidated || 0
                       const inProgress = counts?.InProgress || 0
                       const done = counts?.Done || 0
+                      const checked = counts?.Checked || 0
                       const isSelected = !showAllMonths && selectedMonth === opt.value
+                      const budgetData = budgetUtilizationByMonth?.[opt.value]
+                      const occupiedSlots = budgetData?.occupiedSlots || 0
+                      const maxSlots = budgetData?.maxSlots || 0
+                      
+                      // Formatta il valore degli slot occupati
+                      const occupiedDisplay = occupiedSlots % 1 === 0 
+                        ? occupiedSlots 
+                        : occupiedSlots.toFixed(2)
                       
                       return (
                         <button
@@ -421,7 +482,7 @@ export default function KeyDevsListPage() {
                           }`}
                         >
                           <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {opt.label}
+                            {opt.label} ({occupiedDisplay} di {maxSlots})
                           </span>
                           <div className="flex items-center gap-2 ml-2">
                             {frontValidated > 0 && (
@@ -437,6 +498,11 @@ export default function KeyDevsListPage() {
                             {done > 0 && (
                               <span className="px-2 py-0.5 text-xs rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 font-semibold">
                                 {done}
+                              </span>
+                            )}
+                            {checked > 0 && (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 font-semibold">
+                                {checked}
                               </span>
                             )}
                             {isSelected && (
@@ -466,8 +532,7 @@ export default function KeyDevsListPage() {
           </div>
         </div>
         <Link
-          to="/keydevs/$id"
-          params={{ id: 'new' }}
+          to="/keydevs/new"
           className="px-3 sm:px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-medium rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors border border-blue-600 dark:border-blue-500 text-sm sm:text-base whitespace-nowrap self-start sm:self-auto"
         >
           + Nuovo Sviluppo Chiave
@@ -489,7 +554,12 @@ export default function KeyDevsListPage() {
               </span>
             </div>
             <div>
-              <span className="text-sm text-gray-500 dark:text-gray-400">Slot allocati:</span>
+              <Link 
+                to="/admin/planning"
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+              >
+                Slot allocati ai dipartimenti:
+              </Link>
               <span className="ml-2 font-semibold text-gray-900 dark:text-gray-100">
                 {budgetUtilization.budgetAssigned}
               </span>
@@ -526,6 +596,12 @@ export default function KeyDevsListPage() {
             style={{ width: `${Math.min(budgetUtilization.percentage, 100)}%` }}
           />
         </div>
+        {/* Warning se gli slot allocati ai dipartimenti non corrispondono al budget */}
+        {budgetUtilization.maxSlots > 0 && budgetUtilization.budgetAssigned !== budgetUtilization.maxSlots && (
+          <p className="mt-2 text-sm font-medium text-yellow-600 dark:text-yellow-400">
+            ⚠️ Mancano {Math.abs(budgetUtilization.budgetAssigned - budgetUtilization.maxSlots)} slot da allocare!
+          </p>
+        )}
         {budgetUtilization.percentage < 100 && budgetUtilization.maxSlots > 0 && (
           <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
             {budgetUtilization.competitionSlots > 0 ? (
@@ -657,21 +733,28 @@ export default function KeyDevsListPage() {
                   })}
                 </div>
                 <div className="border-t border-gray-200 dark:border-gray-700 p-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 px-2">
-                      * Stati non filtrati per mese
-                    </p>
-                    {selectedStatuses.length > 0 && (
-                      <button
-                        onClick={() => {
-                          updateSearch({ status: undefined })
-                          setDropdownOpen(false)
-                        }}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                      >
-                        <X size={14} />
-                        Rimuovi filtri
-                      </button>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 px-2">
+                        * Stati non filtrati per mese
+                      </p>
+                      {selectedStatuses.length > 0 && (
+                        <button
+                          onClick={() => {
+                            updateSearch({ status: undefined })
+                            setDropdownOpen(false)
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                        >
+                          <X size={14} />
+                          Rimuovi filtri
+                        </button>
+                      )}
+                    </div>
+                    {selectedStatuses.length === 0 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 px-2 italic">
+                        Nota: Gli sviluppi in "Bozza" sono nascosti di default. Seleziona "Bozza" per visualizzarli.
+                      </p>
                     )}
                   </div>
                 </div>
@@ -718,6 +801,11 @@ export default function KeyDevsListPage() {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             * Stati non filtrati per mese
           </p>
+          {selectedStatuses.length === 0 && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">
+              Nota: Gli sviluppi in "Bozza" sono nascosti di default. Clicca sul filtro "Bozza" per visualizzarli.
+            </p>
+          )}
           {selectedStatuses.length > 0 && (
             <button
               onClick={() => updateSearch({ status: undefined })}

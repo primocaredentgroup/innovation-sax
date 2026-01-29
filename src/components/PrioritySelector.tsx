@@ -23,35 +23,35 @@ interface PriorityConfig {
 
 const priorityConfig: Record<Priority, PriorityConfig> = {
   0: {
-    label: 'No priority',
+    label: 'Nessuna priorità',
     icon: Minus,
     color: 'gray',
     bgColor: 'bg-gray-100 dark:bg-gray-700',
     textColor: 'text-gray-600 dark:text-gray-400'
   },
   1: {
-    label: 'Urgent',
+    label: 'Urgente',
     icon: AlertCircle,
     color: 'orange',
     bgColor: 'bg-orange-100 dark:bg-orange-900/30',
     textColor: 'text-orange-800 dark:text-orange-300'
   },
   2: {
-    label: 'High',
+    label: 'Alta',
     icon: BarChart3,
     color: 'red',
     bgColor: 'bg-red-100 dark:bg-red-900/30',
     textColor: 'text-red-800 dark:text-red-300'
   },
   3: {
-    label: 'Medium',
+    label: 'Media',
     icon: BarChart2,
     color: 'yellow',
     bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
     textColor: 'text-yellow-800 dark:text-yellow-300'
   },
   4: {
-    label: 'Low',
+    label: 'Bassa',
     icon: BarChart,
     color: 'blue',
     bgColor: 'bg-blue-100 dark:bg-blue-900/30',
@@ -73,16 +73,42 @@ export default function PrioritySelector({
   compact = false
 }: PrioritySelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const updatePriority = useMutation(api.keydevs.updatePriority)
 
   const currentConfig = priorityConfig[currentPriority ?? 0]
   const CurrentIcon = currentConfig.icon
 
+  // Calcola la posizione del dropdown quando si apre
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      const dropdownHeight = 250 // Altezza approssimativa del dropdown
+      const spacing = 8 // Spazio tra il bottone e il dropdown
+      const minTop = 10 // Margine minimo dal top dello schermo
+      
+      // Posiziona sempre sopra il bottone
+      let top = rect.top - dropdownHeight - spacing
+      
+      // Se il dropdown andrebbe fuori dallo schermo in alto, posizionalo al minimo consentito
+      if (top < minTop) {
+        top = minTop
+      }
+      
+      setDropdownPosition({
+        top,
+        left: rect.left
+      })
+    }
+  }, [isOpen])
+
   // Chiudi dropdown quando si clicca fuori
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
         setIsOpen(false)
       }
     }
@@ -118,37 +144,47 @@ export default function PrioritySelector({
   }
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <>
       {/* Trigger button */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          setIsOpen(!isOpen)
-        }}
-        className={`flex items-center gap-2 px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
-          compact ? 'p-1' : ''
-        }`}
-        title={compact ? currentConfig.label : undefined}
-      >
-        <CurrentIcon 
-          size={compact ? 16 : 18} 
-          className={currentConfig.textColor}
-        />
-        {!compact && (
-          <span className={`text-sm font-medium ${currentConfig.textColor}`}>
-            {currentConfig.label}
-          </span>
-        )}
-      </button>
+      <div className="relative">
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsOpen(!isOpen)
+          }}
+          className={`flex items-center gap-2 px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+            compact ? 'p-1' : ''
+          }`}
+          title={compact ? currentConfig.label : undefined}
+        >
+          <CurrentIcon 
+            size={compact ? 16 : 18} 
+            className={currentConfig.textColor}
+          />
+          {!compact && (
+            <span className={`text-sm font-medium ${currentConfig.textColor}`}>
+              {currentConfig.label}
+            </span>
+          )}
+        </button>
+      </div>
 
-      {/* Dropdown menu */}
-      {isOpen && (
-        <div className="absolute z-50 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg min-w-[240px] overflow-hidden">
+      {/* Dropdown menu - posizionato fixed rispetto al viewport */}
+      {isOpen && dropdownPosition && (
+        <div
+          ref={dropdownRef}
+          className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg min-w-[240px] overflow-hidden"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`
+          }}
+        >
           {/* Header */}
           <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Change priority to...
+              Cambia priorità in...
             </span>
           </div>
 
@@ -179,9 +215,6 @@ export default function PrioritySelector({
                   <span className={`flex-1 text-sm font-medium ${config.textColor}`}>
                     {config.label}
                   </span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    {priority}
-                  </span>
                   {isSelected && (
                     <Check 
                       size={16} 
@@ -194,6 +227,6 @@ export default function PrioritySelector({
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

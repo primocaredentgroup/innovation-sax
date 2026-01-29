@@ -1,22 +1,20 @@
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 
-type Tab = 'teams' | 'departments' | 'budget' | 'blockingLabels'
+type Tab = 'teams' | 'departments' | 'blockingLabels'
 
 export default function AdminPage() {
   const currentUser = useQuery(api.users.getCurrentUser)
   const teams = useQuery(api.teams.list)
   const departments = useQuery(api.departments.list)
-  const months = useQuery(api.months.list)
   const createTeam = useMutation(api.teams.create)
   const updateTeam = useMutation(api.teams.update)
   const removeTeam = useMutation(api.teams.remove)
   const createDepartment = useMutation(api.departments.create)
   const updateDepartment = useMutation(api.departments.update)
   const removeDepartment = useMutation(api.departments.remove)
-  const upsertMonth = useMutation(api.months.upsert)
   const labels = useQuery(api.labels.list)
   const createLabel = useMutation(api.labels.create)
   const updateLabel = useMutation(api.labels.update)
@@ -25,13 +23,10 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>('teams')
   const [editingTeam, setEditingTeam] = useState<Id<'teams'> | null>(null)
   const [editingDepartment, setEditingDepartment] = useState<Id<'departments'> | null>(null)
-  const [editingMonth, setEditingMonth] = useState<string | null>(null)
   const [editingLabel, setEditingLabel] = useState<Id<'labels'> | null>(null)
   const [newTeamName, setNewTeamName] = useState('')
   const [newDepartmentName, setNewDepartmentName] = useState('')
   const [newDepartmentTeams, setNewDepartmentTeams] = useState<Id<'teams'>[]>([])
-  const [newMonthRef, setNewMonthRef] = useState('')
-  const [newMonthBudget, setNewMonthBudget] = useState(0)
   const [editTeamName, setEditTeamName] = useState('')
   const [editDepartmentName, setEditDepartmentName] = useState('')
   const [editDepartmentTeams, setEditDepartmentTeams] = useState<Id<'teams'>[]>([])
@@ -39,19 +34,6 @@ export default function AdminPage() {
   const [newLabelLabel, setNewLabelLabel] = useState('')
   const [editLabelValue, setEditLabelValue] = useState('')
   const [editLabelLabel, setEditLabelLabel] = useState('')
-
-  // Genera opzioni mesi per i prossimi 12 mesi
-  const monthOptions = useMemo(() => {
-    const options = []
-    const now = new Date()
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
-      const ref = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      const label = date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
-      options.push({ value: ref, label })
-    }
-    return options
-  }, [])
 
   // Solo Admin può accedere
   if (!currentUser?.roles?.includes('Admin')) {
@@ -120,21 +102,6 @@ export default function AdminPage() {
   const handleRemoveDepartment = async (id: Id<'departments'>) => {
     if (!confirm('Sei sicuro di voler eliminare questo dipartimento?')) return
     await removeDepartment({ id })
-  }
-
-  // Gestione Budget Mensile
-  const handleUpsertMonth = async () => {
-    if (!newMonthRef || newMonthBudget < 0) return
-    await upsertMonth({ monthRef: newMonthRef, totalKeyDev: newMonthBudget })
-    setNewMonthRef('')
-    setNewMonthBudget(0)
-    setEditingMonth(null)
-  }
-
-  const handleEditMonth = (monthRef: string, currentBudget: number) => {
-    setEditingMonth(monthRef)
-    setNewMonthRef(monthRef)
-    setNewMonthBudget(currentBudget)
   }
 
   // Gestione Labels
@@ -212,16 +179,6 @@ export default function AdminPage() {
             }`}
           >
             Dipartimenti
-          </button>
-          <button
-            onClick={() => setActiveTab('budget')}
-            className={`py-3 lg:py-4 px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap ${
-              activeTab === 'budget'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
-          >
-            Budget Mensile
           </button>
           <button
             onClick={() => setActiveTab('blockingLabels')}
@@ -488,104 +445,6 @@ export default function AdminPage() {
             </div>
             {departments?.length === 0 && (
               <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">Nessun dipartimento presente</div>
-            )}
-          </div>
-        </div>
-      </div>
-      )}
-
-      {activeTab === 'budget' && (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-        {/* Budget Totale Mensile */}
-        <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Budget Totale Mensile</h2>
-        </div>
-        <div className="p-4 lg:p-6">
-          <div className="mb-4 flex flex-col sm:flex-row gap-2">
-            <select
-              value={newMonthRef}
-              onChange={(e) => setNewMonthRef(e.target.value)}
-              className="flex-1 px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-            >
-              <option value="">Seleziona mese</option>
-              {monthOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              value={newMonthBudget || ''}
-              onChange={(e) => setNewMonthBudget(Number(e.target.value))}
-              placeholder="Budget totale"
-              min="0"
-              step="1"
-              className="flex-1 px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-            />
-            <button
-              onClick={handleUpsertMonth}
-              disabled={!newMonthRef || newMonthBudget < 0}
-              className="px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed whitespace-nowrap"
-            >
-              {editingMonth ? 'Aggiorna' : 'Aggiungi'}
-            </button>
-            {editingMonth && (
-              <button
-                onClick={() => {
-                  setEditingMonth(null)
-                  setNewMonthRef('')
-                  setNewMonthBudget(0)
-                }}
-                className="px-4 py-2 text-sm lg:text-base bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 whitespace-nowrap"
-              >
-                Annulla
-              </button>
-            )}
-          </div>
-
-          <div className="overflow-x-auto -mx-4 lg:mx-0">
-            <div className="inline-block min-w-full align-middle">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-gray-700 border-b">
-                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Mese</th>
-                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Budget Totale</th>
-                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-center text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Azioni</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {months
-                    ?.sort((a, b) => b.monthRef.localeCompare(a.monthRef))
-                    .map((month) => {
-                      const monthLabel = (() => {
-                        const [year, monthNum] = month.monthRef.split('-')
-                        const date = new Date(Number(year), Number(monthNum) - 1, 1)
-                        return date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
-                      })()
-
-                      return (
-                        <tr key={month._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-700">
-                          <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">{monthLabel}</td>
-                          <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100 font-semibold">
-                            {month.totalKeyDev} KeyDev
-                          </td>
-                          <td className="px-3 lg:px-4 py-2 lg:py-3 text-center">
-                            <button
-                              onClick={() => handleEditMonth(month.monthRef, month.totalKeyDev)}
-                              className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
-                            >
-                              Modifica
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                </tbody>
-              </table>
-            </div>
-            {months?.length === 0 && (
-              <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">Nessun budget mensile configurato</div>
             )}
           </div>
         </div>

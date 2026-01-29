@@ -50,11 +50,32 @@ export const getOrCreateUser = mutation({
 
     if (existingUser) {
       // Aggiorna le informazioni se necessario
-      await ctx.db.patch(existingUser._id, {
-        name: identity.name ?? existingUser.name,
-        email: identity.email ?? existingUser.email,
-        picture: identity.pictureUrl ?? existingUser.picture
-      })
+      // Il nome viene aggiornato solo se non è già presente (o è vuoto)
+      // per evitare che venga sovrascritto ad ogni refresh/login
+      const updates: {
+        name?: string
+        email?: string
+        picture?: string
+      } = {}
+      
+      // Aggiorna il nome solo se non esiste già o è vuoto
+      if (!existingUser.name || existingUser.name.trim() === '') {
+        updates.name = identity.name ?? existingUser.name
+      }
+      
+      // Aggiorna email e picture solo se necessario
+      if (identity.email) {
+        updates.email = identity.email
+      }
+      if (identity.pictureUrl) {
+        updates.picture = identity.pictureUrl
+      }
+      
+      // Applica gli aggiornamenti solo se ce ne sono
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(existingUser._id, updates)
+      }
+      
       return existingUser._id
     }
 
