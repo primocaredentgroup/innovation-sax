@@ -894,15 +894,10 @@ export default function KeyDevsListPage() {
 
                 {/* Note */}
                 <div className="pt-3 border-t border-gray-200 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      navigate({ 
-                        to: '/keydevs/$id', 
-                        params: { id: kd.readableId },
-                        search: { notes: 'true' }
-                      })
-                    }}
+                  <Link
+                    to="/keydevs/$id/notes"
+                    params={{ id: kd.readableId }}
+                    onClick={(e) => e.stopPropagation()}
                     className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
                     title={`${kd.notesCount || 0} nota${(kd.notesCount || 0) !== 1 ? 'e' : ''}`}
                   >
@@ -913,7 +908,7 @@ export default function KeyDevsListPage() {
                         {kd.notesCount || 0}
                       </span>
                     )}
-                  </button>
+                  </Link>
                 </div>
               </div>
             )
@@ -1007,15 +1002,10 @@ export default function KeyDevsListPage() {
                     </select>
                   </td>
                   <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate({ 
-                          to: '/keydevs/$id', 
-                          params: { id: kd.readableId },
-                          search: { notes: 'true' }
-                        })
-                      }}
+                    <Link
+                      to="/keydevs/$id/notes"
+                      params={{ id: kd.readableId }}
+                      onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
                       title={`${kd.notesCount || 0} nota${(kd.notesCount || 0) !== 1 ? 'e' : ''}`}
                     >
@@ -1023,7 +1013,7 @@ export default function KeyDevsListPage() {
                       {(kd.notesCount || 0) > 0 && (
                         <span className="text-xs font-semibold">{kd.notesCount || 0}</span>
                       )}
-                    </button>
+                    </Link>
                   </td>
                 </tr>
               ))}

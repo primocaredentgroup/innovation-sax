@@ -9,6 +9,7 @@ import DashboardPage from './pages/Dashboard'
 import KeyDevsListPage from './pages/KeyDevsList'
 import KeyDevNewPage from './pages/KeyDevNew'
 import KeyDevDetailPage from './pages/KeyDevDetail'
+import KeyDevNotesPage from './pages/KeyDevNotes'
 import PlanningPage from './pages/Planning'
 import CoreAppsListPage from './pages/CoreAppsList'
 import CoreAppDetailPage from './pages/CoreAppDetail'
@@ -53,9 +54,15 @@ const keydevNewRoute = createRoute({
 const keydevDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/keydevs/$id',
-  component: KeyDevDetailPage,
+  component: KeyDevDetailPage
+})
+
+const keydevNotesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/keydevs/$id/notes',
+  component: KeyDevNotesPage,
   validateSearch: z.object({
-    notes: z.union([z.literal('true'), z.literal('false')]).optional()
+    highlightedNote: z.string().optional()
   })
 })
 
@@ -119,6 +126,7 @@ const routeTree = rootRoute.addChildren([
   keydevsRoute,
   keydevNewRoute,
   keydevDetailRoute,
+  keydevNotesRoute,
   planningRoute,
   coreAppsRoute,
   coreAppDetailRoute,

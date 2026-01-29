@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 
 // Tipo per i ruoli
@@ -20,18 +20,124 @@ const formatUserName = (name: string | undefined): string => {
   return name.replace(/\s+/g, '')
 }
 
+// Helper per rilevare URL nel testo e renderli cliccabili
+const renderTextWithLinks = (text: string, users: Array<{ _id: Id<'users'>; name: string; email?: string }> | undefined) => {
+  // Regex migliorata per rilevare URL (inclusi quelli con @ al loro interno)
+  // Cattura URL che iniziano con http://, https://, o www.
+  // Include anche caratteri speciali come @, ?, =, &, /, :, etc.
+  const urlRegex = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi
+  
+  // Prima rileviamo gli URL per evitare di trattare "@" dentro gli URL come menzioni
+  const urlMatches: Array<{ start: number; end: number; url: string }> = []
+  let match
+  const regex = new RegExp(urlRegex)
+  
+  while ((match = regex.exec(text)) !== null) {
+    urlMatches.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      url: match[0]
+    })
+  }
+  
+  // Ora processiamo il testo, gestendo prima gli URL e poi le menzioni
+  const elements: React.ReactNode[] = []
+  let lastIndex = 0
+  
+  // Funzione helper per processare il testo normale (non URL) e trovare menzioni
+  const processTextForMentions = (textPart: string, startOffset: number) => {
+    const parts: React.ReactNode[] = []
+    // Dividiamo per menzioni (@username) solo nel testo che non è parte di un URL
+    const mentionParts = textPart.split(/(@\w+)/g)
+    
+    mentionParts.forEach((part, partIdx) => {
+      if (part.startsWith('@')) {
+        const userName = part.substring(1)
+        const user = users?.find(u => {
+          const originalName = u.name.toLowerCase()
+          const formattedName = formatUserName(u.name).toLowerCase()
+          const emailMatch = u.email?.toLowerCase()
+          return originalName === userName.toLowerCase() || 
+                 formattedName === userName.toLowerCase() ||
+                 emailMatch === userName.toLowerCase()
+        })
+        if (user) {
+          parts.push(
+            <span key={`mention-${startOffset}-${partIdx}`} className="font-medium text-blue-600 dark:text-blue-400">
+              {part}
+            </span>
+          )
+        } else {
+          parts.push(<span key={`text-${startOffset}-${partIdx}`}>{part}</span>)
+        }
+      } else if (part) {
+        parts.push(<span key={`text-${startOffset}-${partIdx}`}>{part}</span>)
+      }
+    })
+    
+    return parts
+  }
+  
+  // Processa il testo, alternando tra testo normale e URL
+  urlMatches.forEach((urlMatch, urlIdx) => {
+    // Aggiungi il testo prima dell'URL (con gestione menzioni)
+    if (urlMatch.start > lastIndex) {
+      const textBefore = text.substring(lastIndex, urlMatch.start)
+      const mentionElements = processTextForMentions(textBefore, lastIndex)
+      elements.push(...mentionElements)
+    }
+    
+    // Aggiungi l'URL come link
+    let url = urlMatch.url
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `https://${url}`
+    }
+    
+    elements.push(
+      <a
+        key={`link-${urlIdx}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 dark:text-blue-400 hover:underline break-all"
+      >
+        {urlMatch.url}
+      </a>
+    )
+    
+    lastIndex = urlMatch.end
+  })
+  
+  // Aggiungi il testo rimanente dopo l'ultimo URL (con gestione menzioni)
+  if (lastIndex < text.length) {
+    const textAfter = text.substring(lastIndex)
+    const mentionElements = processTextForMentions(textAfter, lastIndex)
+    elements.push(...mentionElements)
+  }
+  
+  // Se non ci sono URL, processa tutto il testo per menzioni
+  if (urlMatches.length === 0) {
+    return processTextForMentions(text, 0)
+  }
+  
+  return elements
+}
+
 interface NotesSectionProps {
   keyDevId: Id<'keydevs'>
   currentUser: { _id: Id<'users'>; roles?: Role[] } | null | undefined
   users: Array<{ _id: Id<'users'>; name: string; email?: string }> | undefined
-  showNotesPage: boolean
+  readableId?: string
+  highlightedNote?: string
 }
 
-export default function NotesSection({ keyDevId, currentUser, users, showNotesPage }: NotesSectionProps) {
-  const notes = useQuery(api.notes.listByKeyDev, showNotesPage ? { keyDevId } : 'skip')
+export default function NotesSection({ keyDevId, currentUser, users, readableId, highlightedNote }: NotesSectionProps) {
+  const notes = useQuery(api.notes.listByKeyDev, { keyDevId })
   const addNote = useMutation(api.notes.create)
   const updateNote = useMutation(api.notes.update)
   const removeNote = useMutation(api.notes.remove)
+  const noteRefs = useRef<Map<Id<'notes'>, HTMLDivElement>>(new Map())
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const [newNote, setNewNote] = useState('')
   
@@ -44,6 +150,13 @@ export default function NotesSection({ keyDevId, currentUser, users, showNotesPa
   const [editingNoteId, setEditingNoteId] = useState<Id<'notes'> | null>(null)
   const [editingNoteText, setEditingNoteText] = useState('')
   const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<Id<'notes'> | null>(null)
+  
+  // Stati per la ricerca delle note
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedAuthorId, setSelectedAuthorId] = useState<Id<'users'> | ''>('')
+  
+  // Stato per il toast di successo
+  const [showToast, setShowToast] = useState(false)
 
   // Ruoli e permessi utente corrente
   const userRoles = currentUser?.roles as Role[] | undefined
@@ -67,6 +180,65 @@ export default function NotesSection({ keyDevId, currentUser, users, showNotesPa
       }
     }
   }, [showMentionDropdown])
+
+  // Scroll alla nota evidenziata quando viene aperto il link
+  useEffect(() => {
+    if (highlightedNote && notes) {
+      const noteId = highlightedNote as Id<'notes'>
+      const noteElement = noteRefs.current.get(noteId)
+      if (noteElement) {
+        setTimeout(() => {
+          noteElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          noteElement.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2')
+          setTimeout(() => {
+            noteElement.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2')
+          }, 3000)
+        }, 100)
+      }
+    }
+  }, [highlightedNote, notes])
+
+  // Funzione per copiare il link alla nota specifica
+  const handleCopyNoteLink = async (noteId: Id<'notes'>) => {
+    // Usa il readableId se disponibile, altrimenti usa l'id normale
+    const keyDevIdentifier = readableId || keyDevId
+    // Costruisci l'URL per la pagina delle note
+    const noteUrl = `${window.location.origin}/keydevs/${keyDevIdentifier}/notes?highlightedNote=${noteId}`
+    
+    try {
+      await navigator.clipboard.writeText(noteUrl)
+      // Mostra il toast di successo
+      setShowToast(true)
+      setTimeout(() => {
+        setShowToast(false)
+      }, 3000)
+    } catch (err) {
+      console.error('Errore nel copiare il link:', err)
+    }
+  }
+
+  // Funzione per rispondere a una nota menzionando l'autore
+  const handleReply = (authorId: Id<'users'>) => {
+    const author = users?.find(u => u._id === authorId)
+    if (!author) return
+    
+    const formattedAuthorName = formatUserName(author.name)
+    const mentionText = `@${formattedAuthorName} `
+    
+    // Inserisci la menzione nella textarea
+    setNewNote(mentionText)
+    
+    // Scrolla in alto alla textarea e metti il focus
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        textareaRef.current.focus()
+        // Posiziona il cursore alla fine del testo
+        const textLength = mentionText.length
+        textareaRef.current.setSelectionRange(textLength, textLength)
+      }
+    }, 100)
+  }
 
   // Gestisce l'input della textarea per rilevare "@" (per nuova nota)
   const handleNoteInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -117,6 +289,28 @@ export default function NotesSection({ keyDevId, currentUser, users, showNotesPa
       user.email?.toLowerCase().includes(query)
     ).slice(0, 10) // Limita a 10 risultati
   }, [users, mentionQuery])
+
+  // Filtra le note in base alla ricerca
+  const filteredNotes = useMemo(() => {
+    if (!notes) return []
+    
+    return notes.filter(note => {
+      // Filtro per mittente (dropdown)
+      if (selectedAuthorId && note.authorId !== selectedAuthorId) {
+        return false
+      }
+      
+      // Filtro per testo (input testuale)
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim()
+        if (!note.body.toLowerCase().includes(query)) {
+          return false
+        }
+      }
+      
+      return true
+    })
+  }, [notes, searchQuery, selectedAuthorId])
 
   // Gestisce la selezione di un utente dal dropdown
   const handleSelectMention = (userName: string) => {
@@ -272,31 +466,136 @@ export default function NotesSection({ keyDevId, currentUser, users, showNotesPa
     setConfirmDeleteNoteId(null)
   }
 
-  if (!showNotesPage) {
-    return null
-  }
-
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Note</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col h-full">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 shrink-0">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Note</h2>
+        <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:max-w-2xl">
+          <select
+            value={selectedAuthorId}
+            onChange={(e) => setSelectedAuthorId(e.target.value as Id<'users'> | '')}
+            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer min-w-[150px]"
+          >
+            <option value="">Tutti i mittenti</option>
+            {users?.map((user) => (
+              <option key={user._id} value={user._id}>
+                {formatUserName(user.name)}
+              </option>
+            ))}
+          </select>
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cerca nel testo del messaggio..."
+              className="w-full px-3 py-2 pr-8 text-sm border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg leading-none"
+                title="Cancella ricerca"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
-      <div className="space-y-4">
-        {notes && notes.length > 0 ? (
-          notes.map((note) => {
+      <div className="flex flex-col flex-1 min-h-0 space-y-4">
+        <div className="border-b dark:border-gray-700 pb-4 shrink-0">
+          <div className="relative">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1 relative mention-dropdown-container">
+                <textarea
+                  ref={textareaRef}
+                  value={newNote}
+                  onChange={handleNoteInput}
+                  onKeyDown={(e) => {
+                    // Gestisci Escape per chiudere il dropdown
+                    if (e.key === 'Escape' && showMentionDropdown) {
+                      setShowMentionDropdown(false)
+                      setMentionQuery('')
+                      setMentionPosition(null)
+                    }
+                    // Gestisci Enter per selezionare il primo utente nel dropdown
+                    if (e.key === 'Enter' && showMentionDropdown && filteredUsersForMention.length > 0 && !e.shiftKey) {
+                      e.preventDefault()
+                      handleSelectMention(filteredUsersForMention[0].name)
+                    }
+                  }}
+                  placeholder="Aggiungi un commento... Usa @ per menzionare un utente"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                />
+                {/* Dropdown per selezionare utenti */}
+                {showMentionDropdown && filteredUsersForMention && filteredUsersForMention.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                    {filteredUsersForMention.map((user) => (
+                      <button
+                        key={user._id}
+                        type="button"
+                        onClick={() => handleSelectMention(user.name)}
+                        className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      >
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
+                        {user.email && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">({user.email})</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleAddNote}
+                disabled={!newNote.trim()}
+                className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
+              >
+                Aggiungi
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 
+          Sezione scrollabile delle note: si espande per riempire tutto lo spazio disponibile
+          fino alla sezione "LABEL BLOCCANTI". Lo scrolling verticale si attiva automaticamente
+          solo quando il contenuto supera l'altezza disponibile.
+        */}
+        <div className="flex-1 overflow-y-auto min-h-0 pr-2">
+          <div className="space-y-4">
+            {filteredNotes && filteredNotes.length > 0 ? (
+              filteredNotes.map((note) => {
             const mentionedUsers = note.mentionedUserIds 
               ? note.mentionedUserIds.map(userId => users?.find(u => u._id === userId)).filter(Boolean)
               : []
             const isAuthor = note.authorId === currentUser?._id
-            const canEdit = isAuthor || userIsAdmin
+            const canEdit = isAuthor
             const isEditing = editingNoteId === note._id
             const isConfirmDelete = confirmDeleteNoteId === note._id
             
+            const isHighlighted = highlightedNote === note._id
+            
             return (
-              <div key={note._id} className={`p-4 rounded-lg ${
-                note.type === 'Mention' 
-                  ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' 
-                  : 'bg-gray-50 dark:bg-gray-700/50'
-              }`}>
+              <div 
+                key={note._id} 
+                ref={(el) => {
+                  if (el) {
+                    noteRefs.current.set(note._id, el)
+                  } else {
+                    noteRefs.current.delete(note._id)
+                  }
+                }}
+                className={`p-4 rounded-lg overflow-hidden transition-all ${
+                  isHighlighted
+                    ? 'bg-blue-100 dark:bg-blue-900/40 ring-2 ring-blue-500 ring-offset-2'
+                    : note.type === 'Mention' 
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' 
+                      : 'bg-gray-50 dark:bg-gray-700/50'
+                }`}>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
@@ -311,40 +610,60 @@ export default function NotesSection({ keyDevId, currentUser, users, showNotesPa
                       {new Date(note.ts).toLocaleString('it-IT')}
                     </span>
                   </div>
-                  {canEdit && !isEditing && (
+                  {!isEditing && (
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
-                        onClick={() => handleStartEditNote(note._id)}
+                        onClick={() => handleCopyNoteLink(note._id)}
+                        data-note-link={note._id}
                         className="text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
-                        title="Modifica nota"
+                        title="Copia link alla nota"
                       >
-                        ✏️ Modifica
+                        🔗
                       </button>
-                      {!isConfirmDelete && (
+                      {canEdit ? (
+                        <>
+                          <button
+                            onClick={() => handleStartEditNote(note._id)}
+                            className="text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
+                            title="Modifica nota"
+                          >
+                            ✏️ Modifica
+                          </button>
+                          {!isConfirmDelete && (
+                            <button
+                              onClick={() => handleDeleteNoteClick(note._id)}
+                              className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
+                              title="Elimina nota"
+                            >
+                              🗑️ Elimina
+                            </button>
+                          )}
+                          {isConfirmDelete && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-red-600 dark:text-red-400">Confermi eliminazione?</span>
+                              <button
+                                onClick={() => handleConfirmDeleteNote(note._id)}
+                                className="text-xs bg-red-600 dark:bg-red-700 text-white px-2 py-1 rounded hover:bg-red-700 dark:hover:bg-red-600 whitespace-nowrap"
+                              >
+                                Sì, elimina
+                              </button>
+                              <button
+                                onClick={handleCancelDeleteNote}
+                                className="text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 px-2 py-1 rounded hover:bg-gray-400 dark:hover:bg-gray-500 whitespace-nowrap"
+                              >
+                                Annulla
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      ) : (
                         <button
-                          onClick={() => handleDeleteNoteClick(note._id)}
-                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
-                          title="Elimina nota"
+                          onClick={() => handleReply(note.authorId)}
+                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
+                          title="Rispondi alla nota"
                         >
-                          🗑️ Elimina
+                          💬 Rispondi
                         </button>
-                      )}
-                      {isConfirmDelete && (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs text-red-600 dark:text-red-400">Confermi eliminazione?</span>
-                          <button
-                            onClick={() => handleConfirmDeleteNote(note._id)}
-                            className="text-xs bg-red-600 dark:bg-red-700 text-white px-2 py-1 rounded hover:bg-red-700 dark:hover:bg-red-600 whitespace-nowrap"
-                          >
-                            Sì, elimina
-                          </button>
-                          <button
-                            onClick={handleCancelDeleteNote}
-                            className="text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 px-2 py-1 rounded hover:bg-gray-400 dark:hover:bg-gray-500 whitespace-nowrap"
-                          >
-                            Annulla
-                          </button>
-                        </div>
                       )}
                     </div>
                   )}
@@ -455,94 +774,49 @@ export default function NotesSection({ keyDevId, currentUser, users, showNotesPa
                     </div>
                   </div>
                 ) : (
-                  <p className="text-gray-700 dark:text-gray-300">
-                    {note.body.split(/(@\w+)/g).map((part, idx) => {
-                      if (part.startsWith('@')) {
-                        const userName = part.substring(1)
-                        // Cerca l'utente sia con il nome originale che senza spazi
-                        const user = users?.find(u => {
-                          const originalName = u.name.toLowerCase()
-                          const formattedName = formatUserName(u.name).toLowerCase()
-                          const emailMatch = u.email?.toLowerCase()
-                          return originalName === userName.toLowerCase() || 
-                                 formattedName === userName.toLowerCase() ||
-                                 emailMatch === userName.toLowerCase()
-                        })
-                        return user ? (
-                          <span key={idx} className="font-medium text-blue-600 dark:text-blue-400">
-                            {part}
-                          </span>
-                        ) : (
-                          <span key={idx}>{part}</span>
-                        )
-                      }
-                      return <span key={idx}>{part}</span>
-                    })}
+                  <p className="text-gray-700 dark:text-gray-300 wrap-break-word break-all">
+                    {renderTextWithLinks(note.body, users)}
                   </p>
                 )}
               </div>
             )
           })
-        ) : (
+        ) : notes && notes.length > 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400 italic">
-            Nessuna nota presente. Aggiungi la prima nota utilizzando il form qui sotto.
+            Nessuna nota trovata con i criteri di ricerca selezionati.
           </p>
-        )}
-
-        <div className="border-t dark:border-gray-700 pt-4">
-          <div className="relative">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="flex-1 relative mention-dropdown-container">
-                <textarea
-                  value={newNote}
-                  onChange={handleNoteInput}
-                  onKeyDown={(e) => {
-                    // Gestisci Escape per chiudere il dropdown
-                    if (e.key === 'Escape' && showMentionDropdown) {
-                      setShowMentionDropdown(false)
-                      setMentionQuery('')
-                      setMentionPosition(null)
-                    }
-                    // Gestisci Enter per selezionare il primo utente nel dropdown
-                    if (e.key === 'Enter' && showMentionDropdown && filteredUsersForMention.length > 0 && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSelectMention(filteredUsersForMention[0].name)
-                    }
-                  }}
-                  placeholder="Aggiungi un commento... Usa @ per menzionare un utente"
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
-                />
-                {/* Dropdown per selezionare utenti */}
-                {showMentionDropdown && filteredUsersForMention && filteredUsersForMention.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
-                    {filteredUsersForMention.map((user) => (
-                      <button
-                        key={user._id}
-                        type="button"
-                        onClick={() => handleSelectMention(user.name)}
-                        className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                      >
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
-                        {user.email && (
-                          <span className="text-sm text-gray-500 dark:text-gray-400">({user.email})</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={handleAddNote}
-                disabled={!newNote.trim()}
-                className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 whitespace-nowrap"
-              >
-                Aggiungi
-              </button>
-            </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                Nessuna nota presente. Aggiungi la prima nota utilizzando il form qui sopra.
+              </p>
+            )}
           </div>
         </div>
       </div>
+      
+      {/* Toast di successo per la copia del link */}
+      {showToast && (
+        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2 fade-in">
+          <div className="bg-green-600 dark:bg-green-700 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px]">
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <div className="flex-1">
+              <p className="font-medium">Link copiato!</p>
+              <p className="text-sm text-green-100">Puoi incollarlo dove vuoi condividere questo messaggio.</p>
+            </div>
+            <button
+              onClick={() => setShowToast(false)}
+              className="text-green-100 hover:text-white"
+              aria-label="Chiudi"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

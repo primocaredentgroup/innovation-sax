@@ -1,10 +1,9 @@
-import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useState, useMemo, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 import PrioritySelector from '../components/PrioritySelector'
-import NotesSection from '../components/NotesSection'
 
 // Tipo per i ruoli
 type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
@@ -75,7 +74,6 @@ const statusDescriptions: Record<string, string> = {
 export default function KeyDevDetailPage() {
   const { id } = useParams({ strict: false }) as { id: string }
   const navigate = useNavigate()
-  const search = useSearch({ strict: false }) as { notes?: string }
   const isNew = id === 'new'
 
   // Usa getByReadableId se l'id è un readableId (formato KD-XXX), altrimenti usa getById per retrocompatibilità
@@ -117,13 +115,6 @@ export default function KeyDevDetailPage() {
 
   const [rejectionReason, setRejectionReason] = useState('')
   const [showRejectForm, setShowRejectForm] = useState(false)
-  // Inizializza showNotesPage dal parametro URL
-  const [showNotesPage, setShowNotesPage] = useState(() => search.notes === 'true')
-  
-  // Sincronizza lo stato con l'URL quando cambia il parametro
-  useEffect(() => {
-    setShowNotesPage(search.notes === 'true')
-  }, [search.notes])
   const [mockupRepoUrlInput, setMockupRepoUrlInput] = useState('')
   const [validationMonth, setValidationMonth] = useState(currentMonth)
   const [validationCommit, setValidationCommit] = useState('')
@@ -385,9 +376,25 @@ export default function KeyDevDetailPage() {
             </h1>
             {!isNew && keydev && (
               <>
-                <span className="px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  {keydev.readableId}
-                </span>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <span className="px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    {keydev.readableId}
+                  </span>
+                  {/* Link Note posizionato accanto alla sigla */}
+                  <Link
+                    to="/keydevs/$id/notes"
+                    params={{ id }}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 bg-blue-700 dark:bg-blue-400 hover:bg-blue-800 dark:hover:bg-blue-300 shadow-lg border-2 border-blue-800 dark:border-blue-300 hover:shadow-xl !text-white"
+                  >
+                    <span className="!text-white">📝</span>
+                    <span className="!text-white">Note</span>
+                    {keydev.notesCount !== undefined && keydev.notesCount > 0 && (
+                      <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-white dark:bg-blue-600 text-blue-700 dark:text-white text-xs font-bold min-w-5 sm:min-w-6 flex items-center justify-center border border-blue-800 dark:border-blue-200">
+                        {keydev.notesCount}
+                      </span>
+                    )}
+                  </Link>
+                </div>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   <select
                     value={keydev.status}
@@ -424,43 +431,13 @@ export default function KeyDevDetailPage() {
             )}
           </div>
         </div>
-        {!isNew && keydev && (
-          <button
-            onClick={() => {
-              const newShowNotesPage = !showNotesPage
-              navigate({
-                to: '/keydevs/$id',
-                params: { id },
-                search: newShowNotesPage ? { notes: 'true' } : {}
-              })
-            }}
-            className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-              showNotesPage
-                ? 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-            }`}
-          >
-            {showNotesPage ? '← Torna ai Dettagli' : '📝 Note'}
-          </button>
-        )}
       </div>
 
       {/* Layout responsive: singola colonna su mobile, due colonne su desktop */}
       <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Form */}
         <div className="w-full lg:col-span-2 space-y-4 sm:space-y-6">
-          {showNotesPage ? (
-            /* Sottopagina Note */
-            keydev && (
-              <NotesSection 
-                keyDevId={keydev._id} 
-                currentUser={currentUser} 
-                users={users} 
-                showNotesPage={showNotesPage} 
-              />
-            )
-          ) : (
-            <>
+          <>
           <form key={formKey} onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Dettagli</h2>
 
@@ -1209,8 +1186,7 @@ export default function KeyDevDetailPage() {
             </div>
           )}
 
-            </>
-          )}
+          </>
         </div>
 
         {/* Sidebar */}
