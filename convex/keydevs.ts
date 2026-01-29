@@ -44,7 +44,8 @@ const keydevReturnValidator = v.object({
   frontValidatedAt: v.optional(v.number()),
   techValidatedAt: v.optional(v.number()),
   businessValidatedAt: v.optional(v.number()),
-  releasedAt: v.optional(v.number())
+  releasedAt: v.optional(v.number()),
+  notesCount: v.optional(v.number())
 })
 
 /**

@@ -3,7 +3,7 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useMemo, useState, useRef, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
-import { ChevronDown, X } from 'lucide-react'
+import { ChevronDown, X, MessageSquare } from 'lucide-react'
 import PrioritySelector from '../components/PrioritySelector'
 
 // Tipo per i ruoli
@@ -83,7 +83,6 @@ export default function KeyDevsListPage() {
   
   const departments = useQuery(api.departments.list)
   const teams = useQuery(api.teams.list)
-  const allBlockingLabels = useQuery(api.blockingLabels.list)
   const users = useQuery(api.users.listUsers)
   const currentUser = useQuery(api.users.getCurrentUser)
   
@@ -173,20 +172,6 @@ export default function KeyDevsListPage() {
     if (Array.isArray(search.status)) return search.status
     return [search.status]
   }, [search.status])
-
-  // Crea una mappa dei blockingLabels per keydev
-  const blockingLabelsByKeyDev = useMemo(() => {
-    const map = new Map<Id<'keydevs'>, Array<{ labelId: Id<'labels'>; label: { value: string; label: string }; status: 'Open' | 'Closed' }>>()
-    if (allBlockingLabels) {
-      for (const bl of allBlockingLabels) {
-        if (!map.has(bl.keyDevId)) {
-          map.set(bl.keyDevId, [])
-        }
-        map.get(bl.keyDevId)!.push({ labelId: bl.labelId, label: bl.label, status: bl.status })
-      }
-    }
-    return map
-  }, [allBlockingLabels])
 
   // Applica i filtri base (mese, dept, team, status) per calcolare i contatori
   // Di default esclude "Draft" (Bozza) se non ci sono filtri di stato selezionati
@@ -825,10 +810,6 @@ export default function KeyDevsListPage() {
           </div>
         ) : (
           filteredKeyDevs.map((kd) => {
-            const labels = blockingLabelsByKeyDev.get(kd._id) || []
-            const openLabels = labels.filter((l) => l.status === 'Open')
-            const closedLabels = labels.filter((l) => l.status === 'Closed')
-            
             return (
               <div
                 key={kd._id}
@@ -911,31 +892,29 @@ export default function KeyDevsListPage() {
                   </div>
                 </div>
 
-                {/* Blocchi */}
-                {(openLabels.length > 0 || closedLabels.length > 0) && (
-                  <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex flex-wrap gap-2">
-                      {openLabels.map((bl) => (
-                        <span
-                          key={`open-${bl.labelId}`}
-                          className="px-2 py-1 text-xs rounded-full bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"
-                          title={`${bl.label.label} (Aperto)`}
-                        >
-                          {bl.label.label}
-                        </span>
-                      ))}
-                      {closedLabels.map((bl) => (
-                        <span
-                          key={`closed-${bl.labelId}`}
-                          className="px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 line-through"
-                          title={`${bl.label.label} (Chiuso)`}
-                        >
-                          {bl.label.label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Note */}
+                <div className="pt-3 border-t border-gray-200 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigate({ 
+                        to: '/keydevs/$id', 
+                        params: { id: kd.readableId },
+                        search: { notes: 'true' }
+                      })
+                    }}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                    title={`${kd.notesCount || 0} nota${(kd.notesCount || 0) !== 1 ? 'e' : ''}`}
+                  >
+                    <MessageSquare size={16} />
+                    <span className="text-xs font-medium">Note</span>
+                    {(kd.notesCount || 0) > 0 && (
+                      <span className="text-xs font-semibold bg-blue-200 dark:bg-blue-800 px-1.5 py-0.5 rounded-full">
+                        {kd.notesCount || 0}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
             )
           })
@@ -954,7 +933,7 @@ export default function KeyDevsListPage() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Team</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 hidden lg:table-cell">Owner</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Blocchi</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Note</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1027,40 +1006,24 @@ export default function KeyDevsListPage() {
                         ))}
                     </select>
                   </td>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="flex flex-wrap gap-2">
-                      {(() => {
-                        const labels = blockingLabelsByKeyDev.get(kd._id) || []
-                        const openLabels = labels.filter((l) => l.status === 'Open')
-                        const closedLabels = labels.filter((l) => l.status === 'Closed')
-                        
-                        return (
-                          <>
-                            {openLabels.map((bl) => (
-                              <span
-                                key={`open-${bl.labelId}`}
-                                className="px-2 py-1 text-xs rounded-full bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"
-                                title={`${bl.label.label} (Aperto)`}
-                              >
-                                {bl.label.label}
-                              </span>
-                            ))}
-                            {closedLabels.map((bl) => (
-                              <span
-                                key={`closed-${bl.labelId}`}
-                                className="px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 line-through"
-                                title={`${bl.label.label} (Chiuso)`}
-                              >
-                                {bl.label.label}
-                              </span>
-                            ))}
-                            {labels.length === 0 && (
-                              <span className="text-gray-400 dark:text-gray-500 text-xs">-</span>
-                            )}
-                          </>
-                        )
-                      })()}
-                    </div>
+                  <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        navigate({ 
+                          to: '/keydevs/$id', 
+                          params: { id: kd.readableId },
+                          search: { notes: 'true' }
+                        })
+                      }}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                      title={`${kd.notesCount || 0} nota${(kd.notesCount || 0) !== 1 ? 'e' : ''}`}
+                    >
+                      <MessageSquare size={16} />
+                      {(kd.notesCount || 0) > 0 && (
+                        <span className="text-xs font-semibold">{kd.notesCount || 0}</span>
+                      )}
+                    </button>
                   </td>
                 </tr>
               ))}

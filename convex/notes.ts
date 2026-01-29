@@ -64,7 +64,13 @@ export const create = mutation({
       throw new Error('mentionedUserIds non può essere presente per le note di tipo Comment')
     }
 
-    return await ctx.db.insert('notes', {
+    // Verifica che il keydev esista
+    const keydev = await ctx.db.get(args.keyDevId)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+
+    const noteId = await ctx.db.insert('notes', {
       keyDevId: args.keyDevId,
       authorId: user._id,
       body: args.body,
@@ -72,6 +78,13 @@ export const create = mutation({
       type: args.type,
       mentionedUserIds: args.mentionedUserIds
     })
+
+    // Incrementa il contatore delle note
+    await ctx.db.patch(args.keyDevId, {
+      notesCount: (keydev.notesCount || 0) + 1
+    })
+
+    return noteId
   }
 })
 
@@ -164,7 +177,20 @@ export const remove = mutation({
       throw new Error('Non autorizzato a eliminare questa nota')
     }
 
+    // Ottieni il keydev per aggiornare il contatore
+    const keydev = await ctx.db.get(note.keyDevId)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+
+    // Elimina la nota
     await ctx.db.delete(args.id)
+
+    // Decrementa il contatore delle note (non scendere sotto 0)
+    await ctx.db.patch(note.keyDevId, {
+      notesCount: Math.max(0, (keydev.notesCount || 0) - 1)
+    })
+
     return null
   }
 })
