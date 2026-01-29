@@ -375,59 +375,66 @@ export default function KeyDevDetailPage() {
               {isNew ? 'Nuovo Sviluppo Chiave' : keydev?.title}
             </h1>
             {!isNew && keydev && (
-              <>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <span className="px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                    {keydev.readableId}
-                  </span>
-                  {/* Link Note posizionato accanto alla sigla */}
-                  <Link
-                    to="/keydevs/$id/notes"
-                    params={{ id }}
-                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 bg-blue-700 dark:bg-blue-400 hover:bg-blue-800 dark:hover:bg-blue-300 shadow-lg border-2 border-blue-800 dark:border-blue-300 hover:shadow-xl !text-white"
-                  >
-                    <span className="!text-white">📝</span>
-                    <span className="!text-white">Note</span>
-                    {keydev.notesCount !== undefined && keydev.notesCount > 0 && (
-                      <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-white dark:bg-blue-600 text-blue-700 dark:text-white text-xs font-bold min-w-5 sm:min-w-6 flex items-center justify-center border border-blue-800 dark:border-blue-200">
-                        {keydev.notesCount}
-                      </span>
-                    )}
-                  </Link>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <select
-                    value={keydev.status}
-                    onChange={async (e) => {
-                      try {
-                        await updateStatus({ id: keydev._id, status: e.target.value as KeyDevStatus })
-                      } catch (error) {
-                        alert(error instanceof Error ? error.message : 'Errore nel cambio di stato')
-                      }
-                    }}
-                    className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm border-0 ${statusColors[keydev.status]} cursor-pointer`}
-                  >
-                    {getPreviousStatuses(keydev.status).map((status) => (
-                      <option key={status} value={status} className="bg-white dark:bg-gray-800">
-                        {statusLabels[status]}
-                      </option>
-                    ))}
-                  </select>
-                  {/* Pulsante per riportare in Bozza quando rifiutato */}
-                  {keydev.status === 'Rejected' && (isRequester || userIsAdmin) && (
-                    <button
-                      onClick={async () => {
-                        if (!confirm('Sei sicuro di voler riportare questo sviluppo in Bozza? Potrai modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato".')) return
-                        await updateStatus({ id: keydev._id, status: 'Draft' })
-                      }}
-                      className="px-3 sm:px-4 py-1 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-xs sm:text-sm font-medium whitespace-nowrap"
-                      title="Riporta in Bozza per modificare il mockup"
-                    >
-                      ↶ Riporta in Bozza
-                    </button>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                  {keydev.readableId}
+                </span>
+                {/* Link Note migliorato */}
+                <Link
+                  to="/keydevs/$id/notes"
+                  params={{ id }}
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 hover:from-blue-700 hover:to-blue-800 dark:hover:from-blue-600 dark:hover:to-blue-700 shadow-md hover:shadow-lg text-white border border-blue-800 dark:border-blue-400"
+                >
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  <span className="text-white">Note</span>
+                  {keydev.notesCount !== undefined && keydev.notesCount > 0 && (
+                    <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-white dark:bg-blue-800 text-blue-700 dark:text-white text-xs font-bold min-w-5 sm:min-w-6 flex items-center justify-center border border-blue-800 dark:border-blue-200">
+                      {keydev.notesCount}
+                    </span>
                   )}
+                </Link>
+                {/* PrioritySelector migliorato accanto al bottone Note */}
+                <div className="flex items-center">
+                  <PrioritySelector 
+                    keyDevId={keydev._id} 
+                    currentPriority={keydev.priority}
+                    compact={true}
+                  />
                 </div>
-              </>
+                {/* Dropdown status sulla stessa riga */}
+                <select
+                  value={keydev.status}
+                  onChange={async (e) => {
+                    try {
+                      await updateStatus({ id: keydev._id, status: e.target.value as KeyDevStatus })
+                    } catch (error) {
+                      alert(error instanceof Error ? error.message : 'Errore nel cambio di stato')
+                    }
+                  }}
+                  className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm border-0 ${statusColors[keydev.status]} cursor-pointer`}
+                >
+                  {getPreviousStatuses(keydev.status).map((status) => (
+                    <option key={status} value={status} className="bg-white dark:bg-gray-800">
+                      {statusLabels[status]}
+                    </option>
+                  ))}
+                </select>
+                {/* Pulsante per riportare in Bozza quando rifiutato */}
+                {keydev.status === 'Rejected' && (isRequester || userIsAdmin) && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Sei sicuro di voler riportare questo sviluppo in Bozza? Potrai modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato".')) return
+                      await updateStatus({ id: keydev._id, status: 'Draft' })
+                    }}
+                    className="px-3 sm:px-4 py-1 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-xs sm:text-sm font-medium whitespace-nowrap"
+                    title="Riporta in Bozza per modificare il mockup"
+                  >
+                    ↶ Riporta in Bozza
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

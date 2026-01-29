@@ -1,3 +1,5 @@
+"use node";
+
 import { components, internal } from "./_generated/api";
 import { internalAction, internalQuery } from "./_generated/server";
 import { Resend } from "@convex-dev/resend";

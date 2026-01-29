@@ -84,23 +84,51 @@ export default function PrioritySelector({
   // Calcola la posizione del dropdown quando si apre
   useEffect(() => {
     if (isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect()
-      const dropdownHeight = 250 // Altezza approssimativa del dropdown
-      const spacing = 8 // Spazio tra il bottone e il dropdown
-      const minTop = 10 // Margine minimo dal top dello schermo
-      
-      // Posiziona sempre sopra il bottone
-      let top = rect.top - dropdownHeight - spacing
-      
-      // Se il dropdown andrebbe fuori dallo schermo in alto, posizionalo al minimo consentito
-      if (top < minTop) {
-        top = minTop
-      }
-      
-      setDropdownPosition({
-        top,
-        left: rect.left
+      // Usa requestAnimationFrame per differire l'aggiornamento dello stato
+      const frameId = requestAnimationFrame(() => {
+        if (!buttonRef.current) return
+        
+        const rect = buttonRef.current.getBoundingClientRect()
+        const dropdownHeight = 250 // Altezza approssimativa del dropdown
+        const dropdownWidth = 240 // Larghezza del dropdown
+        const spacing = 8 // Spazio tra il bottone e il dropdown
+        const minTop = 10 // Margine minimo dal top dello schermo
+        const minLeft = 10 // Margine minimo dal lato sinistro
+        
+        // Posiziona sempre sopra il bottone
+        let top = rect.top - dropdownHeight - spacing
+        
+        // Se il dropdown andrebbe fuori dallo schermo in alto, posizionalo sotto
+        if (top < minTop) {
+          top = rect.bottom + spacing
+        }
+        
+        // Calcola la posizione orizzontale
+        let left = rect.left
+        
+        // Se il dropdown andrebbe fuori dallo schermo a destra, allinealo al bordo destro del bottone
+        if (left + dropdownWidth > window.innerWidth - minLeft) {
+          left = window.innerWidth - dropdownWidth - minLeft
+        }
+        
+        // Se il dropdown andrebbe fuori dallo schermo a sinistra, posizionalo al minimo consentito
+        if (left < minLeft) {
+          left = minLeft
+        }
+        
+        setDropdownPosition({
+          top,
+          left
+        })
       })
+      
+      return () => cancelAnimationFrame(frameId)
+    } else if (!isOpen) {
+      // Resetta la posizione quando il dropdown si chiude, differendo l'aggiornamento
+      const frameId = requestAnimationFrame(() => {
+        setDropdownPosition(null)
+      })
+      return () => cancelAnimationFrame(frameId)
     }
   }, [isOpen])
 
@@ -154,19 +182,31 @@ export default function PrioritySelector({
             e.stopPropagation()
             setIsOpen(!isOpen)
           }}
-          className={`flex items-center gap-2 px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
-            compact ? 'p-1' : ''
+          className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border transition-all ${
+            compact 
+              ? `p-1.5 border-gray-300 dark:border-gray-600 ${currentConfig.bgColor} hover:shadow-md` 
+              : `px-2 py-1 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700`
           }`}
           title={compact ? currentConfig.label : undefined}
         >
           <CurrentIcon 
-            size={compact ? 16 : 18} 
+            size={compact ? 18 : 18} 
             className={currentConfig.textColor}
           />
           {!compact && (
             <span className={`text-sm font-medium ${currentConfig.textColor}`}>
               {currentConfig.label}
             </span>
+          )}
+          {compact && (
+            <svg 
+              className={`w-3 h-3 ${currentConfig.textColor} transition-transform ${isOpen ? 'rotate-180' : ''}`}
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
           )}
         </button>
       </div>
@@ -175,21 +215,21 @@ export default function PrioritySelector({
       {isOpen && dropdownPosition && (
         <div
           ref={dropdownRef}
-          className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg min-w-[240px] overflow-hidden"
+          className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl min-w-[240px] overflow-hidden backdrop-blur-sm"
           style={{
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`
           }}
         >
           {/* Header */}
-          <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <div className="px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+            <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
               Cambia priorità in...
             </span>
           </div>
 
           {/* Options */}
-          <div className="py-1">
+          <div className="py-1.5">
             {(Object.keys(priorityConfig).map(Number) as Priority[]).map((priority) => {
               const config = priorityConfig[priority]
               const Icon = config.icon
@@ -204,8 +244,8 @@ export default function PrioritySelector({
                     e.stopPropagation()
                     handlePrioritySelect(priority)
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
-                    isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all duration-150 ${
+                    isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500 dark:border-blue-400' : ''
                   }`}
                 >
                   <Icon 
