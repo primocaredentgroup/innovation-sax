@@ -158,10 +158,6 @@ export default function NotesSection({ keyDevId, currentUser, users, readableId,
   // Stato per il toast di successo
   const [showToast, setShowToast] = useState(false)
 
-  // Ruoli e permessi utente corrente
-  const userRoles = currentUser?.roles as Role[] | undefined
-  const userIsAdmin = isAdmin(userRoles)
-
   // Chiudi il dropdown quando si clicca fuori
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -189,10 +185,7 @@ export default function NotesSection({ keyDevId, currentUser, users, readableId,
       if (noteElement) {
         setTimeout(() => {
           noteElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          noteElement.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2')
-          setTimeout(() => {
-            noteElement.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2')
-          }, 3000)
+          // L'evidenziazione è già gestita dalla classe CSS, non serve aggiungere ring temporaneo
         }, 100)
       }
     }
@@ -573,7 +566,7 @@ export default function NotesSection({ keyDevId, currentUser, users, readableId,
               ? note.mentionedUserIds.map(userId => users?.find(u => u._id === userId)).filter(Boolean)
               : []
             const isAuthor = note.authorId === currentUser?._id
-            const canEdit = isAuthor
+            const canEdit = isAuthor || isAdmin(currentUser?.roles)
             const isEditing = editingNoteId === note._id
             const isConfirmDelete = confirmDeleteNoteId === note._id
             
@@ -591,7 +584,7 @@ export default function NotesSection({ keyDevId, currentUser, users, readableId,
                 }}
                 className={`p-4 rounded-lg overflow-hidden transition-all ${
                   isHighlighted
-                    ? 'bg-blue-100 dark:bg-blue-900/40 ring-2 ring-blue-500 ring-offset-2'
+                    ? 'bg-amber-100 dark:bg-amber-900/50 border-2 border-amber-400 dark:border-amber-500 shadow-lg shadow-amber-200/50 dark:shadow-amber-900/50'
                     : note.type === 'Mention' 
                       ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' 
                       : 'bg-gray-50 dark:bg-gray-700/50'
@@ -620,7 +613,16 @@ export default function NotesSection({ keyDevId, currentUser, users, readableId,
                       >
                         🔗
                       </button>
-                      {canEdit ? (
+                      {!isAuthor && (
+                        <button
+                          onClick={() => handleReply(note.authorId)}
+                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
+                          title="Rispondi alla nota"
+                        >
+                          💬 Rispondi
+                        </button>
+                      )}
+                      {canEdit && (
                         <>
                           <button
                             onClick={() => handleStartEditNote(note._id)}
@@ -656,14 +658,6 @@ export default function NotesSection({ keyDevId, currentUser, users, readableId,
                             </div>
                           )}
                         </>
-                      ) : (
-                        <button
-                          onClick={() => handleReply(note.authorId)}
-                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
-                          title="Rispondi alla nota"
-                        >
-                          💬 Rispondi
-                        </button>
                       )}
                     </div>
                   )}

@@ -1,6 +1,7 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
 import { noteTypeValidator } from './schema'
+import { internal } from './_generated/api'
 
 const noteReturnValidator = v.object({
   _id: v.id('notes'),
@@ -84,6 +85,26 @@ export const create = mutation({
       notesCount: (keydev.notesCount || 0) + 1
     })
 
+    // Invia email di notifica a tutti gli utenti menzionati
+    if (args.mentionedUserIds && args.mentionedUserIds.length > 0) {
+      console.log(`[notes.create] Trovati ${args.mentionedUserIds.length} utenti menzionati`)
+      for (const mentionedUserId of args.mentionedUserIds) {
+        // Verifica che l'utente menzionato abbia un'email prima di programmare l'invio
+        const mentionedUser = await ctx.db.get(mentionedUserId)
+        if (mentionedUser?.email) {
+          console.log(`[notes.create] Programmando invio email a ${mentionedUser.email} per nota ${noteId}`)
+          // Programma l'invio email in modo asincrono
+          await ctx.scheduler.runAfter(0, internal.emails.sendMentionNotification, {
+            noteId,
+            mentionedUserId,
+            keyDevId: args.keyDevId,
+          })
+        } else {
+          console.log(`[notes.create] Utente ${mentionedUserId} non ha email, skip invio`)
+        }
+      }
+    }
+
     return noteId
   }
 })
@@ -135,12 +156,37 @@ export const update = mutation({
       throw new Error('mentionedUserIds non può essere presente per le note di tipo Comment')
     }
 
+    // Salva i mentionedUserIds precedenti per confronto
+    const previousMentionedUserIds = note.mentionedUserIds || []
+    const newMentionedUserIds = args.mentionedUserIds || []
+
     await ctx.db.patch(args.id, {
       body: args.body,
       type: args.type,
       mentionedUserIds: args.mentionedUserIds,
       ts: Date.now() // Aggiorna il timestamp
     })
+
+    // Invia email solo ai nuovi utenti menzionati (non presenti nella versione precedente)
+    if (newMentionedUserIds.length > 0) {
+      const newMentions = newMentionedUserIds.filter(
+        (userId) => !previousMentionedUserIds.includes(userId)
+      )
+
+      for (const mentionedUserId of newMentions) {
+        // Verifica che l'utente menzionato abbia un'email prima di programmare l'invio
+        const mentionedUser = await ctx.db.get(mentionedUserId)
+        if (mentionedUser?.email) {
+          // Programma l'invio email in modo asincrono
+          await ctx.scheduler.runAfter(0, internal.emails.sendMentionNotification, {
+            noteId: args.id,
+            mentionedUserId,
+            keyDevId: note.keyDevId,
+          })
+        }
+      }
+    }
+
     return null
   }
 })
