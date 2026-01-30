@@ -65,10 +65,13 @@ export const create = mutation({
       throw new Error('mentionedUserIds non può essere presente per le note di tipo Comment')
     }
 
-    // Verifica che il keydev esista
+    // Verifica che il keydev esista e non sia eliminato
     const keydev = await ctx.db.get(args.keyDevId)
     if (!keydev) {
       throw new Error('KeyDev non trovato')
+    }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile aggiungere note a un KeyDev eliminato')
     }
 
     const noteId = await ctx.db.insert('notes', {

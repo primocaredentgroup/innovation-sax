@@ -516,6 +516,13 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const keydev = await ctx.db.get(args.id)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
+    }
     const { id, ...updates } = args
     await ctx.db.patch(id, updates)
     return null
@@ -550,6 +557,9 @@ export const updateStatus = mutation({
     const keydev = await ctx.db.get(args.id)
     if (!keydev) {
       throw new Error('KeyDev non trovato')
+    }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
     }
 
     const identity = await ctx.auth.getUserIdentity()
@@ -863,6 +873,9 @@ export const takeOwnership = mutation({
     if (!keydev) {
       throw new Error('KeyDev non trovato')
     }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
+    }
 
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
@@ -921,6 +934,9 @@ export const markAsDone = mutation({
     if (!keydev) {
       throw new Error('KeyDev non trovato')
     }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
+    }
 
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
@@ -967,7 +983,7 @@ export const markAsDone = mutation({
 
 /**
  * Collega un mockup repository a un KeyDev.
- * Se il KeyDev è in stato Draft, passa automaticamente a MockupDone.
+ * Non cambia automaticamente lo stato - l'utente deve dichiarare esplicitamente "Mockup Terminato".
  */
 export const linkMockupRepo = mutation({
   args: {
@@ -980,17 +996,39 @@ export const linkMockupRepo = mutation({
     if (!keydev) {
       throw new Error('KeyDev non trovato')
     }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
+    }
 
-    const updates: Record<string, unknown> = {
+    await ctx.db.patch(args.id, {
       mockupRepoUrl: args.mockupRepoUrl
+    })
+    return null
+  }
+})
+
+/**
+ * Aggiorna il repository URL ufficiale di un KeyDev.
+ * Può essere aggiornato in qualsiasi momento.
+ */
+export const updateRepoUrl = mutation({
+  args: {
+    id: v.id('keydevs'),
+    repoUrl: v.string()
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const keydev = await ctx.db.get(args.id)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
     }
-    
-    // Se il KeyDev è in Draft, passa a MockupDone
-    if (keydev.status === 'Draft') {
-      updates.status = 'MockupDone'
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
     }
-    
-    await ctx.db.patch(args.id, updates)
+
+    await ctx.db.patch(args.id, {
+      repoUrl: args.repoUrl
+    })
     return null
   }
 })
@@ -1009,6 +1047,9 @@ export const assignOwner = mutation({
     const keydev = await ctx.db.get(args.id)
     if (!keydev) {
       throw new Error('KeyDev non trovato')
+    }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
     }
 
     const identity = await ctx.auth.getUserIdentity()
@@ -1060,6 +1101,9 @@ export const updatePriority = mutation({
     if (!keydev) {
       throw new Error('KeyDev non trovato')
     }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
+    }
 
     await ctx.db.patch(args.id, {
       priority: args.priority
@@ -1071,6 +1115,7 @@ export const updatePriority = mutation({
 /**
  * Soft-delete un KeyDev impostando deletedAt.
  * Il keydev non apparirà più nelle liste e nei conteggi.
+ * Solo gli Admin, il requester o l'owner possono eliminare un KeyDev.
  */
 export const softDelete = mutation({
   args: {
@@ -1082,10 +1127,31 @@ export const softDelete = mutation({
     if (!keydev) {
       throw new Error('KeyDev non trovato')
     }
+    if (keydev.deletedAt) {
+      throw new Error('KeyDev già eliminato')
+    }
 
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
       throw new Error('Non autenticato')
+    }
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+
+    if (!user) {
+      throw new Error('Utente non trovato')
+    }
+
+    const userRoles = user.roles as Role[] | undefined
+    const userIsAdmin = isAdmin(userRoles)
+    const isRequester = keydev.requesterId === user._id
+    const isOwner = keydev.ownerId === user._id
+
+    if (!userIsAdmin && !isRequester && !isOwner) {
+      throw new Error('Solo gli Admin, il requester o l\'owner possono eliminare un KeyDev')
     }
 
     await ctx.db.patch(args.id, {

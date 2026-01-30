@@ -1,6 +1,7 @@
 import { internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { noteTypeValidator } from "./schema";
+import type { Id } from "./_generated/dataModel";
 
 /**
  * Query interna per recuperare i dati completi della nota con contesto
@@ -90,6 +91,143 @@ export const getNoteWithContext = internalQuery({
         name: mentionedUser.name,
         email: mentionedUser.email,
       },
+    };
+  },
+});
+
+const coreAppStatusValidator = v.union(
+  v.literal('Planning'),
+  v.literal('InProgress'),
+  v.literal('Completed')
+);
+
+/**
+ * Query interna per recuperare tutti gli owner di CoreApps con status InProgress
+ */
+export const getOwnersOfInProgressApps = internalQuery({
+  args: {},
+  returns: v.array(
+    v.object({
+      owner: v.object({
+        _id: v.id("users"),
+        name: v.string(),
+        email: v.optional(v.string()),
+      }),
+      coreApp: v.object({
+        _id: v.id("coreApps"),
+        name: v.string(),
+        slug: v.string(),
+      }),
+    })
+  ),
+  handler: async (ctx) => {
+    // Recupera tutte le CoreApps con status InProgress
+    const coreApps = await ctx.db
+      .query("coreApps")
+      .withIndex("by_status", (q) => q.eq("status", "InProgress"))
+      .collect();
+
+    const result: Array<{
+      owner: { _id: Id<"users">; name: string; email?: string };
+      coreApp: { _id: Id<"coreApps">; name: string; slug: string };
+    }> = [];
+
+    for (const coreApp of coreApps) {
+      if (!coreApp.ownerId) {
+        continue; // Skip se non ha owner
+      }
+      const owner = await ctx.db.get(coreApp.ownerId);
+      if (owner) {
+        result.push({
+          owner: {
+            _id: owner._id,
+            name: owner.name,
+            email: owner.email,
+          },
+          coreApp: {
+            _id: coreApp._id,
+            name: coreApp.name,
+            slug: coreApp.slug,
+          },
+        });
+      }
+    }
+
+    return result;
+  },
+});
+
+/**
+ * Query interna per recuperare CoreApp con subscribers per notifica nuovo update
+ */
+export const getCoreAppWithSubscribers = internalQuery({
+  args: {
+    coreAppId: v.id("coreApps"),
+    updateId: v.id("coreAppUpdates"),
+  },
+  returns: v.union(
+    v.object({
+      coreApp: v.object({
+        _id: v.id("coreApps"),
+        name: v.string(),
+        slug: v.string(),
+        status: coreAppStatusValidator,
+      }),
+      update: v.object({
+        _id: v.id("coreAppUpdates"),
+        weekRef: v.string(),
+        title: v.optional(v.string()),
+        loomUrl: v.optional(v.string()),
+      }),
+      subscribers: v.array(
+        v.object({
+          _id: v.id("users"),
+          name: v.string(),
+          email: v.optional(v.string()),
+        })
+      ),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const coreApp = await ctx.db.get(args.coreAppId);
+    if (!coreApp) {
+      return null;
+    }
+
+    const update = await ctx.db.get(args.updateId);
+    if (!update) {
+      return null;
+    }
+
+    const subscribers: Array<{ _id: Id<"users">; name: string; email?: string }> = [];
+
+    const subscriberIds = coreApp.subscriberIds || [];
+    for (const subscriberId of subscriberIds) {
+      const subscriber = await ctx.db.get(subscriberId);
+      if (subscriber) {
+        subscribers.push({
+          _id: subscriber._id,
+          name: subscriber.name,
+          email: subscriber.email,
+        });
+      }
+    }
+
+    return {
+      coreApp: {
+        _id: coreApp._id,
+        name: coreApp.name,
+        slug: coreApp.slug,
+        status: coreApp.status,
+      },
+      update: {
+        _id: update._id,
+        weekRef: update.weekRef,
+        title: update.title,
+        loomUrl: update.loomUrl,
+      },
+      subscribers,
     };
   },
 });

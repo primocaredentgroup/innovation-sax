@@ -1,5 +1,6 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
+import { internal } from './_generated/api'
 
 const coreAppUpdateReturnValidator = v.object({
   _id: v.id('coreAppUpdates'),
@@ -83,7 +84,7 @@ export const create = mutation({
   },
   returns: v.id('coreAppUpdates'),
   handler: async (ctx, args) => {
-    return await ctx.db.insert('coreAppUpdates', {
+    const updateId = await ctx.db.insert('coreAppUpdates', {
       coreAppId: args.coreAppId,
       weekRef: args.weekRef,
       monthRef: args.monthRef,
@@ -92,6 +93,14 @@ export const create = mutation({
       notes: args.notes,
       createdAt: Date.now()
     })
+
+    // Schedula l'invio delle notifiche ai subscribers
+    await ctx.scheduler.runAfter(0, internal.emails.sendNewUpdateNotification, {
+      updateId,
+      coreAppId: args.coreAppId
+    })
+
+    return updateId
   }
 })
 

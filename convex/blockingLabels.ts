@@ -104,6 +104,15 @@ export const create = mutation({
   },
   returns: v.id('blockingLabels'),
   handler: async (ctx, args) => {
+    // Verifica che il keydev esista e non sia eliminato
+    const keydev = await ctx.db.get(args.keyDevId)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile aggiungere blocking labels a un KeyDev eliminato')
+    }
+
     // Verifica che la label esista
     const label = await ctx.db.get(args.labelId)
     if (!label) {

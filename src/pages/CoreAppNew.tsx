@@ -7,11 +7,13 @@ import type { Id } from '../../convex/_generated/dataModel'
 export default function CoreAppNewPage() {
   const navigate = useNavigate()
   const createCoreApp = useMutation(api.coreApps.create)
+  const users = useQuery(api.users.listUsers)
 
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [description, setDescription] = useState('')
   const [repoUrl, setRepoUrl] = useState('')
+  const [ownerId, setOwnerId] = useState<Id<'users'> | ''>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdId, setCreatedId] = useState<Id<'coreApps'> | null>(null)
@@ -41,11 +43,18 @@ export default function CoreAppNewPage() {
         return
       }
 
+      if (!ownerId) {
+        setError('L\'owner è obbligatorio')
+        setIsSubmitting(false)
+        return
+      }
+
       const id = await createCoreApp({
         name: name.trim(),
         slug: slug.trim() || undefined,
         description: description.trim() || undefined,
-        repoUrl: repoUrl.trim() || undefined
+        repoUrl: repoUrl.trim() || undefined,
+        ownerId
       })
 
       // Imposta l'id creato per attivare la query e la navigazione
@@ -92,6 +101,29 @@ export default function CoreAppNewPage() {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               placeholder="Es. Dashboard Analytics"
             />
+          </div>
+
+          <div>
+            <label
+              htmlFor="owner"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
+              Owner <span className="text-red-500">*</span>
+            </label>
+            <select
+              id="owner"
+              value={ownerId}
+              onChange={(e) => setOwnerId(e.target.value as Id<'users'> | '')}
+              required
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            >
+              <option value="">Seleziona un owner...</option>
+              {users?.map((user) => (
+                <option key={user._id} value={user._id}>
+                  {user.name} {user.email ? `(${user.email})` : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

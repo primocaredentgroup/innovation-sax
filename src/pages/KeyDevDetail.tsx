@@ -61,7 +61,7 @@ const truncateUrl = (url: string, maxLength: number = 50): string => {
 
 // Descrizioni del flusso per ogni stato
 const statusDescriptions: Record<string, string> = {
-  Draft: 'Aggiungi il mockupRepoUrl per passare a "Mockup Terminato"',
+  Draft: 'Aggiungi il mockupRepoUrl e poi dichiara "Mockup Terminato" quando sei pronto',
   MockupDone: 'In attesa di approvazione da parte di un TechValidator',
   Approved: 'In attesa di validazione frontend da parte del BusinessValidator del dipartimento',
   Rejected: 'Rifiutato dal TechValidator - vedere motivo',
@@ -99,6 +99,7 @@ export default function KeyDevDetailPage() {
   const assignOwner = useMutation(api.keydevs.assignOwner)
   const markAsDone = useMutation(api.keydevs.markAsDone)
   const linkMockupRepo = useMutation(api.keydevs.linkMockupRepo)
+  const updateRepoUrl = useMutation(api.keydevs.updateRepoUrl)
   const createBlockingLabel = useMutation(api.blockingLabels.create)
   const removeBlockingLabel = useMutation(api.blockingLabels.remove)
   const penalties = useQuery(
@@ -131,6 +132,10 @@ export default function KeyDevDetailPage() {
   const [penaltyWeight, setPenaltyWeight] = useState('')
   const [penaltyDescription, setPenaltyDescription] = useState('')
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>('')
+  const [editingMockupRepoUrl, setEditingMockupRepoUrl] = useState('')
+  const [editingRepoUrl, setEditingRepoUrl] = useState('')
+  const [isEditingMockupRepoUrl, setIsEditingMockupRepoUrl] = useState(false)
+  const [isEditingRepoUrl, setIsEditingRepoUrl] = useState(false)
   // Inizializza techWeight con il valore esistente del keydev o 1 come default
   const [techWeight, setTechWeight] = useState<0 | 0.25 | 0.5 | 0.75 | 1>(() => {
     if (keydev?.weight !== undefined) {
@@ -165,6 +170,17 @@ export default function KeyDevDetailPage() {
       setOwnershipWeight(1)
     }
   }, [keydev?.weight])
+
+  // Aggiorna i valori di editing quando cambia il keydev
+  useEffect(() => {
+    const mockupRepoUrl = keydev?.mockupRepoUrl || ''
+    const repoUrl = keydev?.repoUrl || ''
+    setEditingMockupRepoUrl(mockupRepoUrl)
+    setEditingRepoUrl(repoUrl)
+    // Reset degli stati di editing quando cambia il keydev
+    setIsEditingMockupRepoUrl(false)
+    setIsEditingRepoUrl(false)
+  }, [keydev?.mockupRepoUrl, keydev?.repoUrl])
   
   // Calcola i valori iniziali per dipartimento e team in base all'utente
   const getInitialDeptId = () => {
@@ -294,6 +310,34 @@ export default function KeyDevDetailPage() {
       mockupRepoUrl: mockupRepoUrl.trim() 
     })
     setMockupRepoUrlInput('')
+  }
+
+  const handleUpdateMockupRepoUrl = async () => {
+    if (!keydev) return
+    await linkMockupRepo({ 
+      id: keydev._id, 
+      mockupRepoUrl: editingMockupRepoUrl.trim() 
+    })
+    setIsEditingMockupRepoUrl(false)
+  }
+
+  const handleUpdateRepoUrl = async () => {
+    if (!keydev || !editingRepoUrl.trim()) return
+    await updateRepoUrl({ 
+      id: keydev._id, 
+      repoUrl: editingRepoUrl.trim() 
+    })
+    setIsEditingRepoUrl(false)
+  }
+
+  const handleCancelEditMockupRepoUrl = () => {
+    setEditingMockupRepoUrl(keydev?.mockupRepoUrl || '')
+    setIsEditingMockupRepoUrl(false)
+  }
+
+  const handleCancelEditRepoUrl = () => {
+    setEditingRepoUrl(keydev?.repoUrl || '')
+    setIsEditingRepoUrl(false)
   }
 
   const handleAddBlockingLabel = async (labelId: Id<'labels'>) => {
@@ -590,28 +634,54 @@ export default function KeyDevDetailPage() {
 
               {/* Azioni disponibili in base allo stato */}
               <div className="space-y-4">
-                {/* Draft: Mostra input per inserire/modificare URL mockup repo */}
+                {/* Draft: Mostra input per inserire/modificare URL mockup repo e pulsante separato per dichiarare Mockup Terminato */}
                 {keydev.status === 'Draft' && (
-                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Repository URL
-                    </label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="text"
-                        value={mockupRepoUrl}
-                        onChange={(e) => setMockupRepoUrlInput(e.target.value)}
-                        placeholder="https://github.com/..."
-                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                      />
-                      <button
-                        onClick={handleLinkMockupRepo}
-                        disabled={!mockupRepoUrl.trim()}
-                        className="px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-md hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 whitespace-nowrap"
-                      >
-                        Salva
-                      </button>
+                  <div className="space-y-4">
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Repository URL Mockup
+                      </label>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={mockupRepoUrl}
+                          onChange={(e) => setMockupRepoUrlInput(e.target.value)}
+                          placeholder="https://github.com/..."
+                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                        />
+                        <button
+                          onClick={handleLinkMockupRepo}
+                          disabled={!mockupRepoUrl.trim()}
+                          className="px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-md hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 whitespace-nowrap"
+                        >
+                          Salva URL
+                        </button>
+                      </div>
+                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        Puoi salvare l'URL del repository mockup senza cambiare lo stato
+                      </p>
                     </div>
+                    
+                    {/* Pulsante separato per dichiarare Mockup Terminato */}
+                    {keydev.mockupRepoUrl && (
+                      <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                        <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-3">
+                          Il repository mockup è stato salvato. Quando sei pronto, puoi dichiarare il mockup come terminato.
+                        </p>
+                        <button
+                          onClick={async () => {
+                            if (!keydev.mockupRepoUrl) {
+                              alert('Devi prima salvare l\'URL del repository mockup')
+                              return
+                            }
+                            await updateStatus({ id: keydev._id, status: 'MockupDone' })
+                          }}
+                          className="px-4 py-2 bg-yellow-600 dark:bg-yellow-700 text-white rounded-md hover:bg-yellow-700 dark:hover:bg-yellow-600 whitespace-nowrap"
+                        >
+                          Dichiara Mockup Terminato
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1157,63 +1227,6 @@ export default function KeyDevDetailPage() {
             </div>
           )}
 
-          {/* GitHub Section */}
-          {!isNew && keydev && keydev.mockupRepoUrl && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-                GitHub - Mockup Repository
-              </h2>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Repository URL
-                  </label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={keydev.mockupRepoUrl}
-                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-xs sm:text-sm"
-                        onClick={(e) => (e.target as HTMLInputElement).select()}
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(keydev.mockupRepoUrl || '')
-                          }}
-                          className="flex-1 sm:flex-none px-4 py-2 bg-gray-600 dark:bg-gray-700 text-white rounded-md hover:bg-gray-700 dark:hover:bg-gray-600 text-sm whitespace-nowrap"
-                          title="Copia URL"
-                        >
-                          Copia
-                        </button>
-                        <a
-                          href={keydev.mockupRepoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm text-center whitespace-nowrap"
-                          title="Apri in nuova scheda"
-                        >
-                          Apri
-                        </a>
-                      </div>
-                    </div>
-                </div>
-
-                {keydev.validatedMockupCommit && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Commit Validato dal Business
-                    </label>
-                    <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono">
-                      {keydev.validatedMockupCommit}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           </>
         </div>
 
@@ -1259,38 +1272,126 @@ export default function KeyDevDetailPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-sm text-gray-500 dark:text-gray-400">RepoMockup</dt>
-                  <dd className="font-medium text-gray-900 dark:text-gray-100 wrap-break-word">
-                    {keydev.mockupRepoUrl ? (
-                      <a
-                        href={keydev.mockupRepoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline break-all"
-                        title={keydev.mockupRepoUrl}
-                      >
-                        {truncateUrl(keydev.mockupRepoUrl, 40)}
-                      </a>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400 mb-2">RepoMockup</dt>
+                  <dd>
+                    {isEditingMockupRepoUrl ? (
+                      <div className="space-y-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            value={editingMockupRepoUrl}
+                            onChange={(e) => setEditingMockupRepoUrl(e.target.value)}
+                            placeholder="https://github.com/..."
+                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm font-mono"
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleUpdateMockupRepoUrl}
+                              disabled={editingMockupRepoUrl.trim() === (keydev.mockupRepoUrl || '')}
+                              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
+                            >
+                              Salva
+                            </button>
+                            <button
+                              onClick={handleCancelEditMockupRepoUrl}
+                              className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 text-sm whitespace-nowrap"
+                            >
+                              Annulla
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     ) : (
-                      <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
+                      <div className="flex items-center gap-2 group">
+                        {keydev.mockupRepoUrl ? (
+                          <a
+                            href={keydev.mockupRepoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all flex-1"
+                            title={keydev.mockupRepoUrl}
+                          >
+                            {truncateUrl(keydev.mockupRepoUrl, 40)}
+                          </a>
+                        ) : (
+                          <span className="text-sm text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
+                        )}
+                        <button
+                          onClick={() => {
+                            setEditingMockupRepoUrl(keydev.mockupRepoUrl || '')
+                            setIsEditingMockupRepoUrl(true)
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                          title="Modifica"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      </div>
                     )}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-sm text-gray-500 dark:text-gray-400">RepoUrl ufficiale</dt>
-                  <dd className="font-medium text-gray-900 dark:text-gray-100 wrap-break-word">
-                    {keydev.repoUrl ? (
-                      <a
-                        href={keydev.repoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline break-all"
-                        title={keydev.repoUrl}
-                      >
-                        {truncateUrl(keydev.repoUrl, 40)}
-                      </a>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400 mb-2">RepoUrl ufficiale</dt>
+                  <dd>
+                    {isEditingRepoUrl ? (
+                      <div className="space-y-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            value={editingRepoUrl}
+                            onChange={(e) => setEditingRepoUrl(e.target.value)}
+                            placeholder="https://github.com/..."
+                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm font-mono"
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleUpdateRepoUrl}
+                              disabled={editingRepoUrl.trim() === (keydev.repoUrl || '') || !editingRepoUrl.trim()}
+                              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
+                            >
+                              Salva
+                            </button>
+                            <button
+                              onClick={handleCancelEditRepoUrl}
+                              className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 text-sm whitespace-nowrap"
+                            >
+                              Annulla
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     ) : (
-                      <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
+                      <div className="flex items-center gap-2 group">
+                        {keydev.repoUrl ? (
+                          <a
+                            href={keydev.repoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all flex-1"
+                            title={keydev.repoUrl}
+                          >
+                            {truncateUrl(keydev.repoUrl, 40)}
+                          </a>
+                        ) : (
+                          <span className="text-sm text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
+                        )}
+                        <button
+                          onClick={() => {
+                            setEditingRepoUrl(keydev.repoUrl || '')
+                            setIsEditingRepoUrl(true)
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                          title="Modifica"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      </div>
                     )}
                   </dd>
                 </div>

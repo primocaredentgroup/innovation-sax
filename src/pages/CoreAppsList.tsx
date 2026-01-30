@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
+import { useMemo } from 'react'
 import { api } from '../../convex/_generated/api'
+import type { Id } from '../../convex/_generated/dataModel'
 
 const statusColors: Record<string, string> = {
   Planning: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
@@ -49,6 +51,13 @@ function isRecentUpdate(weekRef: string | undefined): boolean {
 
 export default function CoreAppsListPage() {
   const coreApps = useQuery(api.coreApps.list)
+  const users = useQuery(api.users.listUsers)
+  
+  // Mappa userId -> user per trovare velocemente gli owner
+  const usersMap = useMemo(() => {
+    if (!users) return new Map<Id<'users'>, { name: string; picture?: string }>()
+    return new Map(users.map(u => [u._id, { name: u.name, picture: u.picture }]))
+  }, [users])
 
   return (
     <div className="w-full max-w-full overflow-x-hidden">
@@ -81,6 +90,21 @@ export default function CoreAppsListPage() {
                 </div>
                 {app.description && (
                   <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-2 wrap-break-word">{app.description}</p>
+                )}
+                {/* Owner */}
+                {app.ownerId && usersMap.get(app.ownerId) && (
+                  <div className="flex items-center gap-2 mt-2">
+                    {usersMap.get(app.ownerId)?.picture && (
+                      <img 
+                        src={usersMap.get(app.ownerId)?.picture} 
+                        alt={usersMap.get(app.ownerId)?.name} 
+                        className="w-5 h-5 rounded-full"
+                      />
+                    )}
+                    <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                      Owner: {usersMap.get(app.ownerId)?.name}
+                    </span>
+                  </div>
                 )}
                 {app.repoUrl && (
                   <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 mt-2 break-all">{app.repoUrl}</p>

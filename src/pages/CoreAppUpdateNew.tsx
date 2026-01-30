@@ -335,13 +335,14 @@ export default function CoreAppUpdateNewPage() {
           
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              URL Video Loom
+              URL Video Loom <span className="text-red-500">*</span>
             </label>
             <input
               type="url"
               value={loomUrl}
               onChange={(e) => setLoomUrl(e.target.value)}
               placeholder="https://www.loom.com/share/..."
+              required
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
             />
           </div>
@@ -379,7 +380,7 @@ export default function CoreAppUpdateNewPage() {
             </Link>
             <button
               type="submit"
-              disabled={isSubmitting || !selectedWeek}
+              disabled={isSubmitting || !selectedWeek || !loomUrl.trim()}
               className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Creazione...' : 'Crea Aggiornamento'}

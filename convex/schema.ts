@@ -217,8 +217,13 @@ export default defineSchema({
       v.literal('Planning'),
       v.literal('InProgress'),
       v.literal('Completed')
-    )
-  }).index('by_slug', ['slug']),
+    ),
+    ownerId: v.optional(v.id('users')), // Owner responsabile dell'app (temporaneamente opzionale per migrazione)
+    subscriberIds: v.optional(v.array(v.id('users'))) // Utenti iscritti alle notifiche (temporaneamente opzionale per migrazione)
+  })
+    .index('by_slug', ['slug'])
+    .index('by_owner', ['ownerId'])
+    .index('by_status', ['status']),
 
   // Core App Weekly Updates (Loom videos)
   coreAppUpdates: defineTable({

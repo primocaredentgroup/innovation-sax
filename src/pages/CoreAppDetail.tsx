@@ -380,6 +380,29 @@ export default function CoreAppDetailPage() {
 
   const coreApp = useQuery(api.coreApps.getBySlug, { slug })
   const months = useQuery(api.months.list)
+  const users = useQuery(api.users.listUsers)
+  
+  // Trova l'owner dalla lista utenti
+  const owner = useMemo(() => {
+    if (!users || !coreApp?.ownerId) return null
+    return users.find(u => u._id === coreApp.ownerId) || null
+  }, [users, coreApp])
+  
+  // Trova i subscribers dalla lista utenti
+  const subscribers = useMemo(() => {
+    if (!users || !coreApp?.subscriberIds) return []
+    return users.filter(u => coreApp.subscriberIds?.includes(u._id) ?? false)
+  }, [users, coreApp])
+  
+  // Utenti disponibili per aggiungere come subscribers (esclusi owner e già iscritti)
+  const availableUsers = useMemo(() => {
+    if (!users || !coreApp) return []
+    const subscriberIds = coreApp.subscriberIds || []
+    return users.filter(u => 
+      u._id !== coreApp.ownerId && 
+      !subscriberIds.includes(u._id)
+    )
+  }, [users, coreApp])
   
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
   
@@ -394,6 +417,8 @@ export default function CoreAppDetailPage() {
   const updateUpdate = useMutation(api.coreAppUpdates.update)
   const deleteUpdate = useMutation(api.coreAppUpdates.remove)
   const updateCoreApp = useMutation(api.coreApps.update)
+  const addSubscriber = useMutation(api.coreApps.addSubscriber)
+  const removeSubscriber = useMutation(api.coreApps.removeSubscriber)
 
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -406,6 +431,8 @@ export default function CoreAppDetailPage() {
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false)
   const [tempPercent, setTempPercent] = useState<number>(0)
   const [tempHubUrl, setTempHubUrl] = useState<string>('')
+  const [isAddingSubscriber, setIsAddingSubscriber] = useState(false)
+  const [selectedNewSubscriber, setSelectedNewSubscriber] = useState<Id<'users'> | ''>('')
   
   // Genera le opzioni per i mesi (6 mesi passati + mese corrente + mesi futuri dal DB)
   const monthOptions = useMemo(() => {
@@ -521,6 +548,24 @@ export default function CoreAppDetailPage() {
     setIsStatusDropdownOpen(false)
   }, [coreApp, updateCoreApp])
 
+  const handleAddSubscriber = useCallback(async () => {
+    if (!coreApp || !selectedNewSubscriber) return
+    await addSubscriber({
+      id: coreApp._id,
+      userId: selectedNewSubscriber
+    })
+    setSelectedNewSubscriber('')
+    setIsAddingSubscriber(false)
+  }, [coreApp, selectedNewSubscriber, addSubscriber])
+
+  const handleRemoveSubscriber = useCallback(async (userId: Id<'users'>) => {
+    if (!coreApp) return
+    await removeSubscriber({
+      id: coreApp._id,
+      userId
+    })
+  }, [coreApp, removeSubscriber])
+
   if (!coreApp) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -593,6 +638,108 @@ export default function CoreAppDetailPage() {
                 {coreApp.repoUrl}
               </a>
             )}
+            
+            {/* Owner */}
+            <div className="mt-4 pt-4 border-t dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Owner</h3>
+              {owner ? (
+                <div className="flex items-center gap-2">
+                  {owner.picture && (
+                    <img 
+                      src={owner.picture} 
+                      alt={owner.name} 
+                      className="w-8 h-8 rounded-full"
+                    />
+                  )}
+                  <div>
+                    <p className="text-gray-900 dark:text-gray-100 font-medium">{owner.name}</p>
+                    {owner.email && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{owner.email}</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-500 dark:text-gray-400">Nessun owner assegnato</p>
+              )}
+            </div>
+            
+            {/* Subscribers */}
+            <div className="mt-4 pt-4 border-t dark:border-gray-700">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                  Iscritti ({subscribers.length})
+                </h3>
+                {!isAddingSubscriber && availableUsers.length > 0 && (
+                  <button
+                    onClick={() => setIsAddingSubscriber(true)}
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                  >
+                    + Aggiungi
+                  </button>
+                )}
+              </div>
+              
+              {isAddingSubscriber && (
+                <div className="flex gap-2 mb-3">
+                  <select
+                    value={selectedNewSubscriber}
+                    onChange={(e) => setSelectedNewSubscriber(e.target.value as Id<'users'> | '')}
+                    className="flex-1 px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  >
+                    <option value="">Seleziona utente...</option>
+                    {availableUsers.map((user) => (
+                      <option key={user._id} value={user._id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleAddSubscriber}
+                    disabled={!selectedNewSubscriber}
+                    className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    Aggiungi
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsAddingSubscriber(false)
+                      setSelectedNewSubscriber('')
+                    }}
+                    className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                  >
+                    Annulla
+                  </button>
+                </div>
+              )}
+              
+              {subscribers.length > 0 ? (
+                <div className="space-y-2">
+                  {subscribers.map((subscriber) => (
+                    <div key={subscriber._id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {subscriber.picture && (
+                          <img 
+                            src={subscriber.picture} 
+                            alt={subscriber.name} 
+                            className="w-6 h-6 rounded-full"
+                          />
+                        )}
+                        <span className="text-gray-900 dark:text-gray-100">{subscriber.name}</span>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveSubscriber(subscriber._id)}
+                        className="text-red-500 hover:text-red-700 dark:hover:text-red-400 text-sm"
+                        title="Rimuovi iscritto"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 dark:text-gray-400 text-sm">Nessun iscritto</p>
+              )}
+            </div>
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">

@@ -130,7 +130,7 @@ export const sendMentionNotification = internalAction({
     try {
       console.log(`[sendMentionNotification] Tentativo invio email a ${mentionedUser.email}`)
       await resend.sendEmail(ctx, {
-        from: "Innovation Sax <noreply@resend.dev>", // TODO: Configurare dominio verificato in produzione
+        from: "w.zisa@primogroup.it",
         to: mentionedUser.email,
         subject: `${author.name} ti ha menzionato in una nota su ${keyDev.title}`,
         html,
@@ -147,6 +147,237 @@ export const sendMentionNotification = internalAction({
       throw error;
     }
 
+    return null;
+  },
+});
+
+/**
+ * Genera il template HTML per l'email reminder settimanale agli owner
+ */
+function generateWeeklyReminderTemplate(
+  ownerName: string,
+  coreAppName: string,
+  coreAppSlug: string,
+  baseUrl: string
+): string {
+  const createUpdateUrl = `${baseUrl}/core-apps/${coreAppSlug}/updates/new`;
+  
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reminder Aggiornamento Settimanale</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h1 style="color: #1f2937; margin-top: 0; font-size: 24px;">Ciao ${ownerName},</h1>
+    
+    <p style="color: #4b5563; font-size: 16px; margin-bottom: 20px;">
+      È venerdì! È tempo di creare l'aggiornamento settimanale per <strong>${coreAppName}</strong>.
+    </p>
+    
+    <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+      <p style="margin: 0; color: #92400e;">
+        📹 Ricorda di registrare un video Loom per mostrare i progressi della settimana ai tuoi colleghi.
+      </p>
+    </div>
+    
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${createUpdateUrl}" 
+         style="display: inline-block; background-color: #3b82f6; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+        Crea Aggiornamento
+      </a>
+    </div>
+    
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+    
+    <p style="color: #6b7280; font-size: 14px; margin: 0;">
+      Ricevi questa email perché sei l'owner di ${coreAppName}.
+    </p>
+  </div>
+  
+  <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
+    <p>Questa è una notifica automatica. Non rispondere a questa email.</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * Genera il template HTML per l'email di notifica nuovo update ai subscribers
+ */
+function generateNewUpdateNotificationTemplate(
+  subscriberName: string,
+  coreAppName: string,
+  updateTitle: string,
+  coreAppUrl: string,
+  loomUrl: string | undefined
+): string {
+  const loomButton = loomUrl ? `
+    <div style="text-align: center; margin: 20px 0;">
+      <a href="${loomUrl}" 
+         style="display: inline-block; background-color: #8b5cf6; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+        🎬 Guarda il Video Loom
+      </a>
+    </div>
+  ` : '';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuovo Aggiornamento</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h1 style="color: #1f2937; margin-top: 0; font-size: 24px;">Ciao ${subscriberName},</h1>
+    
+    <p style="color: #4b5563; font-size: 16px; margin-bottom: 20px;">
+      È stato pubblicato un nuovo aggiornamento per <strong>${coreAppName}</strong>:
+    </p>
+    
+    <div style="background-color: #f3f4f6; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+      <p style="margin: 0; color: #374151; font-weight: 600;">
+        ${updateTitle}
+      </p>
+    </div>
+    
+    ${loomButton}
+    
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${coreAppUrl}" 
+         style="display: inline-block; background-color: #3b82f6; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+        Vai alla Core App
+      </a>
+    </div>
+    
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+    
+    <p style="color: #6b7280; font-size: 14px; margin: 0;">
+      Ricevi questa email perché sei iscritto agli aggiornamenti di ${coreAppName}.
+    </p>
+  </div>
+  
+  <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
+    <p>Questa è una notifica automatica. Non rispondere a questa email.</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * Invia reminder settimanale agli owner di CoreApps con status InProgress
+ * Chiamata dal cron job ogni venerdì alle 14:00 CET
+ */
+export const sendWeeklyReminder = internalAction({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    console.log("[sendWeeklyReminder] Inizio invio reminder settimanali");
+    
+    const baseUrl = process.env.APP_BASE_URL || "http://localhost:5173";
+    
+    // Recupera tutti gli owner di CoreApps InProgress
+    const ownersData = await ctx.runQuery(internal.emailsQueries.getOwnersOfInProgressApps, {});
+    
+    console.log(`[sendWeeklyReminder] Trovati ${ownersData.length} owner da notificare`);
+    
+    for (const { owner, coreApp } of ownersData) {
+      if (!owner.email) {
+        console.log(`[sendWeeklyReminder] Owner ${owner.name} non ha email, skip`);
+        continue;
+      }
+      
+      const html = generateWeeklyReminderTemplate(
+        owner.name,
+        coreApp.name,
+        coreApp.slug,
+        baseUrl
+      );
+      
+      try {
+        await resend.sendEmail(ctx, {
+          from: "w.zisa@primogroup.it",
+          to: owner.email,
+          subject: `📹 Reminder: Aggiornamento settimanale per ${coreApp.name}`,
+          html,
+        });
+        console.log(`[sendWeeklyReminder] ✅ Reminder inviato a ${owner.email} per ${coreApp.name}`);
+      } catch (error) {
+        console.error(`[sendWeeklyReminder] ❌ Errore invio a ${owner.email}:`, error);
+      }
+    }
+    
+    console.log("[sendWeeklyReminder] Completato");
+    return null;
+  },
+});
+
+/**
+ * Invia notifica ai subscribers quando viene creato un nuovo update
+ */
+export const sendNewUpdateNotification = internalAction({
+  args: {
+    updateId: v.id("coreAppUpdates"),
+    coreAppId: v.id("coreApps"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    console.log(`[sendNewUpdateNotification] Inizio invio notifiche per update ${args.updateId}`);
+    
+    const baseUrl = process.env.APP_BASE_URL || "http://localhost:5173";
+    
+    // Recupera i dati della CoreApp con subscribers
+    const data = await ctx.runQuery(internal.emailsQueries.getCoreAppWithSubscribers, {
+      coreAppId: args.coreAppId,
+      updateId: args.updateId,
+    });
+    
+    if (!data) {
+      console.error(`[sendNewUpdateNotification] Dati non trovati per CoreApp ${args.coreAppId}`);
+      return null;
+    }
+    
+    const { coreApp, update, subscribers } = data;
+    
+    console.log(`[sendNewUpdateNotification] Trovati ${subscribers.length} subscribers per ${coreApp.name}`);
+    
+    const coreAppUrl = `${baseUrl}/core-apps/${coreApp.slug}`;
+    
+    for (const subscriber of subscribers) {
+      if (!subscriber.email) {
+        console.log(`[sendNewUpdateNotification] Subscriber ${subscriber.name} non ha email, skip`);
+        continue;
+      }
+      
+      const html = generateNewUpdateNotificationTemplate(
+        subscriber.name,
+        coreApp.name,
+        update.title || `Aggiornamento ${update.weekRef}`,
+        coreAppUrl,
+        update.loomUrl
+      );
+      
+      try {
+        await resend.sendEmail(ctx, {
+          from: "w.zisa@primogroup.it",
+          to: subscriber.email,
+          subject: `🆕 Nuovo aggiornamento per ${coreApp.name}`,
+          html,
+        });
+        console.log(`[sendNewUpdateNotification] ✅ Notifica inviata a ${subscriber.email}`);
+      } catch (error) {
+        console.error(`[sendNewUpdateNotification] ❌ Errore invio a ${subscriber.email}:`, error);
+      }
+    }
+    
+    console.log("[sendNewUpdateNotification] Completato");
     return null;
   },
 });
