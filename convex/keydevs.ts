@@ -45,7 +45,8 @@ const keydevReturnValidator = v.object({
   techValidatedAt: v.optional(v.number()),
   businessValidatedAt: v.optional(v.number()),
   releasedAt: v.optional(v.number()),
-  notesCount: v.optional(v.number())
+  notesCount: v.optional(v.number()),
+  deletedAt: v.optional(v.number())
 })
 
 /**
@@ -61,12 +62,14 @@ export const listByMonth = query({
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
     
     // Ottieni tutte le bozze senza mese associato (che compaiono in tutti i mesi)
     const allDrafts = await ctx.db
       .query('keydevs')
       .withIndex('by_status', (q) => q.eq('status', 'Draft'))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
     
     const draftsToInclude = allDrafts.filter((kd) => !kd.monthRef)
     
@@ -93,6 +96,7 @@ export const listWithoutMonthFilter = query({
         .query('keydevs')
         .withIndex('by_status', (q) => q.eq('status', status))
         .collect()
+        .then(kds => kds.filter(kd => !kd.deletedAt))
       results.push(...keydevs)
     }
     
@@ -108,7 +112,7 @@ export const listAll = query({
   args: {},
   returns: v.array(keydevReturnValidator),
   handler: async (ctx) => {
-    return await ctx.db.query('keydevs').collect()
+    return await ctx.db.query('keydevs').collect().then(kds => kds.filter(kd => !kd.deletedAt))
   }
 })
 
@@ -127,6 +131,7 @@ export const getStatusCountsWithoutMonth = query({
         .query('keydevs')
         .withIndex('by_status', (q) => q.eq('status', status))
         .collect()
+        .then(kds => kds.filter(kd => !kd.deletedAt))
       counts[status] = keydevs.length
     }
     
@@ -141,7 +146,11 @@ export const getById = query({
   args: { id: v.id('keydevs') },
   returns: v.union(keydevReturnValidator, v.null()),
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id)
+    const keydev = await ctx.db.get(args.id)
+    if (!keydev || keydev.deletedAt) {
+      return null
+    }
+    return keydev
   }
 })
 
@@ -152,10 +161,14 @@ export const getByReadableId = query({
   args: { readableId: v.string() },
   returns: v.union(keydevReturnValidator, v.null()),
   handler: async (ctx, args) => {
-    return await ctx.db
+    const keydev = await ctx.db
       .query('keydevs')
       .withIndex('by_readableId', (q) => q.eq('readableId', args.readableId))
       .first()
+    if (!keydev || keydev.deletedAt) {
+      return null
+    }
+    return keydev
   }
 })
 
@@ -167,7 +180,7 @@ export const listDelayed = query({
   args: { currentMonth: v.string() },
   returns: v.array(keydevReturnValidator),
   handler: async (ctx, args) => {
-    const allKeyDevs = await ctx.db.query('keydevs').collect()
+    const allKeyDevs = await ctx.db.query('keydevs').collect().then(kds => kds.filter(kd => !kd.deletedAt))
     return allKeyDevs.filter(
       (kd) => kd.monthRef && kd.monthRef < args.currentMonth && kd.status !== 'Done'
     )
@@ -185,6 +198,7 @@ export const listRejected = query({
       .query('keydevs')
       .withIndex('by_status_and_month', (q) => q.eq('status', 'Rejected'))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
   }
 })
 
@@ -201,12 +215,14 @@ export const getStatusCounts = query({
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
     
     // Ottieni tutte le bozze senza mese associato
     const allDrafts = await ctx.db
       .query('keydevs')
       .withIndex('by_status', (q) => q.eq('status', 'Draft'))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
     const draftsWithoutMonth = allDrafts.filter((kd) => !kd.monthRef)
     
     // Combina i risultati
@@ -254,6 +270,7 @@ export const getPhaseCountsByMonths = query({
       .query('keydevs')
       .withIndex('by_status', (q) => q.eq('status', 'Draft'))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
     let draftsWithoutMonth = allDrafts.filter((kd) => !kd.monthRef)
     
     // Filtra per dipartimento se specificato
@@ -268,6 +285,7 @@ export const getPhaseCountsByMonths = query({
         .query('keydevs')
         .withIndex('by_month', (q) => q.eq('monthRef', monthRef))
         .collect()
+        .then(kds => kds.filter(kd => !kd.deletedAt))
       
       // Filtra per dipartimento se specificato
       let filteredKeydevsByMonth = keydevsByMonth
@@ -353,6 +371,7 @@ export const getBudgetUtilizationByMonths = query({
         .query('keydevs')
         .withIndex('by_month', (q) => q.eq('monthRef', monthRef))
         .collect()
+        .then(kds => kds.filter(kd => !kd.deletedAt))
       
       // Filtra per dipartimento/team se specificati
       let filteredKeydevsByMonth = keydevsByMonth
@@ -390,7 +409,7 @@ export const getTotalPhaseCounts = query({
     Checked: v.number()
   }),
   handler: async (ctx, args) => {
-    let allKeydevs = await ctx.db.query('keydevs').collect()
+    let allKeydevs = await ctx.db.query('keydevs').collect().then(kds => kds.filter(kd => !kd.deletedAt))
     
     // Filtra per dipartimento se specificato
     if (args.deptId) {
@@ -1044,6 +1063,33 @@ export const updatePriority = mutation({
 
     await ctx.db.patch(args.id, {
       priority: args.priority
+    })
+    return null
+  }
+})
+
+/**
+ * Soft-delete un KeyDev impostando deletedAt.
+ * Il keydev non apparirà più nelle liste e nei conteggi.
+ */
+export const softDelete = mutation({
+  args: {
+    id: v.id('keydevs')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const keydev = await ctx.db.get(args.id)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+
+    await ctx.db.patch(args.id, {
+      deletedAt: Date.now()
     })
     return null
   }

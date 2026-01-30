@@ -36,12 +36,14 @@ export const getOKRScore = query({
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
 
     // Ottieni tutte le bozze senza mese associato (che compaiono in tutti i mesi)
     const allDrafts = await ctx.db
       .query('keydevs')
       .withIndex('by_status', (q) => q.eq('status', 'Draft'))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
     const draftsWithoutMonth = allDrafts.filter((kd) => !kd.monthRef)
 
     // Combina i risultati
@@ -88,7 +90,7 @@ export const getDelayedKeyDevs = query({
     })
   ),
   handler: async (ctx, args) => {
-    const allKeyDevs = await ctx.db.query('keydevs').collect()
+    const allKeyDevs = await ctx.db.query('keydevs').collect().then(kds => kds.filter(kd => !kd.deletedAt))
 
     return allKeyDevs
       .filter((kd) => kd.monthRef && kd.monthRef < args.currentMonth && kd.status !== 'Done')
@@ -131,12 +133,14 @@ export const getMonthlyStats = query({
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
 
     // Ottieni tutte le bozze senza mese associato (che compaiono in tutti i mesi)
     const allDrafts = await ctx.db
       .query('keydevs')
       .withIndex('by_status', (q) => q.eq('status', 'Draft'))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
     const draftsWithoutMonth = allDrafts.filter((kd) => !kd.monthRef)
 
     // Combina i risultati
@@ -190,6 +194,7 @@ export const getKeyDevsByStatus = query({
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
 
     // Filtra solo quelli con status >= FrontValidated
     const validStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked'] as const
@@ -240,6 +245,7 @@ export const getKeyDevsByTeamAndStatus = query({
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt))
 
     // Filtra solo quelli con status >= FrontValidated
     const validStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked'] as const
@@ -336,7 +342,7 @@ export const getPastKeyDevs = query({
     })
   ),
   handler: async (ctx, args) => {
-    const allKeyDevs = await ctx.db.query('keydevs').collect()
+    const allKeyDevs = await ctx.db.query('keydevs').collect().then(kds => kds.filter(kd => !kd.deletedAt))
 
     return allKeyDevs
       .filter((kd) => kd.monthRef && kd.monthRef < args.currentMonth && kd.status !== 'Checked')

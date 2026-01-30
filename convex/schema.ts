@@ -160,7 +160,9 @@ export default defineSchema({
     businessValidatedAt: v.optional(v.number()), // Quando BusinessValidator valida (Approved → FrontValidated)
     releasedAt: v.optional(v.number()),
     // Notes count (denormalized)
-    notesCount: v.optional(v.number()) // Contatore delle note associate (default: 0)
+    notesCount: v.optional(v.number()), // Contatore delle note associate (default: 0)
+    // Soft delete
+    deletedAt: v.optional(v.number()) // Timestamp di eliminazione (soft delete)
   })
     .index('by_month', ['monthRef'])
     .index('by_dept_and_month', ['deptId', 'monthRef'])
