@@ -13,6 +13,15 @@ export const resend: Resend = new Resend(components.resend, {
 });
 
 /**
+ * Ottiene l'indirizzo email del mittente configurato
+ * Usa RESEND_FROM_EMAIL se disponibile, altrimenti usa l'indirizzo di produzione di default
+ */
+function getFromEmail(): string {
+  const emailAddress = process.env.RESEND_FROM_EMAIL || "noreply@primogroup.it";
+  return `Innovation Sax <${emailAddress}>`;
+}
+
+/**
  * Genera il template HTML per l'email di notifica menzione
  */
 function generateMentionEmailTemplate(
@@ -130,7 +139,7 @@ export const sendMentionNotification = internalAction({
     try {
       console.log(`[sendMentionNotification] Tentativo invio email a ${mentionedUser.email}`)
       await resend.sendEmail(ctx, {
-        from: "w.zisa@primogroup.it",
+        from: getFromEmail(),
         to: mentionedUser.email,
         subject: `${author.name} ti ha menzionato in una nota su ${keyDev.title}`,
         html,
@@ -303,7 +312,7 @@ export const sendWeeklyReminder = internalAction({
       
       try {
         await resend.sendEmail(ctx, {
-          from: "w.zisa@primogroup.it",
+          from: getFromEmail(),
           to: owner.email,
           subject: `📹 Reminder: Aggiornamento settimanale per ${coreApp.name}`,
           html,
@@ -366,7 +375,7 @@ export const sendNewUpdateNotification = internalAction({
       
       try {
         await resend.sendEmail(ctx, {
-          from: "w.zisa@primogroup.it",
+          from: getFromEmail(),
           to: subscriber.email,
           subject: `🆕 Nuovo aggiornamento per ${coreApp.name}`,
           html,
