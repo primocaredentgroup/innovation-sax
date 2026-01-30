@@ -338,7 +338,8 @@ export const getPastKeyDevs = query({
       monthRef: v.optional(v.string()),
       status: keydevStatusValidator,
       deptId: v.id('departments'),
-      teamId: v.id('teams')
+      teamId: v.id('teams'),
+      notesCount: v.optional(v.number())
     })
   ),
   handler: async (ctx, args) => {
@@ -353,7 +354,8 @@ export const getPastKeyDevs = query({
         monthRef: kd.monthRef,
         status: kd.status,
         deptId: kd.deptId,
-        teamId: kd.teamId
+        teamId: kd.teamId,
+        notesCount: kd.notesCount
       }))
   }
 })

@@ -861,13 +861,31 @@ export default function DashboardPage() {
                       Mese: {kd.monthRef} | Stato: {formatStatus(kd.status)}
                     </div>
                   </div>
-                  <Link
-                    to="/keydevs/$id"
-                    params={{ id: kd._id }}
-                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs sm:text-sm whitespace-nowrap shrink-0 self-start sm:self-auto"
-                  >
-                    Dettagli →
-                  </Link>
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-start sm:self-auto">
+                    <Link
+                      to="/keydevs/$id/notes"
+                      params={{ id: kd.readableId }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
+                      title="Vedi note"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      <span>Note</span>
+                      {(kd.notesCount || 0) > 0 && (
+                        <span className="px-1.5 py-0.5 bg-blue-200 dark:bg-blue-800 rounded-full text-xs font-semibold">
+                          {kd.notesCount || 0}
+                        </span>
+                      )}
+                    </Link>
+                    <Link
+                      to="/keydevs/$id"
+                      params={{ id: kd._id }}
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs sm:text-sm whitespace-nowrap"
+                    >
+                      Dettagli →
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>

@@ -1113,6 +1113,101 @@ export const updatePriority = mutation({
 })
 
 /**
+ * Aggiorna il mese di riferimento di un KeyDev senza cambiare lo stato.
+ * Permette di "prenotare" un mese per ragionare sul budget.
+ * Solo gli stati Approved, FrontValidated, InProgress possono avere un mese assegnato.
+ * Restituisce anche info sul budget per quel mese.
+ */
+export const updateMonth = mutation({
+  args: {
+    id: v.id('keydevs'),
+    monthRef: v.union(v.string(), v.null()) // null per rimuovere il mese
+  },
+  returns: v.object({
+    success: v.boolean(),
+    budgetInfo: v.optional(v.object({
+      maxAlloc: v.number(),
+      currentlyUsed: v.number(),
+      available: v.number()
+    }))
+  }),
+  handler: async (ctx, args) => {
+    const keydev = await ctx.db.get(args.id)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
+    }
+
+    // Solo certi stati possono avere un mese assegnato
+    const allowedStatuses = ['Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
+    if (!allowedStatuses.includes(keydev.status)) {
+      throw new Error(`Non è possibile assegnare un mese a un KeyDev in stato "${keydev.status}"`)
+    }
+
+    // Se si sta assegnando un mese (non rimuovendo)
+    if (args.monthRef) {
+      // Verifica info budget per quel mese
+      const budgetAlloc = await ctx.db
+        .query('budgetKeyDev')
+        .withIndex('by_month_dept_team', (q) =>
+          q
+            .eq('monthRef', args.monthRef!)
+            .eq('deptId', keydev.deptId)
+            .eq('teamId', keydev.teamId)
+        )
+        .first()
+
+      // Conta i keydevs già assegnati a quel mese per questo dept/team
+      // (stati che occupano slot: FrontValidated, InProgress, Done, Checked)
+      const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked']
+      const existingKeydevs = await ctx.db
+        .query('keydevs')
+        .withIndex('by_dept_and_month', (q) =>
+          q.eq('deptId', keydev.deptId).eq('monthRef', args.monthRef!)
+        )
+        .collect()
+
+      const occupiedCount = existingKeydevs.filter(
+        (kd) =>
+          kd._id !== keydev._id && // Escludi il keydev corrente
+          kd.teamId === keydev.teamId &&
+          occupiedStatuses.includes(kd.status) &&
+          !kd.deletedAt
+      ).reduce((sum, kd) => sum + (kd.weight ?? 1), 0)
+
+      // Aggiorna il mese
+      await ctx.db.patch(args.id, {
+        monthRef: args.monthRef
+      })
+
+      return {
+        success: true,
+        budgetInfo: budgetAlloc ? {
+          maxAlloc: budgetAlloc.maxAlloc,
+          currentlyUsed: occupiedCount,
+          available: Math.max(0, budgetAlloc.maxAlloc - occupiedCount)
+        } : undefined
+      }
+    } else {
+      // Rimuovi il mese (imposta a undefined)
+      // Usiamo replace per rimuovere il campo
+      const existing = await ctx.db.get(args.id)
+      if (!existing) {
+        throw new Error('KeyDev non trovato')
+      }
+      
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { _id, _creationTime, monthRef: _monthRef, ...docWithoutSystemFields } = existing
+      await ctx.db.replace(args.id, docWithoutSystemFields)
+      
+      return { success: true }
+    }
+  }
+})
+
+/**
  * Soft-delete un KeyDev impostando deletedAt.
  * Il keydev non apparirà più nelle liste e nei conteggi.
  * Solo gli Admin, il requester o l'owner possono eliminare un KeyDev.

@@ -3,22 +3,294 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useMemo, useState, useRef, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
-import { ChevronDown, X, MessageSquare } from 'lucide-react'
+import { ChevronDown, X, MessageSquare, Calendar } from 'lucide-react'
 import PrioritySelector from '../components/PrioritySelector'
 
-// Tipo per i ruoli
-type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
+// Componente Avatar con Tooltip
+function OwnerAvatar({ 
+  owner, 
+  size = 'sm', 
+  onClick 
+}: { 
+  owner: { _id: string; name: string } | null | undefined
+  size?: 'sm' | 'md'
+  onClick?: () => void
+}) {
+  const [showTooltip, setShowTooltip] = useState(false)
+  
+  if (!owner) {
+    return (
+      <div 
+        className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 ${onClick ? 'cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-500' : ''}`}
+        title="Nessun owner"
+        onClick={onClick}
+      >
+        ?
+      </div>
+    )
+  }
+  
+  // Genera iniziali dal nome
+  const initials = owner.name
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+  
+  // Genera un colore basato sul nome
+  const colors = [
+    'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500', 
+    'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-red-500'
+  ]
+  const colorIndex = owner.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
+  const bgColor = colors[colorIndex]
+  
+  return (
+    <div className="relative">
+      <div 
+        className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full ${bgColor} flex items-center justify-center text-white font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        onClick={onClick}
+        title={onClick ? 'Clicca per cambiare owner' : owner.name}
+      >
+        {initials}
+      </div>
+      {showTooltip && !onClick && (
+        <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 dark:bg-gray-700 rounded shadow-lg whitespace-nowrap">
+          {owner.name}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Modal per cambio owner
+interface OwnerChangeModalProps {
+  isOpen: boolean
+  keyDevTitle: string
+  keyDevReadableId: string
+  currentOwner: { _id: string; name: string } | null | undefined
+  users: Array<{ _id: string; name: string }> | undefined
+  onConfirm: (ownerId: Id<'users'>) => Promise<void>
+  onCancel: () => void
+  isLoading: boolean
+  error: string
+}
+
+function OwnerChangeModal({ 
+  isOpen, 
+  keyDevTitle, 
+  keyDevReadableId,
+  currentOwner,
+  users,
+  onConfirm, 
+  onCancel,
+  isLoading,
+  error
+}: OwnerChangeModalProps) {
+  // Inizializza lo stato con il currentOwner
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string>(() => currentOwner?._id || '')
+  
+  if (!isOpen) return null
+  
+  const handleConfirm = async () => {
+    if (!selectedOwnerId) {
+      return
+    }
+    await onConfirm(selectedOwnerId as Id<'users'>)
+  }
+  
+  return (
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50" onClick={onCancel}>
+      <div 
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Cambia Owner
+        </h3>
+        
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p className="text-sm text-blue-800 dark:text-blue-300">
+            <span className="font-medium">{keyDevReadableId}</span> - {keyDevTitle}
+          </p>
+          {currentOwner && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              Owner attuale: <span className="font-medium">{currentOwner.name}</span>
+            </p>
+          )}
+        </div>
+        
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Seleziona nuovo owner
+          </label>
+          <select
+            value={selectedOwnerId}
+            onChange={(e) => setSelectedOwnerId(e.target.value)}
+            disabled={isLoading}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 disabled:opacity-50"
+          >
+            {!currentOwner && <option value="">Seleziona un owner...</option>}
+            {users?.map((user) => (
+              <option key={user._id} value={user._id}>
+                {user.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+          </div>
+        )}
+        
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isLoading}
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isLoading || !selectedOwnerId}
+            className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Salvataggio...' : 'Conferma'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Modal per conferma prenotazione mese (senza cambio stato)
+interface MonthBookingModalProps {
+  isOpen: boolean
+  keyDevTitle: string
+  keyDevReadableId: string
+  keyDevStatus: string
+  currentMonth: string
+  selectedMonth: string
+  onConfirm: () => Promise<void>
+  onCancel: () => void
+  budgetInfo: { maxAlloc: number; currentlyUsed: number; available: number } | null
+  isLoading: boolean
+  error: string
+}
+
+function MonthBookingModal({ 
+  isOpen, 
+  keyDevTitle, 
+  keyDevReadableId,
+  keyDevStatus,
+  currentMonth,
+  selectedMonth,
+  onConfirm, 
+  onCancel,
+  budgetInfo,
+  isLoading,
+  error
+}: MonthBookingModalProps) {
+  if (!isOpen) return null
+  
+  const formatMonth = (monthRef: string) => {
+    if (!monthRef) return '-'
+    const [year, month] = monthRef.split('-')
+    const date = new Date(parseInt(year), parseInt(month) - 1, 1)
+    return date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+  }
+  
+  const statusLabels: Record<string, string> = {
+    Draft: 'Bozza',
+    MockupDone: 'Mockup Terminato',
+    Approved: 'Approvato',
+    Rejected: 'Rifiutato',
+    FrontValidated: 'Front Validato',
+    InProgress: 'In Corso',
+    Done: 'Completato',
+    Checked: 'Controllato'
+  }
+  
+  return (
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50" onClick={onCancel}>
+      <div 
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Prenota Mese: {formatMonth(selectedMonth)}
+        </h3>
+        
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p className="text-sm text-blue-800 dark:text-blue-300">
+            <span className="font-medium">{keyDevReadableId}</span> - {keyDevTitle}
+          </p>
+          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+            Stato attuale: <span className="font-medium">{statusLabels[keyDevStatus] || keyDevStatus}</span>
+          </p>
+          {currentMonth && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              Da {formatMonth(currentMonth)} → {formatMonth(selectedMonth)}
+            </p>
+          )}
+        </div>
+        
+        {budgetInfo && (
+          <div className={`mb-4 p-3 rounded-lg ${budgetInfo.available > 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-yellow-50 dark:bg-yellow-900/20'}`}>
+            <p className={`text-sm ${budgetInfo.available > 0 ? 'text-green-800 dark:text-green-300' : 'text-yellow-800 dark:text-yellow-300'}`}>
+              <strong>Budget:</strong> {budgetInfo.currentlyUsed} / {budgetInfo.maxAlloc} slot occupati
+            </p>
+            <p className={`text-xs mt-1 ${budgetInfo.available > 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+              {budgetInfo.available > 0 
+                ? `${budgetInfo.available} slot ancora disponibili` 
+                : '⚠️ Tutti gli slot sono occupati - la prenotazione potrebbe essere in competizione'}
+            </p>
+          </div>
+        )}
+        
+        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            <strong>Nota:</strong> Questa è solo una prenotazione del mese. Lo stato del KeyDev 
+            non cambierà automaticamente. Per passare a "Front Validato" dovrai farlo dalla pagina di dettaglio.
+          </p>
+        </div>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+          </div>
+        )}
+        
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isLoading}
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Prenotazione...' : 'Prenota Mese'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Tipo per lo status
 type KeyDevStatus = 'Draft' | 'MockupDone' | 'Approved' | 'Rejected' | 'FrontValidated' | 'InProgress' | 'Done' | 'Checked'
-
-// Helper per verificare ruoli
-const hasRole = (roles: Role[] | undefined, role: Role): boolean => {
-  if (!roles) return false
-  return roles.includes(role)
-}
-
-const isAdmin = (roles: Role[] | undefined): boolean => hasRole(roles, 'Admin')
 
 const statusColors: Record<string, string> = {
   Draft: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
@@ -62,6 +334,48 @@ export default function KeyDevsListPage() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [monthDropdownOpen, setMonthDropdownOpen] = useState(false)
   const monthDropdownRef = useRef<HTMLDivElement>(null)
+  
+  // Stato per il modal di prenotazione mese
+  const [monthBookingModal, setMonthBookingModal] = useState<{
+    isOpen: boolean
+    keyDevId: Id<'keydevs'> | null
+    keyDevTitle: string
+    keyDevReadableId: string
+    keyDevStatus: string
+    currentMonth: string
+    selectedMonth: string
+    deptId: Id<'departments'> | null
+    teamId: Id<'teams'> | null
+  }>({
+    isOpen: false,
+    keyDevId: null,
+    keyDevTitle: '',
+    keyDevReadableId: '',
+    keyDevStatus: '',
+    currentMonth: '',
+    selectedMonth: '',
+    deptId: null,
+    teamId: null
+  })
+  const [monthBookingLoading, setMonthBookingLoading] = useState(false)
+  const [monthBookingError, setMonthBookingError] = useState('')
+  
+  // Stato per il modal di cambio owner
+  const [ownerChangeModal, setOwnerChangeModal] = useState<{
+    isOpen: boolean
+    keyDevId: Id<'keydevs'> | null
+    keyDevTitle: string
+    keyDevReadableId: string
+    currentOwnerId: Id<'users'> | null | undefined
+  }>({
+    isOpen: false,
+    keyDevId: null,
+    keyDevTitle: '',
+    keyDevReadableId: '',
+    currentOwnerId: null
+  })
+  const [ownerChangeLoading, setOwnerChangeLoading] = useState(false)
+  const [ownerChangeError, setOwnerChangeError] = useState('')
 
   const currentMonth = useMemo(() => {
     const now = new Date()
@@ -84,15 +398,22 @@ export default function KeyDevsListPage() {
   const departments = useQuery(api.departments.list)
   const teams = useQuery(api.teams.list)
   const users = useQuery(api.users.listUsers)
-  const currentUser = useQuery(api.users.getCurrentUser)
-  
-  const assignOwner = useMutation(api.keydevs.assignOwner)
   const updateStatus = useMutation(api.keydevs.updateStatus)
+  const updateMonth = useMutation(api.keydevs.updateMonth)
+  const assignOwner = useMutation(api.keydevs.assignOwner)
   
-  // Ruoli e permessi utente corrente
-  const userRoles = currentUser?.roles as Role[] | undefined
-  const userIsAdmin = isAdmin(userRoles)
-  const userIsTechValidator = hasRole(userRoles, 'TechValidator')
+  // Query per il budget del modal di prenotazione (quando è aperto)
+  const budgetForBookingModal = useQuery(
+    api.budget.getByMonthDeptTeam,
+    monthBookingModal.isOpen && monthBookingModal.deptId && monthBookingModal.teamId && monthBookingModal.selectedMonth
+      ? { 
+          monthRef: monthBookingModal.selectedMonth, 
+          deptId: monthBookingModal.deptId, 
+          teamId: monthBookingModal.teamId 
+        }
+      : 'skip'
+  )
+  
   
   // Query per budget e mese (solo se un mese specifico è selezionato)
   const budgetAllocations = useQuery(
@@ -321,6 +642,168 @@ export default function KeyDevsListPage() {
     
     updateSearch({ status: newStatuses.length > 0 ? newStatuses : undefined })
   }
+  
+  // Genera opzioni mese per la colonna mese (dropdown inline)
+  const inlineMonthOptions = useMemo(() => {
+    const options = []
+    const now = new Date()
+    // Include 4 mesi passati, mese corrente e 6 mesi futuri
+    for (let i = -4; i <= 6; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
+      const ref = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      const label = date.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' })
+      options.push({ value: ref, label })
+    }
+    return options
+  }, [])
+  
+  // Handler per aprire il modal di prenotazione mese
+  const handleOpenMonthBookingModal = (kd: {
+    _id: Id<'keydevs'>
+    title: string
+    readableId: string
+    status: string
+    monthRef?: string
+    deptId: Id<'departments'>
+    teamId: Id<'teams'>
+  }, newMonth: string) => {
+    setMonthBookingError('')
+    setMonthBookingModal({
+      isOpen: true,
+      keyDevId: kd._id,
+      keyDevTitle: kd.title,
+      keyDevReadableId: kd.readableId,
+      keyDevStatus: kd.status,
+      currentMonth: kd.monthRef || '',
+      selectedMonth: newMonth,
+      deptId: kd.deptId,
+      teamId: kd.teamId
+    })
+  }
+  
+  // Handler per confermare la prenotazione del mese (senza cambiare stato)
+  const handleConfirmMonthBooking = async () => {
+    if (!monthBookingModal.keyDevId) return
+    
+    setMonthBookingLoading(true)
+    setMonthBookingError('')
+    
+    try {
+      await updateMonth({
+        id: monthBookingModal.keyDevId,
+        monthRef: monthBookingModal.selectedMonth
+      })
+      
+      // Chiudi il modal dopo successo
+      handleCloseMonthBookingModal()
+    } catch (err) {
+      setMonthBookingError(err instanceof Error ? err.message : 'Errore durante la prenotazione')
+    } finally {
+      setMonthBookingLoading(false)
+    }
+  }
+  
+  // Handler per chiudere il modal
+  const handleCloseMonthBookingModal = () => {
+    setMonthBookingModal({
+      isOpen: false,
+      keyDevId: null,
+      keyDevTitle: '',
+      keyDevReadableId: '',
+      keyDevStatus: '',
+      currentMonth: '',
+      selectedMonth: '',
+      deptId: null,
+      teamId: null
+    })
+    setMonthBookingError('')
+  }
+  
+  // Handler per aprire il modal di cambio owner
+  const handleOpenOwnerChangeModal = (kd: {
+    _id: Id<'keydevs'>
+    title: string
+    readableId: string
+    ownerId?: Id<'users'>
+  }) => {
+    setOwnerChangeError('')
+    setOwnerChangeModal({
+      isOpen: true,
+      keyDevId: kd._id,
+      keyDevTitle: kd.title,
+      keyDevReadableId: kd.readableId,
+      currentOwnerId: kd.ownerId
+    })
+  }
+  
+  // Handler per confermare il cambio owner
+  const handleConfirmOwnerChange = async (ownerId: Id<'users'>) => {
+    if (!ownerChangeModal.keyDevId) return
+    
+    setOwnerChangeLoading(true)
+    setOwnerChangeError('')
+    
+    try {
+      await assignOwner({
+        id: ownerChangeModal.keyDevId,
+        ownerId: ownerId
+      })
+      
+      // Chiudi il modal dopo successo
+      handleCloseOwnerChangeModal()
+    } catch (err) {
+      setOwnerChangeError(err instanceof Error ? err.message : 'Errore durante il cambio owner')
+    } finally {
+      setOwnerChangeLoading(false)
+    }
+  }
+  
+  // Handler per chiudere il modal di cambio owner
+  const handleCloseOwnerChangeModal = () => {
+    setOwnerChangeModal({
+      isOpen: false,
+      keyDevId: null,
+      keyDevTitle: '',
+      keyDevReadableId: '',
+      currentOwnerId: null
+    })
+    setOwnerChangeError('')
+  }
+  
+  // Formatta il mese per la visualizzazione
+  const formatMonthShort = (monthRef: string | undefined) => {
+    if (!monthRef) return '-'
+    const [year, month] = monthRef.split('-')
+    const date = new Date(parseInt(year), parseInt(month) - 1, 1)
+    return date.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' })
+  }
+  
+  // Calcola le info del budget per il modal di prenotazione
+  const monthBookingBudgetInfo = useMemo(() => {
+    if (!monthBookingModal.isOpen || !budgetForBookingModal) return null
+    
+    const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked']
+    const selectedMonth = monthBookingModal.selectedMonth
+    const deptId = monthBookingModal.deptId
+    const teamId = monthBookingModal.teamId
+    
+    // Calcola slot occupati dai keydevs già caricati
+    const occupiedSlots = (keydevs || [])
+      .filter(kd => 
+        kd.monthRef === selectedMonth &&
+        kd.deptId === deptId &&
+        kd.teamId === teamId &&
+        occupiedStatuses.includes(kd.status) &&
+        kd._id !== monthBookingModal.keyDevId // Escludi il keydev corrente
+      )
+      .reduce((sum, kd) => sum + (kd.weight ?? 1), 0)
+    
+    return {
+      maxAlloc: budgetForBookingModal.maxAlloc,
+      currentlyUsed: occupiedSlots,
+      available: Math.max(0, budgetForBookingModal.maxAlloc - occupiedSlots)
+    }
+  }, [monthBookingModal, budgetForBookingModal, keydevs])
 
   const selectedTeam = search.team || null
 
@@ -865,30 +1348,45 @@ export default function KeyDevsListPage() {
                     <span className="font-medium">Team:</span>
                     <span>{teams?.find((t) => t._id === kd.teamId)?.name || 'N/A'}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                     <span className="font-medium">Owner:</span>
-                    <select
-                      value={kd.ownerId || ''}
-                      onChange={async (e) => {
-                        if (!e.target.value) return
-                        try {
-                          await assignOwner({ id: kd._id, ownerId: e.target.value as Id<'users'> })
-                        } catch (error) {
-                          alert(error instanceof Error ? error.message : 'Errore nell\'assegnazione dell\'owner')
-                        }
-                      }}
-                      disabled={!userIsAdmin && !userIsTechValidator}
-                      className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <option value="">Nessun owner</option>
-                      {users?.filter(u => hasRole(u.roles as Role[] | undefined, 'TechValidator') || isAdmin(u.roles as Role[] | undefined))
-                        .map((u) => (
-                          <option key={u._id} value={u._id}>
-                            {u.name}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <OwnerAvatar 
+                        owner={users?.find(u => u._id === kd.ownerId)} 
+                        size="sm"
+                        onClick={() => handleOpenOwnerChangeModal(kd)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400" onClick={(e) => e.stopPropagation()}>
+                    <span className="font-medium">Mese:</span>
+                    {['Approved', 'FrontValidated', 'InProgress'].includes(kd.status) ? (
+                      <select
+                        value={kd.monthRef || ''}
+                        onChange={(e) => {
+                          if (!e.target.value || e.target.value === kd.monthRef) return
+                          handleOpenMonthBookingModal(kd, e.target.value)
+                        }}
+                        className={`px-2 py-1 text-xs border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 cursor-pointer ${
+                          kd.monthRef 
+                            ? 'border-gray-300 dark:border-gray-600' 
+                            : 'border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                        }`}
+                        onClick={(e) => e.stopPropagation()}
+                        title="Seleziona o cambia mese"
+                      >
+                        <option value="">Seleziona...</option>
+                        {inlineMonthOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
                           </option>
                         ))}
-                    </select>
+                      </select>
+                    ) : (
+                      <span className={kd.monthRef ? '' : 'text-gray-400 dark:text-gray-500 italic'}>
+                        {kd.monthRef ? formatMonthShort(kd.monthRef) : 'Non assegnato'}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -924,10 +1422,11 @@ export default function KeyDevsListPage() {
               <tr className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Titolo</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Stato</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Mese</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Priorità</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Team</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 hidden lg:table-cell">Owner</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 hidden lg:table-cell">Owner</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Note</th>
               </tr>
             </thead>
@@ -965,6 +1464,41 @@ export default function KeyDevsListPage() {
                     </select>
                   </td>
                   <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                    {/* Colonna Mese: dropdown per stati che possono prenotare, visualizzazione per altri */}
+                    {['Approved', 'FrontValidated', 'InProgress'].includes(kd.status) ? (
+                      <select
+                        value={kd.monthRef || ''}
+                        onChange={(e) => {
+                          if (!e.target.value || e.target.value === kd.monthRef) return
+                          handleOpenMonthBookingModal(kd, e.target.value)
+                        }}
+                        className={`px-2 py-1 text-xs border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 cursor-pointer ${
+                          kd.monthRef 
+                            ? 'border-gray-300 dark:border-gray-600' 
+                            : 'border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                        }`}
+                        onClick={(e) => e.stopPropagation()}
+                        title="Seleziona o cambia mese"
+                      >
+                        <option value="">Seleziona...</option>
+                        {inlineMonthOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={`text-xs ${kd.monthRef ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500 italic'}`}>
+                        {kd.monthRef ? (
+                          <span className="flex items-center gap-1">
+                            <Calendar size={12} className="text-gray-400" />
+                            {formatMonthShort(kd.monthRef)}
+                          </span>
+                        ) : '-'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
                     <PrioritySelector 
                       keyDevId={kd._id} 
                       currentPriority={kd.priority}
@@ -977,29 +1511,13 @@ export default function KeyDevsListPage() {
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {teams?.find((t) => t._id === kd.teamId)?.name || 'N/A'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 hidden lg:table-cell" onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={kd.ownerId || ''}
-                      onChange={async (e) => {
-                        if (!e.target.value) return
-                        try {
-                          await assignOwner({ id: kd._id, ownerId: e.target.value as Id<'users'> })
-                        } catch (error) {
-                          alert(error instanceof Error ? error.message : 'Errore nell\'assegnazione dell\'owner')
-                        }
-                      }}
-                      disabled={!userIsAdmin && !userIsTechValidator}
-                      className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <option value="">Nessun owner</option>
-                      {users?.filter(u => hasRole(u.roles as Role[] | undefined, 'TechValidator') || isAdmin(u.roles as Role[] | undefined))
-                        .map((u) => (
-                          <option key={u._id} value={u._id}>
-                            {u.name}
-                          </option>
-                        ))}
-                    </select>
+                  <td className="px-4 py-3 text-sm hidden lg:table-cell" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-center">
+                      <OwnerAvatar 
+                        owner={users?.find(u => u._id === kd.ownerId)} 
+                        onClick={() => handleOpenOwnerChangeModal(kd)}
+                      />
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
                     <Link
@@ -1027,6 +1545,35 @@ export default function KeyDevsListPage() {
           </div>
         )}
       </div>
+      
+      {/* Modal per prenotazione mese */}
+      <MonthBookingModal
+        isOpen={monthBookingModal.isOpen}
+        keyDevTitle={monthBookingModal.keyDevTitle}
+        keyDevReadableId={monthBookingModal.keyDevReadableId}
+        keyDevStatus={monthBookingModal.keyDevStatus}
+        currentMonth={monthBookingModal.currentMonth}
+        selectedMonth={monthBookingModal.selectedMonth}
+        onConfirm={handleConfirmMonthBooking}
+        onCancel={handleCloseMonthBookingModal}
+        budgetInfo={monthBookingBudgetInfo}
+        isLoading={monthBookingLoading}
+        error={monthBookingError}
+      />
+      
+      {/* Modal per cambio owner */}
+      <OwnerChangeModal
+        key={ownerChangeModal.keyDevId || 'owner-modal'}
+        isOpen={ownerChangeModal.isOpen}
+        keyDevTitle={ownerChangeModal.keyDevTitle}
+        keyDevReadableId={ownerChangeModal.keyDevReadableId}
+        currentOwner={users?.find(u => u._id === ownerChangeModal.currentOwnerId)}
+        users={users}
+        onConfirm={handleConfirmOwnerChange}
+        onCancel={handleCloseOwnerChangeModal}
+        isLoading={ownerChangeLoading}
+        error={ownerChangeError}
+      />
     </div>
   )
 }
