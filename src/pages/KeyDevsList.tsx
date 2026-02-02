@@ -1360,7 +1360,7 @@ export default function KeyDevsListPage() {
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400" onClick={(e) => e.stopPropagation()}>
                     <span className="font-medium">Mese:</span>
-                    {['Approved', 'FrontValidated', 'InProgress'].includes(kd.status) ? (
+                    {['Draft', 'MockupDone', 'Approved'].includes(kd.status) ? (
                       <select
                         value={kd.monthRef || ''}
                         onChange={(e) => {
@@ -1465,7 +1465,7 @@ export default function KeyDevsListPage() {
                   </td>
                   <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
                     {/* Colonna Mese: dropdown per stati che possono prenotare, visualizzazione per altri */}
-                    {['Approved', 'FrontValidated', 'InProgress'].includes(kd.status) ? (
+                    {['Draft', 'MockupDone', 'Approved'].includes(kd.status) ? (
                       <select
                         value={kd.monthRef || ''}
                         onChange={(e) => {

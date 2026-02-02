@@ -1115,7 +1115,7 @@ export const updatePriority = mutation({
 /**
  * Aggiorna il mese di riferimento di un KeyDev senza cambiare lo stato.
  * Permette di "prenotare" un mese per ragionare sul budget.
- * Solo gli stati Approved, FrontValidated, InProgress possono avere un mese assegnato.
+ * Gli stati Draft, MockupDone, Approved, FrontValidated, InProgress possono avere un mese assegnato.
  * Restituisce anche info sul budget per quel mese.
  */
 export const updateMonth = mutation({
@@ -1140,8 +1140,9 @@ export const updateMonth = mutation({
       throw new Error('Non è possibile modificare un KeyDev eliminato')
     }
 
-    // Solo certi stati possono avere un mese assegnato
-    const allowedStatuses = ['Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
+    // Solo certi stati possono avere un mese assegnato (prima di FrontValidated)
+    // Da FrontValidated in poi il mese è bloccato perché matchato con uno slot del budget
+    const allowedStatuses = ['Draft', 'MockupDone', 'Approved']
     if (!allowedStatuses.includes(keydev.status)) {
       throw new Error(`Non è possibile assegnare un mese a un KeyDev in stato "${keydev.status}"`)
     }

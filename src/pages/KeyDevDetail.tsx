@@ -100,6 +100,7 @@ export default function KeyDevDetailPage() {
   const markAsDone = useMutation(api.keydevs.markAsDone)
   const linkMockupRepo = useMutation(api.keydevs.linkMockupRepo)
   const updateRepoUrl = useMutation(api.keydevs.updateRepoUrl)
+  const updateMonth = useMutation(api.keydevs.updateMonth)
   const createBlockingLabel = useMutation(api.blockingLabels.create)
   const removeBlockingLabel = useMutation(api.blockingLabels.remove)
   const penalties = useQuery(
@@ -243,6 +244,32 @@ export default function KeyDevDetailPage() {
     return options
   }, [])
 
+  // Genera opzioni mese per dropdown sidebar (4 mesi passati, mese corrente e 6 mesi futuri)
+  const inlineMonthOptions = useMemo(() => {
+    const options = []
+    const now = new Date()
+    for (let i = -4; i <= 6; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
+      const ref = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      const label = date.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' })
+      options.push({ value: ref, label })
+    }
+    return options
+  }, [])
+
+  // Handler per cambio mese nella sidebar
+  const handleMonthChange = async (newMonth: string) => {
+    if (!keydev || newMonth === keydev.monthRef) return
+    try {
+      await updateMonth({
+        id: keydev._id,
+        monthRef: newMonth || null
+      })
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore durante il cambio mese')
+    }
+  }
+
   // Use keydev data or defaults for form - key resets the form when keydev changes
   const formKey = keydev?._id || 'new'
 
@@ -275,6 +302,14 @@ export default function KeyDevDetailPage() {
   
   // Verifica se l'utente è il requester
   const isRequester = keydev?.requesterId === currentUser?._id
+
+  // Formatta il mese per la visualizzazione breve
+  const formatMonthShort = (monthRef: string | undefined) => {
+    if (!monthRef) return '-'
+    const [year, month] = monthRef.split('-')
+    const date = new Date(parseInt(year), parseInt(month) - 1, 1)
+    return date.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' })
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -1239,8 +1274,27 @@ export default function KeyDevDetailPage() {
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Mese</dt>
                   <dd className="font-medium text-gray-900 dark:text-gray-100">
-                    {keydev.monthRef || (
-                      <span className="text-gray-400 dark:text-gray-500 italic">Nessun mese (Bozza)</span>
+                    {['Draft', 'MockupDone', 'Approved'].includes(keydev.status) ? (
+                      <select
+                        value={keydev.monthRef || ''}
+                        onChange={(e) => handleMonthChange(e.target.value)}
+                        className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm ${
+                          keydev.monthRef 
+                            ? 'border-gray-300 dark:border-gray-600' 
+                            : 'border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                        }`}
+                      >
+                        <option value="">Seleziona...</option>
+                        {inlineMonthOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={keydev.monthRef ? '' : 'text-gray-400 dark:text-gray-500 italic'}>
+                        {keydev.monthRef ? formatMonthShort(keydev.monthRef) : 'Non assegnato'}
+                      </span>
                     )}
                   </dd>
                 </div>
