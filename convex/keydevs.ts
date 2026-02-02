@@ -51,7 +51,7 @@ const keydevReturnValidator = v.object({
 
 /**
  * Lista KeyDevs per mese (filtro obbligatorio).
- * Include anche le bozze senza mese associato che compaiono in tutti i mesi.
+ * Le bozze vengono filtrate per mese come tutti gli altri stati (tranne MockupDone, Rejected, Approved).
  */
 export const listByMonth = query({
   args: { monthRef: v.string() },
@@ -64,17 +64,8 @@ export const listByMonth = query({
       .collect()
       .then(kds => kds.filter(kd => !kd.deletedAt))
     
-    // Ottieni tutte le bozze senza mese associato (che compaiono in tutti i mesi)
-    const allDrafts = await ctx.db
-      .query('keydevs')
-      .withIndex('by_status', (q) => q.eq('status', 'Draft'))
-      .collect()
-      .then(kds => kds.filter(kd => !kd.deletedAt))
-    
-    const draftsToInclude = allDrafts.filter((kd) => !kd.monthRef)
-    
-    // Combina i risultati
-    return [...keydevsByMonth, ...draftsToInclude]
+    // Non includiamo più le bozze senza mese - ora i Draft rispondono ai filtri mensili
+    return keydevsByMonth
   }
 })
 
@@ -204,7 +195,7 @@ export const listRejected = query({
 
 /**
  * Ottiene i contatori degli status per un mese specifico.
- * Include anche le bozze senza mese associato.
+ * Le bozze vengono filtrate per mese come tutti gli altri stati (tranne MockupDone, Rejected, Approved).
  */
 export const getStatusCounts = query({
   args: { monthRef: v.string() },
@@ -217,20 +208,9 @@ export const getStatusCounts = query({
       .collect()
       .then(kds => kds.filter(kd => !kd.deletedAt))
     
-    // Ottieni tutte le bozze senza mese associato
-    const allDrafts = await ctx.db
-      .query('keydevs')
-      .withIndex('by_status', (q) => q.eq('status', 'Draft'))
-      .collect()
-      .then(kds => kds.filter(kd => !kd.deletedAt))
-    const draftsWithoutMonth = allDrafts.filter((kd) => !kd.monthRef)
-    
-    // Combina i risultati
-    const allKeydevsForMonth = [...keydevsByMonth, ...draftsWithoutMonth]
-    
-    // Calcola i contatori per ogni status
+    // Calcola i contatori per ogni status (le bozze senza mese non sono incluse)
     const counts: Record<string, number> = {}
-    for (const kd of allKeydevsForMonth) {
+    for (const kd of keydevsByMonth) {
       counts[kd.status] = (counts[kd.status] || 0) + 1
     }
     
@@ -1261,4 +1241,3 @@ export const softDelete = mutation({
     return null
   }
 })
-

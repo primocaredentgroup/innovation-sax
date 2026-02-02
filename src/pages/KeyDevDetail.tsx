@@ -1284,7 +1284,7 @@ export default function KeyDevDetailPage() {
                             : 'border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20'
                         }`}
                       >
-                        <option value="">Seleziona...</option>
+                        <option value="">Nessun mese</option>
                         {inlineMonthOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}

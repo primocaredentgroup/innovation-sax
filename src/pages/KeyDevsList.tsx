@@ -170,125 +170,6 @@ function OwnerChangeModal({
   )
 }
 
-// Modal per conferma prenotazione mese (senza cambio stato)
-interface MonthBookingModalProps {
-  isOpen: boolean
-  keyDevTitle: string
-  keyDevReadableId: string
-  keyDevStatus: string
-  currentMonth: string
-  selectedMonth: string
-  onConfirm: () => Promise<void>
-  onCancel: () => void
-  budgetInfo: { maxAlloc: number; currentlyUsed: number; available: number } | null
-  isLoading: boolean
-  error: string
-}
-
-function MonthBookingModal({ 
-  isOpen, 
-  keyDevTitle, 
-  keyDevReadableId,
-  keyDevStatus,
-  currentMonth,
-  selectedMonth,
-  onConfirm, 
-  onCancel,
-  budgetInfo,
-  isLoading,
-  error
-}: MonthBookingModalProps) {
-  if (!isOpen) return null
-  
-  const formatMonth = (monthRef: string) => {
-    if (!monthRef) return '-'
-    const [year, month] = monthRef.split('-')
-    const date = new Date(parseInt(year), parseInt(month) - 1, 1)
-    return date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
-  }
-  
-  const statusLabels: Record<string, string> = {
-    Draft: 'Bozza',
-    MockupDone: 'Mockup Terminato',
-    Approved: 'Approvato',
-    Rejected: 'Rifiutato',
-    FrontValidated: 'Front Validato',
-    InProgress: 'In Corso',
-    Done: 'Completato',
-    Checked: 'Controllato'
-  }
-  
-  return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50" onClick={onCancel}>
-      <div 
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
-        onClick={e => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          Prenota Mese: {formatMonth(selectedMonth)}
-        </h3>
-        
-        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <p className="text-sm text-blue-800 dark:text-blue-300">
-            <span className="font-medium">{keyDevReadableId}</span> - {keyDevTitle}
-          </p>
-          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-            Stato attuale: <span className="font-medium">{statusLabels[keyDevStatus] || keyDevStatus}</span>
-          </p>
-          {currentMonth && (
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-              Da {formatMonth(currentMonth)} → {formatMonth(selectedMonth)}
-            </p>
-          )}
-        </div>
-        
-        {budgetInfo && (
-          <div className={`mb-4 p-3 rounded-lg ${budgetInfo.available > 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-yellow-50 dark:bg-yellow-900/20'}`}>
-            <p className={`text-sm ${budgetInfo.available > 0 ? 'text-green-800 dark:text-green-300' : 'text-yellow-800 dark:text-yellow-300'}`}>
-              <strong>Budget:</strong> {budgetInfo.currentlyUsed} / {budgetInfo.maxAlloc} slot occupati
-            </p>
-            <p className={`text-xs mt-1 ${budgetInfo.available > 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-              {budgetInfo.available > 0 
-                ? `${budgetInfo.available} slot ancora disponibili` 
-                : '⚠️ Tutti gli slot sono occupati - la prenotazione potrebbe essere in competizione'}
-            </p>
-          </div>
-        )}
-        
-        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-          <p className="text-sm text-gray-700 dark:text-gray-300">
-            <strong>Nota:</strong> Questa è solo una prenotazione del mese. Lo stato del KeyDev 
-            non cambierà automaticamente. Per passare a "Front Validato" dovrai farlo dalla pagina di dettaglio.
-          </p>
-        </div>
-        
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
-          </div>
-        )}
-        
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            disabled={isLoading}
-            className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
-          >
-            Annulla
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isLoading}
-            className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? 'Prenotazione...' : 'Prenota Mese'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // Tipo per lo status
 type KeyDevStatus = 'Draft' | 'MockupDone' | 'Approved' | 'Rejected' | 'FrontValidated' | 'InProgress' | 'Done' | 'Checked'
 
@@ -335,31 +216,6 @@ export default function KeyDevsListPage() {
   const [monthDropdownOpen, setMonthDropdownOpen] = useState(false)
   const monthDropdownRef = useRef<HTMLDivElement>(null)
   
-  // Stato per il modal di prenotazione mese
-  const [monthBookingModal, setMonthBookingModal] = useState<{
-    isOpen: boolean
-    keyDevId: Id<'keydevs'> | null
-    keyDevTitle: string
-    keyDevReadableId: string
-    keyDevStatus: string
-    currentMonth: string
-    selectedMonth: string
-    deptId: Id<'departments'> | null
-    teamId: Id<'teams'> | null
-  }>({
-    isOpen: false,
-    keyDevId: null,
-    keyDevTitle: '',
-    keyDevReadableId: '',
-    keyDevStatus: '',
-    currentMonth: '',
-    selectedMonth: '',
-    deptId: null,
-    teamId: null
-  })
-  const [monthBookingLoading, setMonthBookingLoading] = useState(false)
-  const [monthBookingError, setMonthBookingError] = useState('')
-  
   // Stato per il modal di cambio owner
   const [ownerChangeModal, setOwnerChangeModal] = useState<{
     isOpen: boolean
@@ -401,19 +257,6 @@ export default function KeyDevsListPage() {
   const updateStatus = useMutation(api.keydevs.updateStatus)
   const updateMonth = useMutation(api.keydevs.updateMonth)
   const assignOwner = useMutation(api.keydevs.assignOwner)
-  
-  // Query per il budget del modal di prenotazione (quando è aperto)
-  const budgetForBookingModal = useQuery(
-    api.budget.getByMonthDeptTeam,
-    monthBookingModal.isOpen && monthBookingModal.deptId && monthBookingModal.teamId && monthBookingModal.selectedMonth
-      ? { 
-          monthRef: monthBookingModal.selectedMonth, 
-          deptId: monthBookingModal.deptId, 
-          teamId: monthBookingModal.teamId 
-        }
-      : 'skip'
-  )
-  
   
   // Query per budget e mese (solo se un mese specifico è selezionato)
   const budgetAllocations = useQuery(
@@ -657,68 +500,6 @@ export default function KeyDevsListPage() {
     return options
   }, [])
   
-  // Handler per aprire il modal di prenotazione mese
-  const handleOpenMonthBookingModal = (kd: {
-    _id: Id<'keydevs'>
-    title: string
-    readableId: string
-    status: string
-    monthRef?: string
-    deptId: Id<'departments'>
-    teamId: Id<'teams'>
-  }, newMonth: string) => {
-    setMonthBookingError('')
-    setMonthBookingModal({
-      isOpen: true,
-      keyDevId: kd._id,
-      keyDevTitle: kd.title,
-      keyDevReadableId: kd.readableId,
-      keyDevStatus: kd.status,
-      currentMonth: kd.monthRef || '',
-      selectedMonth: newMonth,
-      deptId: kd.deptId,
-      teamId: kd.teamId
-    })
-  }
-  
-  // Handler per confermare la prenotazione del mese (senza cambiare stato)
-  const handleConfirmMonthBooking = async () => {
-    if (!monthBookingModal.keyDevId) return
-    
-    setMonthBookingLoading(true)
-    setMonthBookingError('')
-    
-    try {
-      await updateMonth({
-        id: monthBookingModal.keyDevId,
-        monthRef: monthBookingModal.selectedMonth
-      })
-      
-      // Chiudi il modal dopo successo
-      handleCloseMonthBookingModal()
-    } catch (err) {
-      setMonthBookingError(err instanceof Error ? err.message : 'Errore durante la prenotazione')
-    } finally {
-      setMonthBookingLoading(false)
-    }
-  }
-  
-  // Handler per chiudere il modal
-  const handleCloseMonthBookingModal = () => {
-    setMonthBookingModal({
-      isOpen: false,
-      keyDevId: null,
-      keyDevTitle: '',
-      keyDevReadableId: '',
-      keyDevStatus: '',
-      currentMonth: '',
-      selectedMonth: '',
-      deptId: null,
-      teamId: null
-    })
-    setMonthBookingError('')
-  }
-  
   // Handler per aprire il modal di cambio owner
   const handleOpenOwnerChangeModal = (kd: {
     _id: Id<'keydevs'>
@@ -777,33 +558,6 @@ export default function KeyDevsListPage() {
     const date = new Date(parseInt(year), parseInt(month) - 1, 1)
     return date.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' })
   }
-  
-  // Calcola le info del budget per il modal di prenotazione
-  const monthBookingBudgetInfo = useMemo(() => {
-    if (!monthBookingModal.isOpen || !budgetForBookingModal) return null
-    
-    const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked']
-    const selectedMonth = monthBookingModal.selectedMonth
-    const deptId = monthBookingModal.deptId
-    const teamId = monthBookingModal.teamId
-    
-    // Calcola slot occupati dai keydevs già caricati
-    const occupiedSlots = (keydevs || [])
-      .filter(kd => 
-        kd.monthRef === selectedMonth &&
-        kd.deptId === deptId &&
-        kd.teamId === teamId &&
-        occupiedStatuses.includes(kd.status) &&
-        kd._id !== monthBookingModal.keyDevId // Escludi il keydev corrente
-      )
-      .reduce((sum, kd) => sum + (kd.weight ?? 1), 0)
-    
-    return {
-      maxAlloc: budgetForBookingModal.maxAlloc,
-      currentlyUsed: occupiedSlots,
-      available: Math.max(0, budgetForBookingModal.maxAlloc - occupiedSlots)
-    }
-  }, [monthBookingModal, budgetForBookingModal, keydevs])
 
   const selectedTeam = search.team || null
 
@@ -1363,9 +1117,19 @@ export default function KeyDevsListPage() {
                     {['Draft', 'MockupDone', 'Approved'].includes(kd.status) ? (
                       <select
                         value={kd.monthRef || ''}
-                        onChange={(e) => {
-                          if (!e.target.value || e.target.value === kd.monthRef) return
-                          handleOpenMonthBookingModal(kd, e.target.value)
+                        onChange={async (e) => {
+                          const newValue = e.target.value
+                          // Se il valore è uguale a quello attuale, non fare nulla
+                          if (newValue === (kd.monthRef || '')) return
+                          try {
+                            // Cambia direttamente il mese senza dialog
+                            await updateMonth({
+                              id: kd._id,
+                              monthRef: newValue || null // null per rimuovere il mese
+                            })
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : 'Errore durante il cambio mese')
+                          }
                         }}
                         className={`px-2 py-1 text-xs border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 cursor-pointer ${
                           kd.monthRef 
@@ -1375,7 +1139,7 @@ export default function KeyDevsListPage() {
                         onClick={(e) => e.stopPropagation()}
                         title="Seleziona o cambia mese"
                       >
-                        <option value="">Seleziona...</option>
+                        <option value="">Nessun mese</option>
                         {inlineMonthOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}
@@ -1468,9 +1232,19 @@ export default function KeyDevsListPage() {
                     {['Draft', 'MockupDone', 'Approved'].includes(kd.status) ? (
                       <select
                         value={kd.monthRef || ''}
-                        onChange={(e) => {
-                          if (!e.target.value || e.target.value === kd.monthRef) return
-                          handleOpenMonthBookingModal(kd, e.target.value)
+                        onChange={async (e) => {
+                          const newValue = e.target.value
+                          // Se il valore è uguale a quello attuale, non fare nulla
+                          if (newValue === (kd.monthRef || '')) return
+                          try {
+                            // Cambia direttamente il mese senza dialog
+                            await updateMonth({
+                              id: kd._id,
+                              monthRef: newValue || null // null per rimuovere il mese
+                            })
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : 'Errore durante il cambio mese')
+                          }
                         }}
                         className={`px-2 py-1 text-xs border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 cursor-pointer ${
                           kd.monthRef 
@@ -1480,7 +1254,7 @@ export default function KeyDevsListPage() {
                         onClick={(e) => e.stopPropagation()}
                         title="Seleziona o cambia mese"
                       >
-                        <option value="">Seleziona...</option>
+                        <option value="">Nessun mese</option>
                         {inlineMonthOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}
@@ -1545,21 +1319,6 @@ export default function KeyDevsListPage() {
           </div>
         )}
       </div>
-      
-      {/* Modal per prenotazione mese */}
-      <MonthBookingModal
-        isOpen={monthBookingModal.isOpen}
-        keyDevTitle={monthBookingModal.keyDevTitle}
-        keyDevReadableId={monthBookingModal.keyDevReadableId}
-        keyDevStatus={monthBookingModal.keyDevStatus}
-        currentMonth={monthBookingModal.currentMonth}
-        selectedMonth={monthBookingModal.selectedMonth}
-        onConfirm={handleConfirmMonthBooking}
-        onCancel={handleCloseMonthBookingModal}
-        budgetInfo={monthBookingBudgetInfo}
-        isLoading={monthBookingLoading}
-        error={monthBookingError}
-      />
       
       {/* Modal per cambio owner */}
       <OwnerChangeModal
