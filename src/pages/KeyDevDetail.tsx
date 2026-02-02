@@ -259,11 +259,11 @@ export default function KeyDevDetailPage() {
 
   // Handler per cambio mese nella sidebar
   const handleMonthChange = async (newMonth: string) => {
-    if (!keydev || newMonth === keydev.monthRef) return
+    if (!keydev || !newMonth || newMonth === keydev.monthRef) return
     try {
       await updateMonth({
         id: keydev._id,
-        monthRef: newMonth || null
+        monthRef: newMonth
       })
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Errore durante il cambio mese')
