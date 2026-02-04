@@ -230,13 +230,12 @@ export default function KeyDevsListPage() {
   const [ownerChangeLoading, setOwnerChangeLoading] = useState(false)
   const [ownerChangeError, setOwnerChangeError] = useState('')
 
-  const currentMonth = useMemo(() => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  }, [])
-
-  const selectedMonth = search.month === 'all' ? undefined : (search.month || currentMonth)
-  const showAllMonths = search.month === 'all'
+  // Di default mostra tutti i mesi senza filtro
+  // Se search.month non è presente, mostra tutti i mesi
+  // Se search.month === 'all', mostra tutti i mesi
+  // Se search.month è un valore specifico, mostra solo quel mese
+  const showAllMonths = !search.month || search.month === 'all'
+  const selectedMonth = search.month && search.month !== 'all' ? search.month : undefined
 
   // Query per keydevs filtrati per mese (tutti gli stati con monthRef)
   const keydevsByMonth = useQuery(

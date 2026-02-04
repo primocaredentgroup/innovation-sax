@@ -23,23 +23,13 @@ export const getOKRScore = query({
     )
   }),
   handler: async (ctx, args) => {
-    // Ottieni tutti i KeyDev del mese
-    const keydevsByMonth = await ctx.db
+    // Ottieni tutti i KeyDev del mese (solo quelli con monthRef specificato)
+    // Non includiamo più le bozze senza mese per mantenere i numeri coerenti
+    const keydevs = await ctx.db
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
       .then(kds => kds.filter(kd => !kd.deletedAt))
-
-    // Ottieni tutte le bozze senza mese associato (che compaiono in tutti i mesi)
-    const allDrafts = await ctx.db
-      .query('keydevs')
-      .withIndex('by_status', (q) => q.eq('status', 'Draft'))
-      .collect()
-      .then(kds => kds.filter(kd => !kd.deletedAt))
-    const draftsWithoutMonth = allDrafts.filter((kd) => !kd.monthRef)
-
-    // Combina i risultati
-    const keydevs = [...keydevsByMonth, ...draftsWithoutMonth]
 
     const totalCount = keydevs.length
     const checkedCount = keydevs.filter((kd) => kd.status === 'Checked').length
@@ -269,6 +259,118 @@ export const getKeyDevsByTeamAndStatus = query({
     })
 
     return {
+      byTeam
+    }
+  }
+})
+
+/**
+ * Ottiene i KeyDev aggregati per tutti i mesi, raggruppati per team e stato.
+ * Include solo i keydevs con monthRef (esclude le bozze senza mese).
+ */
+export const getKeyDevsByTeamAndStatusAllMonths = query({
+  args: {},
+  returns: v.object({
+    byTeam: v.array(
+      v.object({
+        teamId: v.id('teams'),
+        teamName: v.string(),
+        byStatus: v.array(
+          v.object({
+            status: v.string(),
+            count: v.number()
+          })
+        )
+      })
+    )
+  }),
+  handler: async (ctx) => {
+    // Ottieni tutti i KeyDev con monthRef (escludi le bozze senza mese)
+    const allKeydevs = await ctx.db
+      .query('keydevs')
+      .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt && kd.monthRef))
+
+    // Tutti gli stati possibili
+    const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
+
+    // Ottieni tutti i team
+    const teams = await ctx.db.query('teams').collect()
+
+    // Raggruppa per team e stato - mostra sempre tutti i team anche se vuoti
+    const byTeam = teams.map((team) => {
+      const teamKeydevs = allKeydevs.filter((kd) => kd.teamId === team._id)
+      
+      const statusCounts: Record<string, number> = {}
+      for (const kd of teamKeydevs) {
+        statusCounts[kd.status] = (statusCounts[kd.status] || 0) + 1
+      }
+
+      const byStatus = allStatuses.map((status) => ({
+        status,
+        count: statusCounts[status] || 0
+      }))
+
+      return {
+        teamId: team._id,
+        teamName: team.name,
+        byStatus
+      }
+    })
+
+    return {
+      byTeam
+    }
+  }
+})
+
+/**
+ * Calcola l'OKR score aggregato per tutti i mesi.
+ * Score = (KeyDev Checked / Totale KeyDev con monthRef) * 100
+ * Include solo i keydevs con monthRef (esclude le bozze senza mese).
+ */
+export const getOKRScoreAllMonths = query({
+  args: {},
+  returns: v.object({
+    score: v.number(),
+    checkedCount: v.number(),
+    totalCount: v.number(),
+    byTeam: v.array(
+      v.object({
+        teamId: v.id('teams'),
+        teamName: v.string(),
+        checked: v.number(),
+        total: v.number()
+      })
+    )
+  }),
+  handler: async (ctx) => {
+    // Ottieni tutti i KeyDev con monthRef (escludi le bozze senza mese)
+    const keydevs = await ctx.db
+      .query('keydevs')
+      .collect()
+      .then(kds => kds.filter(kd => !kd.deletedAt && kd.monthRef))
+
+    const totalCount = keydevs.length
+    const checkedCount = keydevs.filter((kd) => kd.status === 'Checked').length
+    const score = totalCount > 0 ? (checkedCount / totalCount) * 100 : 0
+
+    // Raggruppa per team
+    const teams = await ctx.db.query('teams').collect()
+    const byTeam = teams.map((team) => {
+      const teamKeyDevs = keydevs.filter((kd) => kd.teamId === team._id)
+      return {
+        teamId: team._id,
+        teamName: team.name,
+        checked: teamKeyDevs.filter((kd) => kd.status === 'Checked').length,
+        total: teamKeyDevs.length
+      }
+    }).filter((t) => t.total > 0)
+
+    return {
+      score,
+      checkedCount,
+      totalCount,
       byTeam
     }
   }

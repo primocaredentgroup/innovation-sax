@@ -394,12 +394,13 @@ function SharedLegend() {
 
 export default function DashboardPage() {
   const isDark = useDarkMode()
+  const navigate = useNavigate()
   const currentMonth = useMemo(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   }, [])
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+  const [selectedMonth, setSelectedMonth] = useState<string | 'all'>(currentMonth)
   const [activeTab, setActiveTab] = useState<'okr' | 'weeklyLoom' | 'pastKeyDevs'>('okr')
   const [openLoomDialog, setOpenLoomDialog] = useState<{ url: string; title?: string } | null>(null)
   const { width: windowWidth } = useWindowSize()
@@ -407,11 +408,36 @@ export default function DashboardPage() {
   // Query per i mesi disponibili
   const months = useQuery(api.months.list)
   
-  // Query per i dati del dashboard
-  const okrData = useQuery(api.dashboard.getOKRScore, { monthRef: selectedMonth })
+  // Query per i dati del dashboard - usa query aggregate quando "Tutti i mesi" è selezionato
+  const showAllMonths = selectedMonth === 'all'
+  
+  // Query OKR - chiama sempre entrambe le query e scegli quale usare
+  const okrDataAllMonths = useQuery(
+    api.dashboard.getOKRScoreAllMonths,
+    showAllMonths ? {} : 'skip'
+  )
+  const okrDataSingleMonth = useQuery(
+    api.dashboard.getOKRScore,
+    showAllMonths ? 'skip' : (selectedMonth !== 'all' ? { monthRef: selectedMonth } : 'skip')
+  )
+  const okrData = showAllMonths ? okrDataAllMonths : okrDataSingleMonth
+  
   const pastKeyDevs = useQuery(api.dashboard.getPastKeyDevs, { currentMonth })
-  const keyDevsByTeam = useQuery(api.dashboard.getKeyDevsByTeamAndStatus, { monthRef: selectedMonth })
-  const updatesByWeek = useQuery(api.dashboard.getUpdatesByWeek, { monthRef: selectedMonth })
+  
+  // Query KeyDevs by Team - chiama sempre entrambe le query e scegli quale usare
+  const keyDevsByTeamAllMonths = useQuery(
+    api.dashboard.getKeyDevsByTeamAndStatusAllMonths,
+    showAllMonths ? {} : 'skip'
+  )
+  const keyDevsByTeamSingleMonth = useQuery(
+    api.dashboard.getKeyDevsByTeamAndStatus,
+    showAllMonths ? 'skip' : (selectedMonth !== 'all' ? { monthRef: selectedMonth } : 'skip')
+  )
+  const keyDevsByTeam = showAllMonths ? keyDevsByTeamAllMonths : keyDevsByTeamSingleMonth
+  const updatesByWeek = useQuery(
+    api.dashboard.getUpdatesByWeek, 
+    showAllMonths ? {} : { monthRef: selectedMonth }
+  )
   
   // Calcola il counter per Weekly Loom (totale update con loomUrl)
   const weeklyLoomCount = useMemo(() => {
@@ -494,62 +520,62 @@ export default function DashboardPage() {
   return (
     <div className="w-full max-w-full overflow-x-hidden min-w-0">
       {/* Tabs per OKR, Weekly Loom e KeyDev Scaduti - più prominenti */}
-      <div className="mb-8">
-        <div className="flex flex-wrap gap-3 sm:gap-4">
-          <button
-            onClick={() => setActiveTab('okr')}
-            className={`px-4 sm:px-6 py-3 font-semibold text-sm sm:text-base border-2 rounded-lg transition-all shrink-0 ${
-              activeTab === 'okr'
-                ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
-                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
-          >
-            Sviluppi Chiave del Mese
-          </button>
-          <button
-            onClick={() => setActiveTab('weeklyLoom')}
-            className={`px-4 sm:px-6 py-3 font-semibold text-sm sm:text-base border-2 rounded-lg transition-all shrink-0 ${
-              activeTab === 'weeklyLoom'
-                ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
-                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
-          >
-            Aggiornamenti sul Core
-            <span className="ml-2 px-2 py-0.5 bg-blue-600 dark:bg-blue-500 text-white rounded-full text-xs sm:text-sm font-bold">
-              {weeklyLoomCount}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveTab('pastKeyDevs')}
-            className={`px-4 sm:px-6 py-3 font-semibold text-sm sm:text-base border-2 rounded-lg transition-all shrink-0 ${
-              activeTab === 'pastKeyDevs'
-                ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
-                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
-          >
-            <span className="hidden sm:inline">Sviluppi Chiave Scaduti</span>
-            <span className="sm:hidden">KeyDev Scaduti</span>
-            <span className="ml-2 px-2 py-0.5 bg-red-600 dark:bg-red-500 text-white rounded-full text-xs sm:text-sm font-bold">
-              {pastKeyDevsCount}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* Contenuto Tab OKR */}
-      {activeTab === 'okr' && (
-        <>
-          {/* Filtro mese per la tab OKR */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 min-w-0">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap shrink-0">
+      <div className="mb-6 sm:mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+          <div className="flex flex-wrap gap-2 sm:gap-4">
+            <button
+              onClick={() => setActiveTab('okr')}
+              className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 ${
+                activeTab === 'okr'
+                  ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span className="hidden sm:inline">Sviluppi Chiave del Mese</span>
+              <span className="sm:hidden">OKR</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('weeklyLoom')}
+              className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 ${
+                activeTab === 'weeklyLoom'
+                  ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span className="hidden sm:inline">Aggiornamenti sul Core</span>
+              <span className="sm:hidden">Core</span>
+              <span className="ml-1.5 sm:ml-2 px-1.5 sm:px-2 py-0.5 bg-blue-600 dark:bg-blue-500 text-white rounded-full text-[10px] sm:text-xs font-bold">
+                {weeklyLoomCount}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('pastKeyDevs')}
+              className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 ${
+                activeTab === 'pastKeyDevs'
+                  ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span className="hidden sm:inline">Sviluppi Chiave Scaduti</span>
+              <span className="sm:hidden">Scaduti</span>
+              <span className="ml-1.5 sm:ml-2 px-1.5 sm:px-2 py-0.5 bg-red-600 dark:bg-red-500 text-white rounded-full text-[10px] sm:text-xs font-bold">
+                {pastKeyDevsCount}
+              </span>
+            </button>
+          </div>
+          
+          {/* Selettore mese in alto a destra - per le tab OKR e Aggiornamenti sul Core */}
+          {(activeTab === 'okr' || activeTab === 'weeklyLoom') && (
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+              <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap hidden sm:inline">
                 Mese:
               </label>
               <select
                 value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-full sm:w-auto px-3 sm:px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 max-w-full"
+                onChange={(e) => setSelectedMonth(e.target.value === 'all' ? 'all' : e.target.value)}
+                className="flex-1 sm:flex-none px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 sm:min-w-[160px]"
               >
+                <option value="all">Tutti i mesi</option>
                 {monthOptions.map((monthRef) => (
                   <option key={monthRef} value={monthRef}>
                     {formatMonth(monthRef)}
@@ -557,12 +583,20 @@ export default function DashboardPage() {
                 ))}
               </select>
             </div>
-          </div>
+          )}
+        </div>
+      </div>
 
-          {/* OKR Score Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0">
+      {/* Contenuto Tab OKR */}
+      {activeTab === 'okr' && (
+        <>
+          {/* OKR Score Card - cliccabile per navigare a KeyDevsList */}
+          <div 
+            onClick={() => navigate({ to: '/keydevs', search: { month: showAllMonths ? 'all' : selectedMonth } })}
+            className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0 cursor-pointer hover:shadow-lg transition-shadow"
+          >
             <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 break-words">
-              Sviluppi Chiave - {selectedMonth}
+              Sviluppi Chiave - {showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)}
             </h2>
             {okrData ? (
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 min-w-0">
@@ -593,47 +627,47 @@ export default function DashboardPage() {
           {/* Grafico KeyDev per Stato con divisione per team */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0">
             <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 sm:mb-6 break-words">
-              Sviluppi Chiave per Stato - {selectedMonth}
+              Sviluppi Chiave per Stato - {showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)}
             </h2>
-            {keyDevsByTeam ? (
-              <>
-                {/* Griglia con i grafici affiancati - mostra sempre tutti i team */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
-                  {keyDevsByTeam.byTeam.map((team) => {
-                    const teamTotal = team.byStatus.reduce((sum, item) => sum + item.count, 0)
-                    
-                    return (
-                      <div key={team.teamId} className="flex flex-col items-center">
-                        <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm sm:text-base mb-2 text-center break-words px-2">
-                          {team.teamName}
-                        </h3>
+              {keyDevsByTeam ? (
+                <>
+                  {/* Griglia con i grafici affiancati - mostra sempre tutti i team */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
+                    {keyDevsByTeam.byTeam.map((team) => {
+                      const teamTotal = team.byStatus.reduce((sum, item) => sum + item.count, 0)
+                      
+                      return (
+                        <div key={team.teamId} className="flex flex-col items-center">
+                          <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm sm:text-base mb-2 text-center break-words px-2">
+                            {team.teamName}
+                          </h3>
                         <div className="w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] flex items-center justify-center">
                           <PieChart 
                             data={team.byStatus} 
                             size={windowWidth < 640 ? 140 : 160} 
                             teamId={team.teamId}
-                            monthRef={selectedMonth}
+                            monthRef={showAllMonths ? undefined : selectedMonth}
                           />
                         </div>
-                        <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">
-                          Totale: {teamTotal}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-                
-                {/* Legenda unica condivisa */}
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 sm:pt-6">
-                  <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 sm:mb-4">
-                    Legenda Stati
-                  </h3>
-                  <SharedLegend />
-                </div>
-              </>
-            ) : (
-              <div className="text-gray-500 dark:text-gray-400">Caricamento dati...</div>
-            )}
+                          <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">
+                            Totale: {teamTotal}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  
+                  {/* Legenda unica condivisa */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4 sm:pt-6">
+                    <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 sm:mb-4">
+                      Legenda Stati
+                    </h3>
+                    <SharedLegend />
+                  </div>
+                </>
+              ) : (
+                <div className="text-gray-500 dark:text-gray-400">Caricamento dati...</div>
+              )}
           </div>
 
         </>
