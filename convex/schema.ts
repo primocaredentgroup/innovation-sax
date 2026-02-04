@@ -35,9 +35,7 @@ export const keydevStatusValidator = v.union(
 
 export const noteTypeValidator = v.union(
   v.literal('Comment'),
-  v.literal('Mention'),
-  v.literal('Task'), // Deprecato, mantenuto per retrocompatibilità
-  v.literal('Improvement') // Deprecato, mantenuto per retrocompatibilità
+  v.literal('Mention')
 )
 
 // Weight validator per keydevs (peso dello sviluppo per validazione tech)
@@ -168,9 +166,10 @@ export default defineSchema({
     .index('by_owner', ['ownerId'])
     .index('by_readableId', ['readableId']),
 
-  // Notes (commenti, menzioni)
+  // Notes (commenti, menzioni) - possono essere collegate a keydevs o coreApps
   notes: defineTable({
-    keyDevId: v.id('keydevs'),
+    keyDevId: v.optional(v.id('keydevs')), // Opzionale: presente se la nota è collegata a un KeyDev
+    coreAppId: v.optional(v.id('coreApps')), // Opzionale: presente se la nota è collegata a una CoreApp
     authorId: v.id('users'),
     body: v.string(),
     ts: v.number(),
@@ -178,6 +177,7 @@ export default defineSchema({
     mentionedUserIds: v.optional(v.array(v.id('users'))) // Utenti menzionati (solo per type='Mention')
   })
     .index('by_keydev', ['keyDevId'])
+    .index('by_coreApp', ['coreAppId'])
     .index('by_author', ['authorId']),
 
   // Budget allocation per Dept/Team/Month
@@ -213,7 +213,8 @@ export default defineSchema({
       v.literal('Completed')
     ),
     ownerId: v.optional(v.id('users')), // Owner responsabile dell'app (temporaneamente opzionale per migrazione)
-    categoryId: v.optional(v.id('coreAppsCategories')) // Categoria di appartenenza
+    categoryId: v.optional(v.id('coreAppsCategories')), // Categoria di appartenenza
+    notesCount: v.optional(v.number()) // Contatore delle note associate (default: 0)
   })
     .index('by_slug', ['slug'])
     .index('by_owner', ['ownerId'])

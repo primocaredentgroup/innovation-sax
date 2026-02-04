@@ -13,6 +13,7 @@ import KeyDevNotesPage from './pages/KeyDevNotes'
 import PlanningPage from './pages/Planning'
 import CoreAppsListPage from './pages/CoreAppsList'
 import CoreAppDetailPage from './pages/CoreAppDetail'
+import CoreAppNotesPage from './pages/CoreAppNotes'
 import CoreAppNewPage from './pages/CoreAppNew'
 import CoreAppUpdateNewPage from './pages/CoreAppUpdateNew'
 import ProfilePage from './pages/Profile'
@@ -83,6 +84,15 @@ const coreAppDetailRoute = createRoute({
   component: CoreAppDetailPage
 })
 
+const coreAppNotesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/core-apps/$slug/notes',
+  component: CoreAppNotesPage,
+  validateSearch: z.object({
+    highlightedNote: z.string().optional()
+  })
+})
+
 const coreAppUpdateNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/core-apps/$slug/updates/new',
@@ -129,6 +139,7 @@ const routeTree = rootRoute.addChildren([
   planningRoute,
   coreAppsRoute,
   coreAppDetailRoute,
+  coreAppNotesRoute,
   coreAppUpdateNewRoute,
   coreAppNewRoute,
   profileRoute,

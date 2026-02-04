@@ -617,39 +617,58 @@ export default function CoreAppDetailPage() {
         </Link>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">{coreApp.name}</h1>
-          <div className="relative self-start sm:self-auto">
-            <button
-              onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-              className={`px-3 py-1 rounded-full text-xs sm:text-sm ${statusColors[coreApp.status]} hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-2 whitespace-nowrap`}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Link Note */}
+            <Link
+              to="/core-apps/$slug/notes"
+              params={{ slug }}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 hover:from-blue-700 hover:to-blue-800 dark:hover:from-blue-600 dark:hover:to-blue-700 shadow-md hover:shadow-lg text-white border border-blue-800 dark:border-blue-400"
             >
-              {statusLabels[coreApp.status]}
-              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
-            </button>
-            {isStatusDropdownOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setIsStatusDropdownOpen(false)}
-                />
-                <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 z-20 min-w-[180px]">
-                  {(['Planning', 'InProgress', 'Completed'] as const).map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => handleStatusChange(status)}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg ${
-                        coreApp.status === status
-                          ? `${statusColors[status]} font-medium`
-                          : 'text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      {statusLabels[status]}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+              <span className="text-white">Note</span>
+              {coreApp.notesCount !== undefined && coreApp.notesCount > 0 && (
+                <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-white dark:bg-blue-800 text-blue-700 dark:text-white text-xs font-bold min-w-5 sm:min-w-6 flex items-center justify-center border border-blue-800 dark:border-blue-200">
+                  {coreApp.notesCount}
+                </span>
+              )}
+            </Link>
+            {/* Status dropdown */}
+            <div className="relative self-start sm:self-auto">
+              <button
+                onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                className={`px-3 py-1 rounded-full text-xs sm:text-sm ${statusColors[coreApp.status]} hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-2 whitespace-nowrap`}
+              >
+                {statusLabels[coreApp.status]}
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {isStatusDropdownOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setIsStatusDropdownOpen(false)}
+                  />
+                  <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 z-20 min-w-[180px]">
+                    {(['Planning', 'InProgress', 'Completed'] as const).map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => handleStatusChange(status)}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg ${
+                          coreApp.status === status
+                            ? `${statusColors[status]} font-medium`
+                            : 'text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        {statusLabels[status]}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

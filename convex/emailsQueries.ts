@@ -4,12 +4,13 @@ import { noteTypeValidator } from "./schema";
 import type { Id } from "./_generated/dataModel";
 
 /**
- * Query interna per recuperare i dati completi della nota con contesto
+ * Query interna per recuperare i dati completi della nota con contesto.
+ * Supporta note collegate sia a KeyDev che a CoreApp.
  */
 export const getNoteWithContext = internalQuery({
   args: {
     noteId: v.id("notes"),
-    keyDevId: v.id("keydevs"),
+    keyDevId: v.id("keydevs"), // Per ora manteniamo obbligatorio per retrocompatibilità con emails.ts
     mentionedUserId: v.id("users"),
   },
   returns: v.union(
@@ -17,7 +18,8 @@ export const getNoteWithContext = internalQuery({
       note: v.object({
         _id: v.id("notes"),
         _creationTime: v.number(),
-        keyDevId: v.id("keydevs"),
+        keyDevId: v.optional(v.id("keydevs")),
+        coreAppId: v.optional(v.id("coreApps")),
         authorId: v.id("users"),
         body: v.string(),
         ts: v.number(),
@@ -71,6 +73,7 @@ export const getNoteWithContext = internalQuery({
         _id: note._id,
         _creationTime: note._creationTime,
         keyDevId: note.keyDevId,
+        coreAppId: note.coreAppId,
         authorId: note.authorId,
         body: note.body,
         ts: note.ts,

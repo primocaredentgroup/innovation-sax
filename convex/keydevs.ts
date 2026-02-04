@@ -2,7 +2,6 @@ import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
 import { keydevStatusValidator, keydevWeightValidator, keydevPriorityValidator } from './schema'
 import { hasRole, isAdmin } from './users'
-import type { Doc } from './_generated/dataModel'
 
 // Tipo per i ruoli
 type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'

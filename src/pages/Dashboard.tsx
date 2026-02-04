@@ -5,25 +5,6 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { oembed } from '@loomhq/loom-embed'
 import type { Id } from '../../convex/_generated/dataModel'
 
-// Helper per calcolare il numero della settimana ISO
-function getISOWeek(date: Date): { year: number; week: number } {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  const dayNum = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-  return { year: d.getUTCFullYear(), week: weekNo }
-}
-
-// Funzione helper per ottenere la settimana precedente in formato "YYYY-Www"
-function getPreviousWeek(): string {
-  const now = new Date()
-  const previousWeek = new Date(now)
-  previousWeek.setDate(previousWeek.getDate() - 7)
-  const { year, week } = getISOWeek(previousWeek)
-  return `${year}-W${week.toString().padStart(2, '0')}`
-}
-
 // Funzione helper per formattare il nome dello stato
 function formatStatus(status: string): string {
   const statusMap: Record<string, string> = {
@@ -410,64 +391,6 @@ function SharedLegend() {
   )
 }
 
-// Componente per grafico a barre orizzontali
-function BarChart({ 
-  data 
-}: { 
-  data: Array<{ teamId: Id<'teams'>; teamName: string; done: number; total: number }>
-}) {
-  // Calcola la percentuale massima per scalare le barre
-  const maxPercentage = Math.max(
-    ...data.map((team) => (team.total > 0 ? (team.done / team.total) * 100 : 0)),
-    1 // Almeno 1% per evitare divisione per zero
-  )
-
-  return (
-    <div className="space-y-3 sm:space-y-4">
-      {data.map((team) => {
-        const percentage = team.total > 0 ? (team.done / team.total) * 100 : 0
-        const barWidth = maxPercentage > 0 ? (percentage / maxPercentage) * 100 : 0
-        
-        return (
-          <div key={team.teamId} className="space-y-2">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0">
-              <span className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm min-w-0 sm:min-w-[120px] truncate">
-                {team.teamName}
-              </span>
-              <div className="flex items-center gap-2 sm:gap-4">
-                <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                  {team.done} / {team.total}
-                </span>
-                <span className="text-sm sm:text-base font-bold text-green-600 dark:text-green-400 min-w-[45px] sm:min-w-[50px] text-right">
-                  {percentage.toFixed(0)}%
-                </span>
-              </div>
-            </div>
-            <div className="relative w-full bg-gray-200 dark:bg-gray-700 rounded-full h-6 sm:h-8 overflow-hidden">
-              <div
-                className="bg-green-500 dark:bg-green-600 h-6 sm:h-8 rounded-full transition-all duration-500 flex items-center justify-end pr-2 sm:pr-3"
-                style={{
-                  width: `${barWidth}%`
-                }}
-              >
-                {barWidth > 20 && (
-                  <span className="text-xs font-semibold text-white">
-                    {team.done}
-                  </span>
-                )}
-              </div>
-              {barWidth <= 20 && percentage > 0 && (
-                <span className="absolute inset-0 flex items-center pl-2 sm:pl-3 text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  {team.done}
-                </span>
-              )}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 export default function DashboardPage() {
   const isDark = useDarkMode()
@@ -477,8 +400,6 @@ export default function DashboardPage() {
   }, [])
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-  const previousWeek = useMemo(() => getPreviousWeek(), [])
-  const [selectedWeek, setSelectedWeek] = useState(previousWeek)
   const [activeTab, setActiveTab] = useState<'okr' | 'weeklyLoom' | 'pastKeyDevs'>('okr')
   const [openLoomDialog, setOpenLoomDialog] = useState<{ url: string; title?: string } | null>(null)
   const { width: windowWidth } = useWindowSize()
@@ -537,19 +458,6 @@ export default function DashboardPage() {
     
     return uniqueMonths
   }, [months])
-
-  // Genera le opzioni per il dropdown delle settimane
-  const weekOptions = useMemo(() => {
-    if (!updatesByWeek) return []
-    return updatesByWeek.map((w) => w.weekRef)
-  }, [updatesByWeek])
-
-  // Se la settimana selezionata non è disponibile, usa la prima disponibile o la settimana precedente
-  const effectiveSelectedWeek = useMemo(() => {
-    if (!updatesByWeek || updatesByWeek.length === 0) return previousWeek
-    if (weekOptions.includes(selectedWeek)) return selectedWeek
-    return weekOptions[0] || previousWeek
-  }, [updatesByWeek, selectedWeek, weekOptions, previousWeek])
 
   // Trova tutti gli update raggruppati per Core App (senza filtro settimanale)
   // Prendi gli update da tutte le settimane disponibili
@@ -836,7 +744,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex flex-wrap items-center gap-2 mt-1">
                         <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                          Mese: <span className="font-medium text-gray-700 dark:text-gray-300">{formatMonth(kd.monthRef)}</span>
+                          Mese: <span className="font-medium text-gray-700 dark:text-gray-300">{kd.monthRef ? formatMonth(kd.monthRef) : 'N/A'}</span>
                         </span>
                         <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">|</span>
                         <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">

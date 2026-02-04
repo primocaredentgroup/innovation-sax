@@ -19,6 +19,7 @@ const coreAppReturnValidator = v.object({
   status: coreAppStatusValidator,
   ownerId: v.optional(v.id('users')),
   categoryId: v.optional(v.id('coreAppsCategories')),
+  notesCount: v.optional(v.number()),
   lastUpdate: v.optional(v.object({
     createdAt: v.number(),
     weekRef: v.string()

@@ -124,15 +124,25 @@ const renderTextWithLinks = (text: string, users: Array<{ _id: Id<'users'>; name
 }
 
 interface NotesSectionProps {
-  keyDevId: Id<'keydevs'>
+  keyDevId?: Id<'keydevs'>
+  coreAppId?: Id<'coreApps'>
   currentUser: { _id: Id<'users'>; roles?: Role[] } | null | undefined
   users: Array<{ _id: Id<'users'>; name: string; email?: string }> | undefined
-  readableId?: string
+  entityIdentifier?: string // readableId per keydevs o slug per coreApps
   highlightedNote?: string
 }
 
-export default function NotesSection({ keyDevId, currentUser, users, readableId, highlightedNote }: NotesSectionProps) {
-  const notes = useQuery(api.notes.listByKeyDev, { keyDevId })
+export default function NotesSection({ keyDevId, coreAppId, currentUser, users, entityIdentifier, highlightedNote }: NotesSectionProps) {
+  // Usa la query appropriata in base al tipo di entità
+  const keyDevNotes = useQuery(
+    api.notes.listByKeyDev,
+    keyDevId ? { keyDevId } : 'skip'
+  )
+  const coreAppNotes = useQuery(
+    api.notes.listByCoreApp,
+    coreAppId ? { coreAppId } : 'skip'
+  )
+  const notes = keyDevId ? keyDevNotes : coreAppNotes
   const addNote = useMutation(api.notes.create)
   const updateNote = useMutation(api.notes.update)
   const removeNote = useMutation(api.notes.remove)
@@ -193,10 +203,18 @@ export default function NotesSection({ keyDevId, currentUser, users, readableId,
 
   // Funzione per copiare il link alla nota specifica
   const handleCopyNoteLink = async (noteId: Id<'notes'>) => {
-    // Usa il readableId se disponibile, altrimenti usa l'id normale
-    const keyDevIdentifier = readableId || keyDevId
-    // Costruisci l'URL per la pagina delle note
-    const noteUrl = `${window.location.origin}/keydevs/${keyDevIdentifier}/notes?highlightedNote=${noteId}`
+    // Costruisci l'URL in base al tipo di entità
+    let noteUrl: string
+    if (keyDevId) {
+      const identifier = entityIdentifier || keyDevId
+      noteUrl = `${window.location.origin}/keydevs/${identifier}/notes?highlightedNote=${noteId}`
+    } else if (coreAppId) {
+      const identifier = entityIdentifier || coreAppId
+      noteUrl = `${window.location.origin}/core-apps/${identifier}/notes?highlightedNote=${noteId}`
+    } else {
+      console.error('Nessuna entità associata alla nota')
+      return
+    }
     
     try {
       await navigator.clipboard.writeText(noteUrl)
@@ -334,6 +352,10 @@ export default function NotesSection({ keyDevId, currentUser, users, readableId,
 
   const handleAddNote = async () => {
     if (!newNote.trim()) return
+    if (!keyDevId && !coreAppId) {
+      console.error('Nessuna entità associata')
+      return
+    }
     
     // Cerca tutte le menzioni nel testo pattern "@NomeUtente"
     const mentionedUserIds: Id<'users'>[] = []
@@ -366,6 +388,7 @@ export default function NotesSection({ keyDevId, currentUser, users, readableId,
     
     await addNote({
       keyDevId,
+      coreAppId,
       body: newNote,
       type: noteType,
       mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined

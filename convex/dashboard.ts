@@ -17,7 +17,7 @@ export const getOKRScore = query({
       v.object({
         teamId: v.id('teams'),
         teamName: v.string(),
-        done: v.number(),
+        checked: v.number(),
         total: v.number()
       })
     )
@@ -52,7 +52,7 @@ export const getOKRScore = query({
       return {
         teamId: team._id,
         teamName: team.name,
-        done: teamKeyDevs.filter((kd) => kd.status === 'Done').length,
+        checked: teamKeyDevs.filter((kd) => kd.status === 'Checked').length,
         total: teamKeyDevs.length
       }
     }).filter((t) => t.total > 0)

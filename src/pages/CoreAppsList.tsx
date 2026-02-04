@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { useMemo, useState } from 'react'
 import { api } from '../../convex/_generated/api'
@@ -53,6 +53,7 @@ type SortField = 'name' | 'category' | 'status' | 'owner' | 'progress' | 'lastUp
 type SortDirection = 'asc' | 'desc'
 
 export default function CoreAppsListPage() {
+  const navigate = useNavigate()
   const coreApps = useQuery(api.coreApps.list)
   const categories = useQuery(api.coreAppsCategories.list)
   const users = useQuery(api.users.listUsers)
@@ -324,16 +325,35 @@ export default function CoreAppsListPage() {
                 filteredApps.map((app) => (
                   <tr
                     key={app._id}
+                    onClick={() => navigate({ to: '/core-apps/$slug', params: { slug: app.slug } })}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Link
-                        to="/core-apps/$slug"
-                        params={{ slug: app.slug }}
-                        className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
-                      >
-                        {app.name}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to="/core-apps/$slug"
+                          params={{ slug: app.slug }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
+                        >
+                          {app.name}
+                        </Link>
+                        <a
+                          href={`/core-apps/${app.slug}/notes`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                          title={`${app.notesCount || 0} nota${(app.notesCount || 0) !== 1 ? 'e' : ''}`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                          {(app.notesCount || 0) > 0 && (
+                            <span className="text-xs font-semibold">{app.notesCount || 0}</span>
+                          )}
+                        </a>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {app.categoryId && categoriesMap.get(app.categoryId) ? (
@@ -437,7 +457,24 @@ export default function CoreAppsListPage() {
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 wrap-break-word">{app.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 wrap-break-word">{app.name}</h3>
+                    <a
+                      href={`/core-apps/${app.slug}/notes`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                      title={`${app.notesCount || 0} nota${(app.notesCount || 0) !== 1 ? 'e' : ''}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      {(app.notesCount || 0) > 0 && (
+                        <span className="text-xs font-semibold">{app.notesCount || 0}</span>
+                      )}
+                    </a>
+                  </div>
                   <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${statusColors[app.status]}`}>
                     {statusLabels[app.status]}
                   </span>
