@@ -3,7 +3,7 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useMemo, useState, useRef, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
-import { ChevronDown, X, MessageSquare, Calendar } from 'lucide-react'
+import { ChevronDown, X, MessageSquare, Calendar, Search } from 'lucide-react'
 import PrioritySelector from '../components/PrioritySelector'
 
 // Componente Avatar con Tooltip
@@ -195,9 +195,6 @@ const statusLabels: Record<string, string> = {
   Checked: 'Controllato'
 }
 
-// Stati che non hanno filtro per mese (appaiono sempre)
-const statusesWithoutMonthFilter = ['MockupDone', 'Rejected', 'Approved']
-
 // Ordine degli stati per la visualizzazione
 const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
 
@@ -241,13 +238,11 @@ export default function KeyDevsListPage() {
   const selectedMonth = search.month === 'all' ? undefined : (search.month || currentMonth)
   const showAllMonths = search.month === 'all'
 
-  // Query per keydevs filtrati per mese (Draft, FrontValidated, InProgress, Done)
+  // Query per keydevs filtrati per mese (tutti gli stati con monthRef)
   const keydevsByMonth = useQuery(
     api.keydevs.listByMonth, 
     selectedMonth ? { monthRef: selectedMonth } : 'skip'
   )
-  // Query per keydevs senza filtro mese (MockupDone, Rejected, Approved)
-  const keydevsWithoutMonth = useQuery(api.keydevs.listWithoutMonthFilter)
   // Query per tutti i keydevs quando "Tutti i mesi" è selezionato
   const allKeydevs = useQuery(api.keydevs.listAll, showAllMonths ? {} : 'skip')
   
@@ -283,11 +278,9 @@ export default function KeyDevsListPage() {
       // Quando "Tutti i mesi" è selezionato, mostra tutti i keydevs
       combined = allKeydevs || []
     } else {
-      const byMonthFiltered = (keydevsByMonth || []).filter(
-        (kd) => !statusesWithoutMonthFilter.includes(kd.status)
-      )
-      const withoutMonth = keydevsWithoutMonth || []
-      combined = [...byMonthFiltered, ...withoutMonth]
+      // Quando un mese specifico è selezionato, mostra solo i keydevs di quel mese
+      // Tutti gli stati con monthRef vengono filtrati per mese
+      combined = keydevsByMonth || []
     }
     
     // Ordina per priorità: 1 (Urgent) per primi, poi 2, 3, 4, 0 (No priority)
@@ -305,7 +298,7 @@ export default function KeyDevsListPage() {
       // Altrimenti ordina normalmente (1, 2, 3, 4)
       return priorityA - priorityB
     })
-  }, [showAllMonths, allKeydevs, keydevsByMonth, keydevsWithoutMonth])
+  }, [showAllMonths, allKeydevs, keydevsByMonth])
   
   // Calcola i contatori basandosi sui keydevs filtrati per team/dipartimento
   // Questo assicura che i contatori corrispondano ai keydevs visibili nella lista
@@ -880,14 +873,20 @@ export default function KeyDevsListPage() {
           </div>
           
           {/* Search Input */}
-          <div className="shrink-0 w-full sm:w-auto sm:min-w-[250px]">
-            <input
-              type="text"
-              placeholder="Cerca per titolo o ID..."
-              value={search.query || ''}
-              onChange={(e) => updateSearch({ query: e.target.value || undefined })}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 text-sm"
-            />
+          <div className="shrink-0 w-full sm:w-auto sm:min-w-[400px] lg:min-w-[500px]">
+            <div className="relative">
+              <Search 
+                size={20} 
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"
+              />
+              <input
+                type="text"
+                placeholder="Cerca per titolo o ID..."
+                value={search.query || ''}
+                onChange={(e) => updateSearch({ query: e.target.value || undefined })}
+                className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 text-base shadow-sm hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -922,7 +921,6 @@ export default function KeyDevsListPage() {
                     const label = statusLabels[key]
                     const isSelected = selectedStatuses.includes(key)
                     const count = statusCounts?.[key] || 0
-                    const hasNoMonthFilter = statusesWithoutMonthFilter.includes(key)
                     
                     return (
                       <label
@@ -941,9 +939,6 @@ export default function KeyDevsListPage() {
                           <span className={`px-2 py-1 text-xs rounded-full ${statusColors[key]}`}>
                             {label}
                           </span>
-                          {hasNoMonthFilter && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400" title="Non filtrato per mese">*</span>
-                          )}
                           {count > 0 && (
                             <span className="ml-auto text-xs font-medium text-gray-500 dark:text-gray-400">
                               ({count})
@@ -956,10 +951,7 @@ export default function KeyDevsListPage() {
                 </div>
                 <div className="border-t border-gray-200 dark:border-gray-700 p-2">
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 px-2">
-                        * Stati non filtrati per mese
-                      </p>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       {selectedStatuses.length > 0 && (
                         <button
                           onClick={() => {
@@ -969,14 +961,60 @@ export default function KeyDevsListPage() {
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
                         >
                           <X size={14} />
-                          Rimuovi filtri
+                          Rimuovi tutti i filtri per stato
                         </button>
+                      )}
+                      {selectedMonth && !showAllMonths && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            Filtro mese: <span className="font-semibold text-gray-700 dark:text-gray-300">
+                              {(() => {
+                                const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
+                                return monthOpt?.label || formatMonthShort(selectedMonth)
+                              })()}
+                            </span>
+                          </span>
+                          <button
+                            onClick={() => {
+                              updateSearch({ month: 'all' })
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                            title="Rimuovi filtro mese"
+                          >
+                            <X size={14} />
+                            Rimuovi
+                          </button>
+                        </div>
                       )}
                     </div>
                     {selectedStatuses.length === 0 && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 px-2 italic">
-                        Nota: Gli sviluppi in "Bozza" sono nascosti di default. Seleziona "Bozza" per visualizzarli.
-                      </p>
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 px-2 italic">
+                          Nota: Gli sviluppi in "Bozza" sono nascosti di default. Seleziona "Bozza" per visualizzarli.
+                        </p>
+                        {selectedMonth && !showAllMonths && (
+                          <div className="flex items-center gap-2 px-2">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              Filtro mese attivo: <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                {(() => {
+                                  const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
+                                  return monthOpt?.label || formatMonthShort(selectedMonth)
+                                })()}
+                              </span>
+                            </span>
+                            <button
+                              onClick={() => {
+                                updateSearch({ month: 'all' })
+                              }}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                              title="Rimuovi filtro mese"
+                            >
+                              <X size={14} />
+                              Rimuovi
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -995,7 +1033,6 @@ export default function KeyDevsListPage() {
               const label = statusLabels[key]
               const isSelected = selectedStatuses.includes(key)
               const count = statusCounts?.[key] || 0
-              const hasNoMonthFilter = statusesWithoutMonthFilter.includes(key)
               return (
                 <button
                   key={key}
@@ -1005,10 +1042,8 @@ export default function KeyDevsListPage() {
                       ? `${statusColors[key]} ring-2 ring-offset-2 ring-gray-600 dark:ring-gray-400 shadow-md font-semibold`
                       : `${statusColors[key]} opacity-70 hover:opacity-100`
                   }`}
-                  title={hasNoMonthFilter ? 'Questo stato non è filtrato per mese' : undefined}
                 >
                   {label}
-                  {hasNoMonthFilter && <span className="ml-1 text-xs opacity-60">*</span>}
                   {count > 0 && (
                     <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
                       isSelected ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900' : 'bg-gray-700 dark:bg-gray-300 text-white dark:text-gray-900'
@@ -1020,22 +1055,43 @@ export default function KeyDevsListPage() {
               )
             })}
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            * Stati non filtrati per mese
-          </p>
-          {selectedStatuses.length === 0 && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">
-              Nota: Gli sviluppi in "Bozza" sono nascosti di default. Clicca sul filtro "Bozza" per visualizzarli.
-            </p>
-          )}
-          {selectedStatuses.length > 0 && (
-            <button
-              onClick={() => updateSearch({ status: undefined })}
-              className="mt-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
-            >
-              Rimuovi tutti i filtri
-            </button>
-          )}
+          <div className="flex items-center gap-4 mt-2 flex-wrap">
+            {selectedStatuses.length === 0 && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                Nota: Gli sviluppi in "Bozza" sono nascosti di default. Clicca sul filtro "Bozza" per visualizzarli.
+              </p>
+            )}
+            {selectedStatuses.length > 0 && (
+              <button
+                onClick={() => updateSearch({ status: undefined })}
+                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
+              >
+                Rimuovi tutti i filtri per stato
+              </button>
+            )}
+            {selectedMonth && !showAllMonths && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  Filtro mese attivo: <span className="font-semibold text-gray-700 dark:text-gray-300">
+                    {(() => {
+                      const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
+                      return monthOpt?.label || formatMonthShort(selectedMonth)
+                    })()}
+                  </span>
+                </span>
+                <button
+                  onClick={() => {
+                    updateSearch({ month: 'all' })
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                  title="Rimuovi filtro mese"
+                >
+                  <X size={14} />
+                  Rimuovi
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -27,6 +27,10 @@ function getPreviousWeek(): string {
 // Funzione helper per formattare il nome dello stato
 function formatStatus(status: string): string {
   const statusMap: Record<string, string> = {
+    Draft: 'Bozza',
+    MockupDone: 'Mockup Terminato',
+    Approved: 'Approvato',
+    Rejected: 'Rifiutato',
     FrontValidated: 'Front Validato',
     InProgress: 'In Corso',
     Done: 'Completato',
@@ -175,12 +179,17 @@ function LoomDialog({
   )
 }
 
-// Colori per gli stati
+// Colori per gli stati - allineati con KeyDevsList.tsx
+// Usiamo versioni più scure per i grafici (basate sui colori di KeyDevsList ma più saturate per visibilità)
 const statusColors: Record<string, { light: string; dark: string }> = {
-  FrontValidated: { light: '#3b82f6', dark: '#2563eb' }, // blue
-  InProgress: { light: '#a855f7', dark: '#9333ea' }, // purple
-  Done: { light: '#10b981', dark: '#059669' }, // emerald/green
-  Checked: { light: '#f97316', dark: '#ea580c' } // orange
+  Draft: { light: '#6b7280', dark: '#374151' }, // gray-500 / gray-700
+  MockupDone: { light: '#eab308', dark: '#a16207' }, // yellow-500 / yellow-700
+  Approved: { light: '#22c55e', dark: '#15803d' }, // green-500 / green-700
+  Rejected: { light: '#ef4444', dark: '#b91c1c' }, // red-500 / red-700
+  FrontValidated: { light: '#3b82f6', dark: '#1e40af' }, // blue-500 / blue-800
+  InProgress: { light: '#a855f7', dark: '#7e22ce' }, // purple-500 / purple-700
+  Done: { light: '#10b981', dark: '#047857' }, // emerald-500 / emerald-700
+  Checked: { light: '#f97316', dark: '#c2410c' } // orange-500 / orange-700
 }
 
 // Hook per rilevare il tema
@@ -378,7 +387,7 @@ function SharedLegend() {
   const isDark = useDarkMode()
   
   // Tutti gli stati possibili nell'ordine desiderato
-  const allStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked'] as const
+  const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
@@ -461,6 +470,7 @@ function BarChart({
 }
 
 export default function DashboardPage() {
+  const isDark = useDarkMode()
   const currentMonth = useMemo(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -541,91 +551,79 @@ export default function DashboardPage() {
     return weekOptions[0] || previousWeek
   }, [updatesByWeek, selectedWeek, weekOptions, previousWeek])
 
-  // Trova gli update per la settimana selezionata, raggruppati per Core App
+  // Trova tutti gli update raggruppati per Core App (senza filtro settimanale)
+  // Prendi gli update da tutte le settimane disponibili
   const updatesByCoreApp = useMemo(() => {
     if (!updatesByWeek) return []
-    const weekData = updatesByWeek.find((w) => w.weekRef === effectiveSelectedWeek)
-    if (!weekData) return []
+    
+    // Raccogli tutti gli update da tutte le settimane
+    const allUpdates: Array<typeof updatesByWeek[0]['updates'][0]> = []
+    for (const weekData of updatesByWeek) {
+      allUpdates.push(...weekData.updates)
+    }
     
     // Raggruppa per Core App
-    const grouped: Record<string, typeof weekData.updates> = {}
-    for (const update of weekData.updates) {
+    const grouped: Record<string, typeof allUpdates> = {}
+    for (const update of allUpdates) {
       if (!grouped[update.coreAppId]) {
         grouped[update.coreAppId] = []
       }
       grouped[update.coreAppId].push(update)
     }
     
-    return Object.entries(grouped).map(([coreAppId, updates]) => ({
-      coreAppId: coreAppId as Id<'coreApps'>,
-      coreAppName: updates[0].coreAppName,
-      percentComplete: updates[0].percentComplete,
-      updates
-    }))
-  }, [updatesByWeek, effectiveSelectedWeek])
+    // Limita a 10 elementi e ordina per percentComplete decrescente
+    return Object.entries(grouped)
+      .map(([coreAppId, updates]) => ({
+        coreAppId: coreAppId as Id<'coreApps'>,
+        coreAppName: updates[0].coreAppName,
+        percentComplete: updates[0].percentComplete,
+        updates
+      }))
+      .sort((a, b) => b.percentComplete - a.percentComplete)
+      .slice(0, 10)
+  }, [updatesByWeek])
 
   return (
     <div className="w-full max-w-full overflow-x-hidden min-w-0">
-      {/* Header con titolo e dropdown mese */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 min-w-0">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 shrink-0">Dashboard</h1>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 min-w-0 w-full sm:w-auto">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap shrink-0">
-            Mese:
-          </label>
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="w-full sm:w-auto px-3 sm:px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 max-w-full"
-          >
-            {monthOptions.map((monthRef) => (
-              <option key={monthRef} value={monthRef}>
-                {monthRef}
-              </option>
-            ))}
-          </select>
-          <div className="px-3 sm:px-4 py-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg shrink-0 min-w-0">
-            <span className="text-sm sm:text-base font-semibold text-blue-700 dark:text-blue-300 break-words">
-              {formatMonth(selectedMonth)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs per OKR, Weekly Loom e KeyDev Scaduti */}
-      <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex flex-wrap gap-2 sm:gap-4">
+      {/* Tabs per OKR, Weekly Loom e KeyDev Scaduti - più prominenti */}
+      <div className="mb-8">
+        <div className="flex flex-wrap gap-3 sm:gap-4">
           <button
             onClick={() => setActiveTab('okr')}
-            className={`px-2 sm:px-4 py-2 font-medium text-xs sm:text-sm border-b-2 transition-colors shrink-0 ${
+            className={`px-4 sm:px-6 py-3 font-semibold text-sm sm:text-base border-2 rounded-lg transition-all shrink-0 ${
               activeTab === 'okr'
-                ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
+                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
           >
             Sviluppi Chiave del Mese
           </button>
           <button
             onClick={() => setActiveTab('weeklyLoom')}
-            className={`px-2 sm:px-4 py-2 font-medium text-xs sm:text-sm border-b-2 transition-colors shrink-0 ${
+            className={`px-4 sm:px-6 py-3 font-semibold text-sm sm:text-base border-2 rounded-lg transition-all shrink-0 ${
               activeTab === 'weeklyLoom'
-                ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
+                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
           >
-            Applicativi Core ({weeklyLoomCount})
+            Aggiornamenti sul Core
+            <span className="ml-2 px-2 py-0.5 bg-blue-600 dark:bg-blue-500 text-white rounded-full text-xs sm:text-sm font-bold">
+              {weeklyLoomCount}
+            </span>
           </button>
           <button
             onClick={() => setActiveTab('pastKeyDevs')}
-            className={`px-2 sm:px-4 py-2 font-medium text-xs sm:text-sm border-b-2 transition-colors shrink-0 ${
+            className={`px-4 sm:px-6 py-3 font-semibold text-sm sm:text-base border-2 rounded-lg transition-all shrink-0 ${
               activeTab === 'pastKeyDevs'
-                ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
+                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
           >
             <span className="hidden sm:inline">Sviluppi Chiave Scaduti</span>
             <span className="sm:hidden">KeyDev Scaduti</span>
-            <span className="ml-1">({pastKeyDevsCount})</span>
+            <span className="ml-2 px-2 py-0.5 bg-red-600 dark:bg-red-500 text-white rounded-full text-xs sm:text-sm font-bold">
+              {pastKeyDevsCount}
+            </span>
           </button>
         </div>
       </div>
@@ -633,6 +631,26 @@ export default function DashboardPage() {
       {/* Contenuto Tab OKR */}
       {activeTab === 'okr' && (
         <>
+          {/* Filtro mese per la tab OKR */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 min-w-0">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap shrink-0">
+                Mese:
+              </label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="w-full sm:w-auto px-3 sm:px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 max-w-full"
+              >
+                {monthOptions.map((monthRef) => (
+                  <option key={monthRef} value={monthRef}>
+                    {formatMonth(monthRef)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           {/* OKR Score Card */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0">
             <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 break-words">
@@ -648,8 +666,8 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0 w-full sm:w-auto">
                   <div className="flex flex-wrap sm:flex-nowrap justify-between text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1 gap-2">
-                    <span className="whitespace-nowrap shrink-0">Done: {okrData.doneCount}</span>
-                    <span className="whitespace-nowrap shrink-0">Budget: {okrData.totalBudget}</span>
+                    <span className="whitespace-nowrap shrink-0">Controllati: {okrData.checkedCount}</span>
+                    <span className="whitespace-nowrap shrink-0">Totale: {okrData.totalCount}</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 sm:h-4 min-w-0">
                     <div
@@ -671,67 +689,42 @@ export default function DashboardPage() {
             </h2>
             {keyDevsByTeam ? (
               <>
-                {/* Griglia con i grafici affiancati */}
-                {keyDevsByTeam.byTeam.length > 0 ? (
-                  <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
-                      {keyDevsByTeam.byTeam.map((team) => {
-                        const teamTotal = team.byStatus.reduce((sum, item) => sum + item.count, 0)
-                        if (teamTotal === 0) return null
-                        
-                        return (
-                          <div key={team.teamId} className="flex flex-col items-center">
-                            <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm sm:text-base mb-2 text-center break-words px-2">
-                              {team.teamName}
-                            </h3>
-                            <div className="w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] flex items-center justify-center">
-                              <PieChart 
-                                data={team.byStatus} 
-                                size={windowWidth < 640 ? 140 : 160} 
-                                teamId={team.teamId}
-                                monthRef={selectedMonth}
-                              />
-                            </div>
-                            <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">
-                              Totale: {teamTotal}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
+                {/* Griglia con i grafici affiancati - mostra sempre tutti i team */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
+                  {keyDevsByTeam.byTeam.map((team) => {
+                    const teamTotal = team.byStatus.reduce((sum, item) => sum + item.count, 0)
                     
-                    {/* Legenda unica condivisa */}
-                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4 sm:pt-6">
-                      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 sm:mb-4">
-                        Legenda Stati
-                      </h3>
-                      <SharedLegend />
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-gray-500 dark:text-gray-400 text-center py-4 text-sm">
-                    Nessuno Sviluppo Chiave con status Front Validato o superiore per questo mese.
-                    <br />
-                    <span className="text-xs mt-2 block">
-                      Nota: vengono visualizzati solo gli sviluppi con stato Front Validato, In Corso, Completato o Controllato.
-                    </span>
-                  </div>
-                )}
+                    return (
+                      <div key={team.teamId} className="flex flex-col items-center">
+                        <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm sm:text-base mb-2 text-center break-words px-2">
+                          {team.teamName}
+                        </h3>
+                        <div className="w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] flex items-center justify-center">
+                          <PieChart 
+                            data={team.byStatus} 
+                            size={windowWidth < 640 ? 140 : 160} 
+                            teamId={team.teamId}
+                            monthRef={selectedMonth}
+                          />
+                        </div>
+                        <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">
+                          Totale: {teamTotal}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                
+                {/* Legenda unica condivisa */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 sm:pt-6">
+                  <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 sm:mb-4">
+                    Legenda Stati
+                  </h3>
+                  <SharedLegend />
+                </div>
               </>
             ) : (
               <div className="text-gray-500 dark:text-gray-400">Caricamento dati...</div>
-            )}
-          </div>
-
-          {/* Monthly Progress by Team */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 sm:mb-6 break-words">
-              Completati per Team - {selectedMonth}
-            </h2>
-            {okrData?.byTeam && okrData.byTeam.length > 0 ? (
-              <BarChart data={okrData.byTeam} />
-            ) : (
-              <div className="text-gray-500 dark:text-gray-400 text-sm">Nessun team con Sviluppi Chiave questo mese</div>
             )}
           </div>
 
@@ -742,32 +735,10 @@ export default function DashboardPage() {
       {activeTab === 'weeklyLoom' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 min-w-0">
           <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 break-words">
-            Update Loom per Settimana
+            Aggiornamenti sul Core
           </h2>
           {updatesByWeek ? (
             <div>
-              <div className="mb-4">
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Seleziona Settimana
-                </label>
-                <select
-                  value={effectiveSelectedWeek}
-                  onChange={(e) => {
-                    setSelectedWeek(e.target.value)
-                  }}
-                  className="w-full sm:w-64 px-3 sm:px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {weekOptions.length > 0 ? (
-                    weekOptions.map((weekRef) => (
-                      <option key={weekRef} value={weekRef}>
-                        {weekRef}
-                      </option>
-                    ))
-                  ) : (
-                    <option value={previousWeek}>{previousWeek}</option>
-                  )}
-                </select>
-              </div>
               {updatesByCoreApp.length > 0 ? (
                 <div className="space-y-4 sm:space-y-6">
                   {updatesByCoreApp.map((group) => (
@@ -788,21 +759,23 @@ export default function DashboardPage() {
                       </div>
                       <div className="space-y-3 sm:space-y-4">
                         {group.updates.map((update) => (
-                          <div key={update._id}>
-                            {update.title && (
-                              <h4 className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 break-words">
-                                {update.title}
-                              </h4>
-                            )}
-                            {update.notes && (
-                              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-3 break-words">
-                                {update.notes}
-                              </p>
-                            )}
+                          <div key={update._id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              {update.title && (
+                                <h4 className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 break-words">
+                                  {update.title}
+                                </h4>
+                              )}
+                              {update.notes && (
+                                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 break-words">
+                                  {update.notes}
+                                </p>
+                              )}
+                            </div>
                             {update.loomUrl && (
                               <button
                                 onClick={() => setOpenLoomDialog({ url: update.loomUrl!, title: update.title })}
-                                className="w-full sm:w-auto px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 text-xs sm:text-sm font-medium transition-colors"
+                                className="shrink-0 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 text-xs sm:text-sm font-medium transition-colors"
                               >
                                 ▶ Guarda Video Loom
                               </button>
@@ -815,7 +788,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="text-gray-500 dark:text-gray-400 text-center py-4 text-sm">
-                  Nessun update disponibile per la settimana selezionata
+                  Nessun update disponibile
                 </div>
               )}
             </div>
@@ -848,46 +821,68 @@ export default function DashboardPage() {
           </div>
           {pastKeyDevs && pastKeyDevs.length > 0 ? (
             <div className="space-y-3">
-              {pastKeyDevs.map((kd) => (
-                <div
-                  key={kd._id}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100 break-words">
-                      {kd.readableId}: {kd.title}
-                    </div>
-                    <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      Mese: {kd.monthRef} | Stato: {formatStatus(kd.status)}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-start sm:self-auto">
-                    <Link
-                      to="/keydevs/$id/notes"
-                      params={{ id: kd.readableId }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
-                      title="Vedi note"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                      <span>Note</span>
-                      {(kd.notesCount || 0) > 0 && (
-                        <span className="px-1.5 py-0.5 bg-blue-200 dark:bg-blue-800 rounded-full text-xs font-semibold">
-                          {kd.notesCount || 0}
+              {pastKeyDevs.map((kd) => {
+                const statusColorInfo = statusColors[kd.status]
+                const statusBgColor = isDark ? statusColorInfo?.dark : statusColorInfo?.light || '#6b7280'
+                
+                return (
+                  <div
+                    key={kd._id}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100 break-words">
+                        {kd.readableId}: {kd.title}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                          Mese: <span className="font-medium text-gray-700 dark:text-gray-300">{formatMonth(kd.monthRef)}</span>
                         </span>
-                      )}
-                    </Link>
-                    <Link
-                      to="/keydevs/$id"
-                      params={{ id: kd._id }}
-                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs sm:text-sm whitespace-nowrap"
-                    >
-                      Dettagli →
-                    </Link>
+                        <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">|</span>
+                        <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                          Stato:
+                        </span>
+                        <span
+                          className="px-2 py-0.5 text-xs sm:text-sm font-medium rounded-full"
+                          style={{
+                            backgroundColor: statusBgColor,
+                            color: isDark ? '#fff' : '#1f2937'
+                          }}
+                        >
+                          {formatStatus(kd.status)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-start sm:self-auto">
+                      <Link
+                        to="/keydevs/$id/notes"
+                        params={{ id: kd.readableId }}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
+                        title="Vedi note"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <span>Note</span>
+                        {(kd.notesCount || 0) > 0 && (
+                          <span className="px-1.5 py-0.5 bg-blue-200 dark:bg-blue-800 rounded-full text-xs font-semibold">
+                            {kd.notesCount || 0}
+                          </span>
+                        )}
+                      </Link>
+                      <Link
+                        to="/keydevs/$id"
+                        params={{ id: kd._id }}
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs sm:text-sm whitespace-nowrap"
+                      >
+                        Dettagli →
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <div className="text-gray-500 dark:text-gray-400 text-center py-4 text-sm">

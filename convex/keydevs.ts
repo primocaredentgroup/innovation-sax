@@ -51,7 +51,7 @@ const keydevReturnValidator = v.object({
 
 /**
  * Lista KeyDevs per mese (filtro obbligatorio).
- * Le bozze vengono filtrate per mese come tutti gli altri stati (tranne MockupDone, Rejected, Approved).
+ * Tutti gli stati con monthRef vengono filtrati per mese.
  */
 export const listByMonth = query({
   args: { monthRef: v.string() },
@@ -70,32 +70,6 @@ export const listByMonth = query({
 })
 
 /**
- * Lista KeyDevs in stati che non richiedono filtro per mese.
- * Stati: MockupDone, Rejected, Approved (non hanno ancora monthRef assegnato).
- */
-export const listWithoutMonthFilter = query({
-  args: {},
-  returns: v.array(keydevReturnValidator),
-  handler: async (ctx) => {
-    // Stati che non richiedono filtro per mese
-    const statuses = ['MockupDone', 'Rejected', 'Approved'] as const
-    
-    const results: Array<Doc<'keydevs'>> = []
-    
-    for (const status of statuses) {
-      const keydevs = await ctx.db
-        .query('keydevs')
-        .withIndex('by_status', (q) => q.eq('status', status))
-        .collect()
-        .then(kds => kds.filter(kd => !kd.deletedAt))
-      results.push(...keydevs)
-    }
-    
-    return results
-  }
-})
-
-/**
  * Lista tutti i KeyDevs senza filtro per mese.
  * Include tutti gli stati e tutti i mesi.
  */
@@ -104,29 +78,6 @@ export const listAll = query({
   returns: v.array(keydevReturnValidator),
   handler: async (ctx) => {
     return await ctx.db.query('keydevs').collect().then(kds => kds.filter(kd => !kd.deletedAt))
-  }
-})
-
-/**
- * Ottiene i contatori degli status per gli stati senza filtro mese.
- */
-export const getStatusCountsWithoutMonth = query({
-  args: {},
-  returns: v.record(v.string(), v.number()),
-  handler: async (ctx) => {
-    const statuses = ['MockupDone', 'Rejected', 'Approved'] as const
-    const counts: Record<string, number> = {}
-    
-    for (const status of statuses) {
-      const keydevs = await ctx.db
-        .query('keydevs')
-        .withIndex('by_status', (q) => q.eq('status', status))
-        .collect()
-        .then(kds => kds.filter(kd => !kd.deletedAt))
-      counts[status] = keydevs.length
-    }
-    
-    return counts
   }
 })
 
@@ -195,7 +146,7 @@ export const listRejected = query({
 
 /**
  * Ottiene i contatori degli status per un mese specifico.
- * Le bozze vengono filtrate per mese come tutti gli altri stati (tranne MockupDone, Rejected, Approved).
+ * Tutti gli stati con monthRef vengono filtrati per mese.
  */
 export const getStatusCounts = query({
   args: { monthRef: v.string() },

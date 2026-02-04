@@ -4,15 +4,15 @@ import { keydevStatusValidator } from './schema'
 
 /**
  * Calcola l'OKR score per un mese.
- * Score = (KeyDev Done / Budget Totale) * 100
+ * Score = (KeyDev Checked / Totale KeyDev del mese) * 100
  * Include anche le bozze senza mese associato.
  */
 export const getOKRScore = query({
   args: { monthRef: v.string() },
   returns: v.object({
     score: v.number(),
-    doneCount: v.number(),
-    totalBudget: v.number(),
+    checkedCount: v.number(),
+    totalCount: v.number(),
     byTeam: v.array(
       v.object({
         teamId: v.id('teams'),
@@ -23,14 +23,6 @@ export const getOKRScore = query({
     )
   }),
   handler: async (ctx, args) => {
-    // Ottieni il budget del mese
-    const month = await ctx.db
-      .query('months')
-      .withIndex('by_monthRef', (q) => q.eq('monthRef', args.monthRef))
-      .first()
-
-    const totalBudget = month?.totalKeyDev ?? 0
-
     // Ottieni tutti i KeyDev del mese
     const keydevsByMonth = await ctx.db
       .query('keydevs')
@@ -49,8 +41,9 @@ export const getOKRScore = query({
     // Combina i risultati
     const keydevs = [...keydevsByMonth, ...draftsWithoutMonth]
 
-    const doneCount = keydevs.filter((kd) => kd.status === 'Done').length
-    const score = totalBudget > 0 ? (doneCount / totalBudget) * 100 : 0
+    const totalCount = keydevs.length
+    const checkedCount = keydevs.filter((kd) => kd.status === 'Checked').length
+    const score = totalCount > 0 ? (checkedCount / totalCount) * 100 : 0
 
     // Raggruppa per team
     const teams = await ctx.db.query('teams').collect()
@@ -66,8 +59,8 @@ export const getOKRScore = query({
 
     return {
       score,
-      doneCount,
-      totalBudget,
+      checkedCount,
+      totalCount,
       byTeam
     }
   }
@@ -221,7 +214,8 @@ export const getKeyDevsByStatus = query({
 })
 
 /**
- * Ottiene i KeyDev filtrati per mese con status >= "FrontValidated", raggruppati per team e stato.
+ * Ottiene i KeyDev filtrati per mese, raggruppati per team e stato.
+ * Include tutti gli stati possibili dato che ora è possibile associare il mese a prescindere dallo status.
  */
 export const getKeyDevsByTeamAndStatus = query({
   args: { monthRef: v.string() },
@@ -240,32 +234,29 @@ export const getKeyDevsByTeamAndStatus = query({
     )
   }),
   handler: async (ctx, args) => {
-    // Ottieni tutti i KeyDev del mese
+    // Ottieni tutti i KeyDev del mese (senza filtrare per status)
     const keydevsByMonth = await ctx.db
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
       .then(kds => kds.filter(kd => !kd.deletedAt))
 
-    // Filtra solo quelli con status >= FrontValidated
-    const validStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked'] as const
-    const filteredKeydevs = keydevsByMonth.filter((kd) =>
-      validStatuses.includes(kd.status as typeof validStatuses[number])
-    )
+    // Tutti gli stati possibili
+    const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
 
     // Ottieni tutti i team
     const teams = await ctx.db.query('teams').collect()
 
-    // Raggruppa per team e stato
+    // Raggruppa per team e stato - mostra sempre tutti i team anche se vuoti
     const byTeam = teams.map((team) => {
-      const teamKeydevs = filteredKeydevs.filter((kd) => kd.teamId === team._id)
+      const teamKeydevs = keydevsByMonth.filter((kd) => kd.teamId === team._id)
       
       const statusCounts: Record<string, number> = {}
       for (const kd of teamKeydevs) {
         statusCounts[kd.status] = (statusCounts[kd.status] || 0) + 1
       }
 
-      const byStatus = validStatuses.map((status) => ({
+      const byStatus = allStatuses.map((status) => ({
         status,
         count: statusCounts[status] || 0
       }))
@@ -275,7 +266,7 @@ export const getKeyDevsByTeamAndStatus = query({
         teamName: team.name,
         byStatus
       }
-    }).filter((team) => team.byStatus.some((s) => s.count > 0))
+    })
 
     return {
       byTeam
