@@ -361,7 +361,9 @@ export default function CoreAppsListPage() {
                           {categoriesMap.get(app.categoryId)?.name}
                         </span>
                       ) : (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">-</span>
+                        <span className="px-2 py-1 text-xs rounded-full bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 font-medium">
+                          Nessuna categoria
+                        </span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -479,9 +481,13 @@ export default function CoreAppsListPage() {
                     {statusLabels[app.status]}
                   </span>
                   {/* Badge categoria */}
-                  {app.categoryId && categoriesMap.get(app.categoryId) && (
+                  {app.categoryId && categoriesMap.get(app.categoryId) ? (
                     <span className="px-2 py-1 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 whitespace-nowrap">
                       {categoriesMap.get(app.categoryId)?.name}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-1 text-xs rounded-full bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 font-medium whitespace-nowrap">
+                      Nessuna categoria
                     </span>
                   )}
                 </div>

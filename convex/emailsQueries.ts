@@ -163,7 +163,7 @@ export const getOwnersOfInProgressApps = internalQuery({
 /**
  * Query interna per recuperare CoreApp con subscribers per notifica nuovo update.
  * I subscribers vengono recuperati dalla categoria della CoreApp.
- * Per retrocompatibilità, se la CoreApp non ha una categoria, usa i subscriberIds della CoreApp stessa.
+ * Se la CoreApp non ha una categoria assegnata, l'array di subscribers sarà vuoto.
  */
 export const getCoreAppWithSubscribers = internalQuery({
   args: {
