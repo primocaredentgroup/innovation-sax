@@ -40,11 +40,6 @@ export const noteTypeValidator = v.union(
   v.literal('Improvement') // Deprecato, mantenuto per retrocompatibilità
 )
 
-export const blockingLabelStatusValidator = v.union(
-  v.literal('Open'),
-  v.literal('Closed')
-)
-
 // Weight validator per keydevs (peso dello sviluppo per validazione tech)
 export const keydevWeightValidator = v.union(
   v.literal(0),
@@ -109,7 +104,7 @@ export default defineSchema({
     name: v.string()
   }),
 
-  // Labels (tipologie di blocking labels)
+  // Labels
   labels: defineTable({
     value: v.string(), // Valore tecnico/identificativo (es. "Improvement", "Bug", "TechDebt")
     label: v.string() // Etichetta visualizzata (es. "Miglioramento", "Bug", "Debito Tecnico")
@@ -185,16 +180,6 @@ export default defineSchema({
     .index('by_keydev', ['keyDevId'])
     .index('by_author', ['authorId']),
 
-  // Blocking Labels
-  blockingLabels: defineTable({
-    keyDevId: v.id('keydevs'),
-    labelId: v.id('labels'),
-    status: blockingLabelStatusValidator
-  })
-    .index('by_keydev', ['keyDevId'])
-    .index('by_status', ['status'])
-    .index('by_label', ['labelId']),
-
   // Budget allocation per Dept/Team/Month
   budgetKeyDev: defineTable({
     monthRef: v.string(),
@@ -204,6 +189,15 @@ export default defineSchema({
   })
     .index('by_month', ['monthRef'])
     .index('by_month_dept_team', ['monthRef', 'deptId', 'teamId']),
+
+  // Core App Categories (per raggruppare le Core Apps e gestire le subscription)
+  coreAppsCategories: defineTable({
+    name: v.string(),
+    slug: v.string(), // URL-friendly identifier
+    description: v.optional(v.string()),
+    subscriberIds: v.optional(v.array(v.id('users'))) // Utenti iscritti alle notifiche di questa categoria
+  })
+    .index('by_slug', ['slug']),
 
   // Core Apps
   coreApps: defineTable({
@@ -219,11 +213,12 @@ export default defineSchema({
       v.literal('Completed')
     ),
     ownerId: v.optional(v.id('users')), // Owner responsabile dell'app (temporaneamente opzionale per migrazione)
-    subscriberIds: v.optional(v.array(v.id('users'))) // Utenti iscritti alle notifiche (temporaneamente opzionale per migrazione)
+    categoryId: v.optional(v.id('coreAppsCategories')) // Categoria di appartenenza
   })
     .index('by_slug', ['slug'])
     .index('by_owner', ['ownerId'])
-    .index('by_status', ['status']),
+    .index('by_status', ['status'])
+    .index('by_category', ['categoryId']),
 
   // Core App Weekly Updates (Loom videos)
   coreAppUpdates: defineTable({

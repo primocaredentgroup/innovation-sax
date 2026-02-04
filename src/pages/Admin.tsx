@@ -3,7 +3,7 @@ import { api } from '../../convex/_generated/api'
 import { useState } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 
-type Tab = 'teams' | 'departments' | 'blockingLabels'
+type Tab = 'teams' | 'departments' | 'coreAppsCategories'
 
 export default function AdminPage() {
   const currentUser = useQuery(api.users.getCurrentUser)
@@ -15,25 +15,30 @@ export default function AdminPage() {
   const createDepartment = useMutation(api.departments.create)
   const updateDepartment = useMutation(api.departments.update)
   const removeDepartment = useMutation(api.departments.remove)
-  const labels = useQuery(api.labels.list)
-  const createLabel = useMutation(api.labels.create)
-  const updateLabel = useMutation(api.labels.update)
-  const removeLabel = useMutation(api.labels.remove)
+  const coreAppsCategories = useQuery(api.coreAppsCategories.list)
+  const coreApps = useQuery(api.coreApps.list)
+  const createCategory = useMutation(api.coreAppsCategories.create)
+  const updateCategory = useMutation(api.coreAppsCategories.update)
+  const removeCategory = useMutation(api.coreAppsCategories.remove)
+  const updateCoreApp = useMutation(api.coreApps.update)
 
   const [activeTab, setActiveTab] = useState<Tab>('teams')
   const [editingTeam, setEditingTeam] = useState<Id<'teams'> | null>(null)
   const [editingDepartment, setEditingDepartment] = useState<Id<'departments'> | null>(null)
-  const [editingLabel, setEditingLabel] = useState<Id<'labels'> | null>(null)
   const [newTeamName, setNewTeamName] = useState('')
   const [newDepartmentName, setNewDepartmentName] = useState('')
   const [newDepartmentTeams, setNewDepartmentTeams] = useState<Id<'teams'>[]>([])
   const [editTeamName, setEditTeamName] = useState('')
   const [editDepartmentName, setEditDepartmentName] = useState('')
   const [editDepartmentTeams, setEditDepartmentTeams] = useState<Id<'teams'>[]>([])
-  const [newLabelValue, setNewLabelValue] = useState('')
-  const [newLabelLabel, setNewLabelLabel] = useState('')
-  const [editLabelValue, setEditLabelValue] = useState('')
-  const [editLabelLabel, setEditLabelLabel] = useState('')
+  const [editingCategory, setEditingCategory] = useState<Id<'coreAppsCategories'> | null>(null)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategorySlug, setNewCategorySlug] = useState('')
+  const [newCategoryDescription, setNewCategoryDescription] = useState('')
+  const [editCategoryName, setEditCategoryName] = useState('')
+  const [editCategorySlug, setEditCategorySlug] = useState('')
+  const [editCategoryDescription, setEditCategoryDescription] = useState('')
+  const [editCategoryCoreApps, setEditCategoryCoreApps] = useState<Id<'coreApps'>[]>([])
 
   // Solo Admin può accedere
   if (!currentUser?.roles?.includes('Admin')) {
@@ -104,48 +109,85 @@ export default function AdminPage() {
     await removeDepartment({ id })
   }
 
-  // Gestione Labels
-  const handleCreateLabel = async () => {
-    if (!newLabelValue.trim() || !newLabelLabel.trim()) return
+  // Gestione Categorie Core Apps
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) return
     try {
-      await createLabel({ value: newLabelValue.trim(), label: newLabelLabel.trim() })
-      setNewLabelValue('')
-      setNewLabelLabel('')
+      await createCategory({
+        name: newCategoryName.trim(),
+        slug: newCategorySlug.trim() || undefined,
+        description: newCategoryDescription.trim() || undefined
+      })
+      setNewCategoryName('')
+      setNewCategorySlug('')
+      setNewCategoryDescription('')
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Errore nella creazione della label')
+      alert(error instanceof Error ? error.message : 'Errore nella creazione della categoria')
     }
   }
 
-  const handleUpdateLabel = async (id: Id<'labels'>) => {
-    if (!editLabelValue.trim() || !editLabelLabel.trim()) return
+  const handleUpdateCategory = async (id: Id<'coreAppsCategories'>) => {
+    if (!editCategoryName.trim()) return
     try {
-      await updateLabel({ id, value: editLabelValue.trim(), label: editLabelLabel.trim() })
-      setEditingLabel(null)
-      setEditLabelValue('')
-      setEditLabelLabel('')
+      await updateCategory({
+        id,
+        name: editCategoryName.trim(),
+        slug: editCategorySlug.trim() || undefined,
+        description: editCategoryDescription.trim() || undefined
+      })
+      
+      // Aggiorna le Core Apps associate
+      const currentAssociatedApps = coreApps?.filter(app => app.categoryId === id) || []
+      const currentAssociatedIds = currentAssociatedApps.map(app => app._id)
+      
+      // Rimuovi la categoria dalle Core Apps che non sono più selezionate
+      for (const appId of currentAssociatedIds) {
+        if (!editCategoryCoreApps.includes(appId)) {
+          await updateCoreApp({ id: appId, categoryId: undefined })
+        }
+      }
+      
+      // Aggiungi la categoria alle Core Apps selezionate che non l'avevano già
+      for (const appId of editCategoryCoreApps) {
+        if (!currentAssociatedIds.includes(appId)) {
+          await updateCoreApp({ id: appId, categoryId: id })
+        }
+      }
+      
+      setEditingCategory(null)
+      setEditCategoryName('')
+      setEditCategorySlug('')
+      setEditCategoryDescription('')
+      setEditCategoryCoreApps([])
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Errore nell\'aggiornamento della label')
+      alert(error instanceof Error ? error.message : 'Errore nell\'aggiornamento della categoria')
     }
   }
 
-  const handleStartEditLabel = (id: Id<'labels'>, currentValue: string, currentLabel: string) => {
-    setEditingLabel(id)
-    setEditLabelValue(currentValue)
-    setEditLabelLabel(currentLabel)
+  const handleStartEditCategory = (id: Id<'coreAppsCategories'>, currentName: string, currentSlug: string, currentDescription?: string) => {
+    setEditingCategory(id)
+    setEditCategoryName(currentName)
+    setEditCategorySlug(currentSlug)
+    setEditCategoryDescription(currentDescription || '')
+    // Inizializza con le Core Apps già associate
+    const associatedApps = coreApps?.filter(app => app.categoryId === id) || []
+    setEditCategoryCoreApps(associatedApps.map(app => app._id))
   }
 
-  const handleCancelEditLabel = () => {
-    setEditingLabel(null)
-    setEditLabelValue('')
-    setEditLabelLabel('')
+  const handleCancelEditCategory = () => {
+    setEditingCategory(null)
+    setEditCategoryName('')
+    setEditCategorySlug('')
+    setEditCategoryDescription('')
+    setEditCategoryCoreApps([])
   }
 
-  const handleRemoveLabel = async (id: Id<'labels'>) => {
-    if (!confirm('Sei sicuro di voler eliminare questa label? Non sarà possibile eliminarla se è ancora in uso da blocking labels.')) return
+  const handleRemoveCategory = async (id: Id<'coreAppsCategories'>) => {
+    if (!confirm('Sei sicuro di voler eliminare questa categoria? Le Core Apps associate perderanno il riferimento alla categoria.')) return
     try {
-      await removeLabel({ id })
+      await removeCategory({ id })
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Errore nell\'eliminazione della label')
+      alert(error instanceof Error ? error.message : 'Errore nell\'eliminazione della categoria')
     }
   }
 
@@ -154,7 +196,7 @@ export default function AdminPage() {
     <div className="w-full max-w-full">
       <div className="mb-4 lg:mb-6">
         <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100">Amministrazione</h1>
-        <p className="text-xs lg:text-sm text-gray-600 dark:text-gray-400 mt-1">Gestisci team, dipartimenti, budget totale e blocking labels</p>
+        <p className="text-xs lg:text-sm text-gray-600 dark:text-gray-400 mt-1">Gestisci team, dipartimenti e categorie Core Apps</p>
       </div>
 
       {/* Tab Navigation */}
@@ -181,14 +223,14 @@ export default function AdminPage() {
             Dipartimenti
           </button>
           <button
-            onClick={() => setActiveTab('blockingLabels')}
+            onClick={() => setActiveTab('coreAppsCategories')}
             className={`py-3 lg:py-4 px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap ${
-              activeTab === 'blockingLabels'
+              activeTab === 'coreAppsCategories'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
             }`}
           >
-            Blocking Labels
+            Categorie Core Apps
           </button>
         </nav>
       </div>
@@ -451,41 +493,44 @@ export default function AdminPage() {
       </div>
       )}
 
-      {activeTab === 'blockingLabels' && (
+      {activeTab === 'coreAppsCategories' && (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Tipologie di Blocking Labels</h2>
+          <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Categorie Core Apps</h2>
         </div>
         <div className="p-4 lg:p-6">
           <p className="text-xs lg:text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Gestisci le tipologie di blocking labels disponibili nel sistema.
+            Gestisci le categorie per organizzare le Core Apps. Gli utenti possono iscriversi alle categorie per ricevere notifiche.
           </p>
           
           <div className="mb-4 space-y-2">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                value={newLabelValue}
-                onChange={(e) => setNewLabelValue(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleCreateLabel()}
-                placeholder="Valore (es. Improvement, Bug)"
-                className="flex-1 px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-              <input
-                type="text"
-                value={newLabelLabel}
-                onChange={(e) => setNewLabelLabel(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleCreateLabel()}
-                placeholder="Etichetta (es. Miglioramento, Bug)"
-                className="flex-1 px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-              <button
-                onClick={handleCreateLabel}
-                className="px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 whitespace-nowrap"
-              >
-                Aggiungi
-              </button>
-            </div>
+            <input
+              type="text"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="Nome categoria"
+              className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+            />
+            <input
+              type="text"
+              value={newCategorySlug}
+              onChange={(e) => setNewCategorySlug(e.target.value)}
+              placeholder="Slug (opzionale, generato automaticamente se vuoto)"
+              className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+            />
+            <textarea
+              value={newCategoryDescription}
+              onChange={(e) => setNewCategoryDescription(e.target.value)}
+              placeholder="Descrizione (opzionale)"
+              rows={2}
+              className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+            />
+            <button
+              onClick={handleCreateCategory}
+              className="w-full sm:w-auto px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+            >
+              Aggiungi Categoria
+            </button>
           </div>
 
           <div className="overflow-x-auto -mx-4 lg:mx-0">
@@ -493,56 +538,114 @@ export default function AdminPage() {
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
-                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Valore</th>
-                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Etichetta</th>
+                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Nome</th>
+                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Slug</th>
+                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Descrizione</th>
+                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Core Apps</th>
                     <th className="px-3 lg:px-4 py-2 lg:py-3 text-center text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Azioni</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {labels?.map((label) => {
-                    const isEditing = editingLabel === label._id
-                    const displayValue = isEditing ? editLabelValue : label.value
-                    const displayLabel = isEditing ? editLabelLabel : label.label
+                  {coreAppsCategories?.map((category) => {
+                    const isEditing = editingCategory === category._id
+                    const associatedApps = coreApps?.filter(app => app.categoryId === category._id) || []
 
                     return (
-                      <tr key={label._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm font-mono text-gray-900 dark:text-gray-100">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editLabelValue}
-                              onChange={(e) => setEditLabelValue(e.target.value)}
-                              className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
-                              autoFocus
-                            />
-                          ) : (
-                            displayValue
-                          )}
-                        </td>
+                      <tr key={category._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">
                           {isEditing ? (
                             <input
                               type="text"
-                              value={editLabelLabel}
-                              onChange={(e) => setEditLabelLabel(e.target.value)}
+                              value={editCategoryName}
+                              onChange={(e) => setEditCategoryName(e.target.value)}
+                              className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                              autoFocus
+                            />
+                          ) : (
+                            category.name
+                          )}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm font-mono text-gray-900 dark:text-gray-100">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editCategorySlug}
+                              onChange={(e) => setEditCategorySlug(e.target.value)}
                               className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
                             />
                           ) : (
-                            displayLabel
+                            category.slug
+                          )}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">
+                          {isEditing ? (
+                            <textarea
+                              value={editCategoryDescription}
+                              onChange={(e) => setEditCategoryDescription(e.target.value)}
+                              rows={2}
+                              className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                            />
+                          ) : (
+                            <span className={category.description ? '' : 'text-gray-400 dark:text-gray-500'}>
+                              {category.description || '-'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm">
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <select
+                                multiple
+                                value={editCategoryCoreApps}
+                                onChange={(e) => {
+                                  const selectedIds = Array.from(e.target.selectedOptions, option => option.value as Id<'coreApps'>)
+                                  setEditCategoryCoreApps(selectedIds)
+                                }}
+                                className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100 min-h-[100px]"
+                                size={Math.min(coreApps?.length || 0, 5)}
+                              >
+                                {coreApps?.map((app) => (
+                                  <option key={app._id} value={app._id}>
+                                    {app.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {editCategoryCoreApps.length} selezionate (Ctrl/Cmd + Click per selezioni multiple)
+                              </p>
+                            </div>
+                          ) : associatedApps.length > 0 ? (
+                            <div className="flex flex-col gap-1">
+                              {associatedApps.slice(0, 3).map((app) => (
+                                <span
+                                  key={app._id}
+                                  className="px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 inline-block"
+                                >
+                                  {app.name}
+                                </span>
+                              ))}
+                              {associatedApps.length > 3 && (
+                                <span className="text-gray-500 dark:text-gray-400 text-xs">
+                                  +{associatedApps.length - 3} altre
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-500">-</span>
                           )}
                         </td>
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-center">
                           {isEditing ? (
                             <div className="flex gap-1 lg:gap-2 justify-center flex-wrap">
                               <button
-                                onClick={() => handleUpdateLabel(label._id)}
+                                onClick={() => handleUpdateCategory(category._id)}
                                 className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
                               >
                                 Salva
                               </button>
                               <button
-                                onClick={handleCancelEditLabel}
-                                className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                                onClick={handleCancelEditCategory}
+                                className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
                               >
                                 Annulla
                               </button>
@@ -550,13 +653,13 @@ export default function AdminPage() {
                           ) : (
                             <div className="flex gap-1 lg:gap-2 justify-center flex-wrap">
                               <button
-                                onClick={() => handleStartEditLabel(label._id, label.value, label.label)}
+                                onClick={() => handleStartEditCategory(category._id, category.name, category.slug, category.description)}
                                 className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
                               >
                                 Modifica
                               </button>
                               <button
-                                onClick={() => handleRemoveLabel(label._id)}
+                                onClick={() => handleRemoveCategory(category._id)}
                                 className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600"
                               >
                                 Elimina
@@ -570,8 +673,8 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-            {labels?.length === 0 && (
-              <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">Nessuna label presente</div>
+            {coreAppsCategories?.length === 0 && (
+              <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">Nessuna categoria presente</div>
             )}
           </div>
         </div>

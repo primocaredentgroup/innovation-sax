@@ -381,6 +381,7 @@ export default function CoreAppDetailPage() {
   const coreApp = useQuery(api.coreApps.getBySlug, { slug })
   const months = useQuery(api.months.list)
   const users = useQuery(api.users.listUsers)
+  const categories = useQuery(api.coreAppsCategories.list)
   
   // Trova l'owner dalla lista utenti
   const owner = useMemo(() => {
@@ -388,21 +389,17 @@ export default function CoreAppDetailPage() {
     return users.find(u => u._id === coreApp.ownerId) || null
   }, [users, coreApp])
   
-  // Trova i subscribers dalla lista utenti
-  const subscribers = useMemo(() => {
-    if (!users || !coreApp?.subscriberIds) return []
-    return users.filter(u => coreApp.subscriberIds?.includes(u._id) ?? false)
-  }, [users, coreApp])
-  
-  // Utenti disponibili per aggiungere come subscribers (esclusi owner e già iscritti)
-  const availableUsers = useMemo(() => {
-    if (!users || !coreApp) return []
-    const subscriberIds = coreApp.subscriberIds || []
-    return users.filter(u => 
-      u._id !== coreApp.ownerId && 
-      !subscriberIds.includes(u._id)
-    )
-  }, [users, coreApp])
+  // Trova la categoria della CoreApp
+  const category = useMemo(() => {
+    if (!categories || !coreApp?.categoryId) return null
+    return categories.find(c => c._id === coreApp.categoryId) || null
+  }, [categories, coreApp])
+
+  // Trova i subscribers della categoria
+  const categorySubscribers = useMemo(() => {
+    if (!users || !category?.subscriberIds) return []
+    return users.filter(u => category.subscriberIds?.includes(u._id) ?? false)
+  }, [users, category])
   
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
   
@@ -417,22 +414,26 @@ export default function CoreAppDetailPage() {
   const updateUpdate = useMutation(api.coreAppUpdates.update)
   const deleteUpdate = useMutation(api.coreAppUpdates.remove)
   const updateCoreApp = useMutation(api.coreApps.update)
-  const addSubscriber = useMutation(api.coreApps.addSubscriber)
-  const removeSubscriber = useMutation(api.coreApps.removeSubscriber)
+  const addCategorySubscriber = useMutation(api.coreAppsCategories.addSubscriber)
+  const removeCategorySubscriber = useMutation(api.coreAppsCategories.removeSubscriber)
 
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   type UpdateType = NonNullable<typeof updates>[number]
   const [selectedUpdate, setSelectedUpdate] = useState<UpdateType | null>(null)
   
-  // Stati per l'editing della percentuale e dell'URL
+  // Stati per l'editing della percentuale, dell'URL e della descrizione
   const [isEditingPercent, setIsEditingPercent] = useState(false)
   const [isEditingHubUrl, setIsEditingHubUrl] = useState(false)
+  const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false)
   const [tempPercent, setTempPercent] = useState<number>(0)
   const [tempHubUrl, setTempHubUrl] = useState<string>('')
+  const [tempDescription, setTempDescription] = useState<string>('')
   const [isAddingSubscriber, setIsAddingSubscriber] = useState(false)
   const [selectedNewSubscriber, setSelectedNewSubscriber] = useState<Id<'users'> | ''>('')
+  const [isEditingCategory, setIsEditingCategory] = useState(false)
+  const [selectedCategoryId, setSelectedCategoryId] = useState<Id<'coreAppsCategories'> | ''>('')
   
   // Genera le opzioni per i mesi (6 mesi passati + mese corrente + mesi futuri dal DB)
   const monthOptions = useMemo(() => {
@@ -472,6 +473,7 @@ export default function CoreAppDetailPage() {
   // Usa valori derivati quando non si sta editando, altrimenti usa lo stato locale
   const currentPercent = isEditingPercent ? tempPercent : (coreApp?.percentComplete || 0)
   const currentHubUrl = isEditingHubUrl ? tempHubUrl : (coreApp?.hubMilestonesUrl || '')
+  const currentDescription = isEditingDescription ? tempDescription : (coreApp?.description || '')
 
   // Inizializza lo stato locale quando si entra in modalità editing
   const startEditingPercent = useCallback(() => {
@@ -485,6 +487,13 @@ export default function CoreAppDetailPage() {
     if (coreApp) {
       setTempHubUrl(coreApp.hubMilestonesUrl || '')
       setIsEditingHubUrl(true)
+    }
+  }, [coreApp])
+
+  const startEditingDescription = useCallback(() => {
+    if (coreApp) {
+      setTempDescription(coreApp.description || '')
+      setIsEditingDescription(true)
     }
   }, [coreApp])
 
@@ -539,6 +548,15 @@ export default function CoreAppDetailPage() {
     setIsEditingHubUrl(false)
   }, [coreApp, tempHubUrl, updateCoreApp])
 
+  const handleSaveDescription = useCallback(async () => {
+    if (!coreApp) return
+    await updateCoreApp({
+      id: coreApp._id,
+      description: tempDescription.trim() || undefined
+    })
+    setIsEditingDescription(false)
+  }, [coreApp, tempDescription, updateCoreApp])
+
   const handleStatusChange = useCallback(async (newStatus: 'Planning' | 'InProgress' | 'Completed') => {
     if (!coreApp) return
     await updateCoreApp({
@@ -548,23 +566,39 @@ export default function CoreAppDetailPage() {
     setIsStatusDropdownOpen(false)
   }, [coreApp, updateCoreApp])
 
-  const handleAddSubscriber = useCallback(async () => {
-    if (!coreApp || !selectedNewSubscriber) return
-    await addSubscriber({
-      id: coreApp._id,
+  const handleAddCategorySubscriber = useCallback(async () => {
+    if (!category || !selectedNewSubscriber) return
+    await addCategorySubscriber({
+      id: category._id,
       userId: selectedNewSubscriber
     })
     setSelectedNewSubscriber('')
     setIsAddingSubscriber(false)
-  }, [coreApp, selectedNewSubscriber, addSubscriber])
+  }, [category, selectedNewSubscriber, addCategorySubscriber])
 
-  const handleRemoveSubscriber = useCallback(async (userId: Id<'users'>) => {
-    if (!coreApp) return
-    await removeSubscriber({
-      id: coreApp._id,
+  const handleRemoveCategorySubscriber = useCallback(async (userId: Id<'users'>) => {
+    if (!category) return
+    await removeCategorySubscriber({
+      id: category._id,
       userId
     })
-  }, [coreApp, removeSubscriber])
+  }, [category, removeCategorySubscriber])
+
+  const handleSaveCategory = useCallback(async () => {
+    if (!coreApp) return
+    await updateCoreApp({
+      id: coreApp._id,
+      categoryId: selectedCategoryId || undefined
+    })
+    setIsEditingCategory(false)
+  }, [coreApp, selectedCategoryId, updateCoreApp])
+
+  const startEditingCategory = useCallback(() => {
+    if (coreApp) {
+      setSelectedCategoryId(coreApp.categoryId || '')
+      setIsEditingCategory(true)
+    }
+  }, [coreApp])
 
   if (!coreApp) {
     return (
@@ -625,9 +659,63 @@ export default function CoreAppDetailPage() {
         <div className="w-full lg:col-span-2 space-y-4 sm:space-y-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Informazioni</h2>
-            {coreApp.description && (
-              <p className="text-gray-600 dark:text-gray-400 mb-4 wrap-break-word">{coreApp.description}</p>
-            )}
+            <div className="mb-4">
+              {isEditingDescription ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={tempDescription}
+                    onChange={(e) => setTempDescription(e.target.value)}
+                    placeholder="Descrizione dell'applicazione..."
+                    rows={4}
+                    className="w-full px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setIsEditingDescription(false)
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveDescription}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
+                    >
+                      Salva
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingDescription(false)
+                      }}
+                      className="px-3 py-1 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-400 dark:hover:bg-gray-500 whitespace-nowrap"
+                    >
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="wrap-break-word">
+                  {currentDescription ? (
+                    <div className="flex items-start gap-2">
+                      <p className="text-gray-600 dark:text-gray-400 flex-1 min-w-0">{currentDescription}</p>
+                      <button
+                        onClick={startEditingDescription}
+                        className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 shrink-0"
+                        title="Modifica descrizione"
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={startEditingDescription}
+                      className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 text-sm underline"
+                    >
+                      + Aggiungi descrizione
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             {coreApp.repoUrl && (
               <a
                 href={coreApp.repoUrl}
@@ -663,81 +751,138 @@ export default function CoreAppDetailPage() {
               )}
             </div>
             
-            {/* Subscribers */}
+            {/* Categoria */}
             <div className="mt-4 pt-4 border-t dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase">
-                  Iscritti ({subscribers.length})
-                </h3>
-                {!isAddingSubscriber && availableUsers.length > 0 && (
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase">Categoria</h3>
+                {!isEditingCategory && (
                   <button
-                    onClick={() => setIsAddingSubscriber(true)}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                    onClick={startEditingCategory}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                   >
-                    + Aggiungi
+                    Modifica
                   </button>
                 )}
               </div>
               
-              {isAddingSubscriber && (
-                <div className="flex gap-2 mb-3">
+              {isEditingCategory ? (
+                <div className="space-y-2">
                   <select
-                    value={selectedNewSubscriber}
-                    onChange={(e) => setSelectedNewSubscriber(e.target.value as Id<'users'> | '')}
-                    className="flex-1 px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    value={selectedCategoryId}
+                    onChange={(e) => setSelectedCategoryId(e.target.value as Id<'coreAppsCategories'> | '')}
+                    className="w-full px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   >
-                    <option value="">Seleziona utente...</option>
-                    {availableUsers.map((user) => (
-                      <option key={user._id} value={user._id}>
-                        {user.name}
+                    <option value="">Nessuna categoria</option>
+                    {categories?.map((cat) => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.name}
                       </option>
                     ))}
                   </select>
-                  <button
-                    onClick={handleAddSubscriber}
-                    disabled={!selectedNewSubscriber}
-                    className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    Aggiungi
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsAddingSubscriber(false)
-                      setSelectedNewSubscriber('')
-                    }}
-                    className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-                  >
-                    Annulla
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveCategory}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                      Salva
+                    </button>
+                    <button
+                      onClick={() => setIsEditingCategory(false)}
+                      className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                    >
+                      Annulla
+                    </button>
+                  </div>
                 </div>
-              )}
-              
-              {subscribers.length > 0 ? (
-                <div className="space-y-2">
-                  {subscribers.map((subscriber) => (
-                    <div key={subscriber._id} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {subscriber.picture && (
-                          <img 
-                            src={subscriber.picture} 
-                            alt={subscriber.name} 
-                            className="w-6 h-6 rounded-full"
-                          />
-                        )}
-                        <span className="text-gray-900 dark:text-gray-100">{subscriber.name}</span>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveSubscriber(subscriber._id)}
-                        className="text-red-500 hover:text-red-700 dark:hover:text-red-400 text-sm"
-                        title="Rimuovi iscritto"
-                      >
-                        ✕
-                      </button>
+              ) : category ? (
+                <div>
+                  <span className="inline-block px-3 py-1 text-sm rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
+                    {category.name}
+                  </span>
+                  {category.description && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{category.description}</p>
+                  )}
+                  
+                  {/* Iscritti alla categoria */}
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                        Iscritti alla categoria ({categorySubscribers.length})
+                      </h4>
+                      {!isAddingSubscriber && users && users.length > categorySubscribers.length && (
+                        <button
+                          onClick={() => setIsAddingSubscriber(true)}
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                        >
+                          + Aggiungi
+                        </button>
+                      )}
                     </div>
-                  ))}
+                    
+                    {isAddingSubscriber && (
+                      <div className="flex gap-2 mb-3">
+                        <select
+                          value={selectedNewSubscriber}
+                          onChange={(e) => setSelectedNewSubscriber(e.target.value as Id<'users'> | '')}
+                          className="flex-1 px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        >
+                          <option value="">Seleziona utente...</option>
+                          {users?.filter(u => !category.subscriberIds?.includes(u._id)).map((user) => (
+                            <option key={user._id} value={user._id}>
+                              {user.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleAddCategorySubscriber}
+                          disabled={!selectedNewSubscriber}
+                          className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          Aggiungi
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsAddingSubscriber(false)
+                            setSelectedNewSubscriber('')
+                          }}
+                          className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                        >
+                          Annulla
+                        </button>
+                      </div>
+                    )}
+                    
+                    {categorySubscribers.length > 0 ? (
+                      <div className="space-y-2">
+                        {categorySubscribers.map((subscriber) => (
+                          <div key={subscriber._id} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {subscriber.picture && (
+                                <img 
+                                  src={subscriber.picture} 
+                                  alt={subscriber.name} 
+                                  className="w-6 h-6 rounded-full"
+                                />
+                              )}
+                              <span className="text-gray-900 dark:text-gray-100 text-sm">{subscriber.name}</span>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveCategorySubscriber(subscriber._id)}
+                              className="text-red-500 hover:text-red-700 dark:hover:text-red-400 text-xs"
+                              title="Rimuovi iscritto dalla categoria"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 dark:text-gray-400 text-xs">Nessun iscritto alla categoria</p>
+                    )}
+                  </div>
                 </div>
               ) : (
-                <p className="text-gray-500 dark:text-gray-400 text-sm">Nessun iscritto</p>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">Nessuna categoria assegnata</p>
               )}
             </div>
           </div>

@@ -18,7 +18,7 @@ const coreAppReturnValidator = v.object({
   hubMilestonesUrl: v.optional(v.string()),
   status: coreAppStatusValidator,
   ownerId: v.optional(v.id('users')),
-  subscriberIds: v.optional(v.array(v.id('users'))),
+  categoryId: v.optional(v.id('coreAppsCategories')),
   lastUpdate: v.optional(v.object({
     createdAt: v.number(),
     weekRef: v.string()
@@ -33,6 +33,41 @@ export const list = query({
   returns: v.array(coreAppReturnValidator),
   handler: async (ctx) => {
     const apps = await ctx.db.query('coreApps').collect()
+    
+    // Per ogni app, trova l'ultimo aggiornamento
+    const appsWithLastUpdate = await Promise.all(
+      apps.map(async (app) => {
+        const lastUpdate = await ctx.db
+          .query('coreAppUpdates')
+          .withIndex('by_coreApp', (q) => q.eq('coreAppId', app._id))
+          .order('desc')
+          .first()
+        
+        return {
+          ...app,
+          lastUpdate: lastUpdate ? {
+            createdAt: lastUpdate.createdAt,
+            weekRef: lastUpdate.weekRef
+          } : undefined
+        }
+      })
+    )
+    
+    return appsWithLastUpdate
+  }
+})
+
+/**
+ * Lista le Core Apps per categoria.
+ */
+export const listByCategory = query({
+  args: { categoryId: v.id('coreAppsCategories') },
+  returns: v.array(coreAppReturnValidator),
+  handler: async (ctx, args) => {
+    const apps = await ctx.db
+      .query('coreApps')
+      .withIndex('by_category', (q) => q.eq('categoryId', args.categoryId))
+      .collect()
     
     // Per ogni app, trova l'ultimo aggiornamento
     const appsWithLastUpdate = await Promise.all(
@@ -101,7 +136,8 @@ export const create = mutation({
     slug: v.optional(v.string()),
     description: v.optional(v.string()),
     repoUrl: v.optional(v.string()),
-    ownerId: v.id('users')
+    ownerId: v.id('users'),
+    categoryId: v.optional(v.id('coreAppsCategories'))
   },
   returns: v.id('coreApps'),
   handler: async (ctx, args) => {
@@ -123,6 +159,14 @@ export const create = mutation({
       throw new Error('Owner non trovato')
     }
 
+    // Verifica che la categoria esista (se specificata)
+    if (args.categoryId) {
+      const category = await ctx.db.get(args.categoryId)
+      if (!category) {
+        throw new Error('Categoria non trovata')
+      }
+    }
+
     return await ctx.db.insert('coreApps', {
       name: args.name,
       slug,
@@ -131,7 +175,7 @@ export const create = mutation({
       repoUrl: args.repoUrl,
       status: 'Planning',
       ownerId: args.ownerId,
-      subscriberIds: []
+      categoryId: args.categoryId
     })
   }
 })
@@ -149,7 +193,8 @@ export const update = mutation({
     repoUrl: v.optional(v.string()),
     hubMilestonesUrl: v.optional(v.string()),
     status: v.optional(coreAppStatusValidator),
-    ownerId: v.optional(v.id('users'))
+    ownerId: v.optional(v.id('users')),
+    categoryId: v.optional(v.id('coreAppsCategories'))
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -175,65 +220,15 @@ export const update = mutation({
       }
     }
 
+    // Se si sta aggiornando la categoria, verifica che esista
+    if (updates.categoryId) {
+      const category = await ctx.db.get(updates.categoryId)
+      if (!category) {
+        throw new Error('Categoria non trovata')
+      }
+    }
+
     await ctx.db.patch(id, updates)
-    return null
-  }
-})
-
-/**
- * Aggiunge un subscriber alla Core App.
- */
-export const addSubscriber = mutation({
-  args: {
-    id: v.id('coreApps'),
-    userId: v.id('users')
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const coreApp = await ctx.db.get(args.id)
-    if (!coreApp) {
-      throw new Error('Core App non trovata')
-    }
-
-    const user = await ctx.db.get(args.userId)
-    if (!user) {
-      throw new Error('Utente non trovato')
-    }
-
-    // Inizializza subscriberIds se non esiste
-    const currentSubscribers = coreApp.subscriberIds || []
-
-    // Verifica che l'utente non sia già iscritto
-    if (currentSubscribers.includes(args.userId)) {
-      return null // Già iscritto, non fare nulla
-    }
-
-    await ctx.db.patch(args.id, {
-      subscriberIds: [...currentSubscribers, args.userId]
-    })
-    return null
-  }
-})
-
-/**
- * Rimuove un subscriber dalla Core App.
- */
-export const removeSubscriber = mutation({
-  args: {
-    id: v.id('coreApps'),
-    userId: v.id('users')
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const coreApp = await ctx.db.get(args.id)
-    if (!coreApp) {
-      throw new Error('Core App non trovata')
-    }
-
-    const currentSubscribers = coreApp.subscriberIds || []
-    await ctx.db.patch(args.id, {
-      subscriberIds: currentSubscribers.filter((id) => id !== args.userId)
-    })
     return null
   }
 })

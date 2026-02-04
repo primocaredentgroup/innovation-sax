@@ -86,11 +86,6 @@ export default function KeyDevDetailPage() {
   const teams = useQuery(api.teams.list)
   const users = useQuery(api.users.listUsers)
   const currentUser = useQuery(api.users.getCurrentUser)
-  const blockingLabels = useQuery(
-    api.blockingLabels.listByKeyDev,
-    isNew || !keydev ? 'skip' : { keyDevId: keydev._id }
-  )
-  const availableLabels = useQuery(api.labels.list)
 
   const createKeyDev = useMutation(api.keydevs.create)
   const updateKeyDev = useMutation(api.keydevs.update)
@@ -101,8 +96,6 @@ export default function KeyDevDetailPage() {
   const linkMockupRepo = useMutation(api.keydevs.linkMockupRepo)
   const updateRepoUrl = useMutation(api.keydevs.updateRepoUrl)
   const updateMonth = useMutation(api.keydevs.updateMonth)
-  const createBlockingLabel = useMutation(api.blockingLabels.create)
-  const removeBlockingLabel = useMutation(api.blockingLabels.remove)
   const penalties = useQuery(
     api.penalties.listByKeyDev,
     isNew || !keydev ? 'skip' : { keyDevId: keydev._id }
@@ -375,22 +368,6 @@ export default function KeyDevDetailPage() {
     setIsEditingRepoUrl(false)
   }
 
-  const handleAddBlockingLabel = async (labelId: Id<'labels'>) => {
-    if (isNew || !keydev) return
-    try {
-      await createBlockingLabel({
-        keyDevId: keydev._id,
-        labelId
-      })
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Errore nell\'aggiunta della blocking label')
-    }
-  }
-
-  const handleRemoveBlockingLabel = async (id: Id<'blockingLabels'>) => {
-    if (!confirm('Sei sicuro di voler rimuovere questa blocking label?')) return
-    await removeBlockingLabel({ id })
-  }
 
   // Handler per rifiutare con motivo
   const handleReject = async () => {
@@ -1550,70 +1527,6 @@ export default function KeyDevDetailPage() {
               </dl>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Label Bloccanti</h3>
-              
-              {/* Mostra tutti i label possibili come pulsanti cliccabili */}
-              <div className="mb-4">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Aggiungi blocking label:</p>
-                <div className="flex flex-wrap gap-2">
-                  {availableLabels?.map((label) => {
-                    const existingOpen = blockingLabels?.find((bl) => bl.labelId === label._id && bl.status === 'Open')
-                    const existingClosed = blockingLabels?.find((bl) => bl.labelId === label._id && bl.status === 'Closed')
-                    return (
-                      <button
-                        key={label._id}
-                        onClick={() => handleAddBlockingLabel(label._id)}
-                        disabled={!!existingOpen}
-                        className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                          existingOpen
-                            ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 cursor-not-allowed'
-                            : existingClosed
-                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'
-                        }`}
-                        title={existingOpen ? 'Label già presente (aperta)' : existingClosed ? 'Label già presente (chiusa) - clicca per aggiungerne una nuova' : 'Clicca per aggiungere questa blocking label'}
-                      >
-                        {label.label}
-                        {existingOpen && ' ✓'}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Lista delle blocking labels esistenti */}
-              {blockingLabels && blockingLabels.length > 0 ? (
-                <div className="space-y-2">
-                  {blockingLabels.map((bl) => (
-                    <div
-                      key={bl._id}
-                      className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 py-2 rounded ${
-                        bl.status === 'Open' ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : 'bg-gray-50 dark:bg-gray-700/50'
-                      }`}
-                    >
-                      <span className={`wrap-break-word ${bl.status === 'Closed' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
-                        {bl.label.label}
-                      </span>
-                      <div className="flex items-center gap-2 self-start sm:self-auto">
-                        <span className={`text-xs whitespace-nowrap ${bl.status === 'Open' ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                          {bl.status === 'Open' ? 'Aperto' : 'Chiuso'}
-                        </span>
-                        <button
-                          onClick={() => handleRemoveBlockingLabel(bl._id)}
-                          className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 px-2 py-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 whitespace-nowrap"
-                          title="Rimuovi blocking label"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400">Nessuna label bloccante presente</p>
-              )}
-            </div>
           </div>
         )}
       </div>

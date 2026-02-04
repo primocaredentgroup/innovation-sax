@@ -116,16 +116,6 @@ export const remove = mutation({
   args: { id: v.id('labels') },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // Verifica che non ci siano blocking labels che usano questa label
-    const blockingLabels = await ctx.db
-      .query('blockingLabels')
-      .withIndex('by_label', (q) => q.eq('labelId', args.id))
-      .first()
-    
-    if (blockingLabels) {
-      throw new Error('Non è possibile eliminare una label che è ancora in uso da blocking labels')
-    }
-
     await ctx.db.delete(args.id)
     return null
   }

@@ -158,7 +158,9 @@ export const getOwnersOfInProgressApps = internalQuery({
 });
 
 /**
- * Query interna per recuperare CoreApp con subscribers per notifica nuovo update
+ * Query interna per recuperare CoreApp con subscribers per notifica nuovo update.
+ * I subscribers vengono recuperati dalla categoria della CoreApp.
+ * Per retrocompatibilità, se la CoreApp non ha una categoria, usa i subscriberIds della CoreApp stessa.
  */
 export const getCoreAppWithSubscribers = internalQuery({
   args: {
@@ -173,6 +175,11 @@ export const getCoreAppWithSubscribers = internalQuery({
         slug: v.string(),
         status: coreAppStatusValidator,
       }),
+      category: v.optional(v.object({
+        _id: v.id("coreAppsCategories"),
+        name: v.string(),
+        slug: v.string(),
+      })),
       update: v.object({
         _id: v.id("coreAppUpdates"),
         weekRef: v.string(),
@@ -202,15 +209,28 @@ export const getCoreAppWithSubscribers = internalQuery({
 
     const subscribers: Array<{ _id: Id<"users">; name: string; email?: string }> = [];
 
-    const subscriberIds = coreApp.subscriberIds || [];
-    for (const subscriberId of subscriberIds) {
-      const subscriber = await ctx.db.get(subscriberId);
-      if (subscriber) {
-        subscribers.push({
-          _id: subscriber._id,
-          name: subscriber.name,
-          email: subscriber.email,
-        });
+    // Recupera i subscribers dalla categoria
+    let category = null;
+
+    if (coreApp.categoryId) {
+      const categoryDoc = await ctx.db.get(coreApp.categoryId);
+      if (categoryDoc) {
+        category = {
+          _id: categoryDoc._id,
+          name: categoryDoc.name,
+          slug: categoryDoc.slug,
+        };
+        const subscriberIds = categoryDoc.subscriberIds || [];
+        for (const subscriberId of subscriberIds) {
+          const subscriber = await ctx.db.get(subscriberId);
+          if (subscriber) {
+            subscribers.push({
+              _id: subscriber._id,
+              name: subscriber.name,
+              email: subscriber.email,
+            });
+          }
+        }
       }
     }
 
@@ -221,6 +241,7 @@ export const getCoreAppWithSubscribers = internalQuery({
         slug: coreApp.slug,
         status: coreApp.status,
       },
+      category: category || undefined,
       update: {
         _id: update._id,
         weekRef: update.weekRef,

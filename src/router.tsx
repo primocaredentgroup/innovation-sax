@@ -40,7 +40,6 @@ const keydevsRoute = createRoute({
     dept: z.string().optional(),
     team: z.string().optional(),
     status: z.union([z.string(), z.array(z.string())]).optional(),
-    blockingLabel: z.string().optional(),
     query: z.string().optional()
   })
 })

@@ -8,10 +8,10 @@
  * @module
  */
 
-import type * as blockingLabels from "../blockingLabels.js";
 import type * as budget from "../budget.js";
 import type * as coreAppUpdates from "../coreAppUpdates.js";
 import type * as coreApps from "../coreApps.js";
+import type * as coreAppsCategories from "../coreAppsCategories.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as departments from "../departments.js";
@@ -33,10 +33,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  blockingLabels: typeof blockingLabels;
   budget: typeof budget;
   coreAppUpdates: typeof coreAppUpdates;
   coreApps: typeof coreApps;
+  coreAppsCategories: typeof coreAppsCategories;
   crons: typeof crons;
   dashboard: typeof dashboard;
   departments: typeof departments;
