@@ -50,7 +50,7 @@ function OwnerAvatar({
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         onClick={onClick}
-        title={onClick ? 'Clicca per cambiare owner' : owner.name}
+        title={onClick ? (owner ? `Clicca per cambiare owner - ${owner.name}` : 'Clicca per cambiare owner') : owner.name}
       >
         {owner.picture ? (
           <img src={owner.picture} alt={owner.name} className="w-full h-full rounded-full object-cover" />
@@ -763,18 +763,11 @@ export default function CoreAppsListPage() {
                         handleOpenOwnerChangeModal(app)
                       }}
                     >
-                      <div className="flex items-center gap-2 cursor-pointer hover:opacity-80">
+                      <div className="flex items-center justify-center cursor-pointer hover:opacity-80">
                         <OwnerAvatar
                           owner={app.ownerId && usersMap.get(app.ownerId) ? { _id: app.ownerId, name: usersMap.get(app.ownerId)!.name, picture: usersMap.get(app.ownerId)?.picture } : null}
                           onClick={() => handleOpenOwnerChangeModal(app)}
                         />
-                        {app.ownerId && usersMap.get(app.ownerId) ? (
-                          <span className="text-sm text-gray-900 dark:text-gray-100">
-                            {usersMap.get(app.ownerId)?.name}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
-                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
