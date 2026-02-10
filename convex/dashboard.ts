@@ -266,7 +266,7 @@ export const getKeyDevsByTeamAndStatus = query({
 
 /**
  * Ottiene i KeyDev aggregati per tutti i mesi, raggruppati per team e stato.
- * Include solo i keydevs con monthRef (esclude le bozze senza mese).
+ * Include tutti i KeyDev (anche quelli con monthRef undefined).
  */
 export const getKeyDevsByTeamAndStatusAllMonths = query({
   args: {},
@@ -285,11 +285,11 @@ export const getKeyDevsByTeamAndStatusAllMonths = query({
     )
   }),
   handler: async (ctx) => {
-    // Ottieni tutti i KeyDev con monthRef (escludi le bozze senza mese)
+    // Ottieni tutti i KeyDev (inclusi quelli con monthRef undefined)
     const allKeydevs = await ctx.db
       .query('keydevs')
       .collect()
-      .then(kds => kds.filter(kd => !kd.deletedAt && kd.monthRef))
+      .then(kds => kds.filter(kd => !kd.deletedAt))
 
     // Tutti gli stati possibili
     const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
@@ -326,8 +326,8 @@ export const getKeyDevsByTeamAndStatusAllMonths = query({
 
 /**
  * Calcola l'OKR score aggregato per tutti i mesi.
- * Score = (KeyDev Checked / Totale KeyDev con monthRef) * 100
- * Include solo i keydevs con monthRef (esclude le bozze senza mese).
+ * Score = (KeyDev Checked / Totale KeyDev) * 100
+ * Include tutti i KeyDev (anche quelli con monthRef undefined).
  */
 export const getOKRScoreAllMonths = query({
   args: {},
@@ -345,11 +345,11 @@ export const getOKRScoreAllMonths = query({
     )
   }),
   handler: async (ctx) => {
-    // Ottieni tutti i KeyDev con monthRef (escludi le bozze senza mese)
+    // Ottieni tutti i KeyDev (inclusi quelli con monthRef undefined)
     const keydevs = await ctx.db
       .query('keydevs')
       .collect()
-      .then(kds => kds.filter(kd => !kd.deletedAt && kd.monthRef))
+      .then(kds => kds.filter(kd => !kd.deletedAt))
 
     const totalCount = keydevs.length
     const checkedCount = keydevs.filter((kd) => kd.status === 'Checked').length

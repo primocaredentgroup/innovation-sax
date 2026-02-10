@@ -41,14 +41,19 @@ const keydevsRoute = createRoute({
     dept: z.string().optional(),
     team: z.string().optional(),
     status: z.union([z.string(), z.array(z.string())]).optional(),
-    query: z.string().optional()
+    query: z.string().optional(),
+    owner: z.string().optional()
   })
 })
 
 const keydevNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/keydevs/new',
-  component: KeyDevNewPage
+  component: KeyDevNewPage,
+  validateSearch: z.object({
+    title: z.string().optional(),
+    description: z.string().optional()
+  })
 })
 
 const keydevDetailRoute = createRoute({

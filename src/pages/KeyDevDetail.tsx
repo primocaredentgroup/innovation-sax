@@ -92,6 +92,7 @@ export default function KeyDevDetailPage() {
   const updateStatus = useMutation(api.keydevs.updateStatus)
   const takeOwnership = useMutation(api.keydevs.takeOwnership)
   const assignOwner = useMutation(api.keydevs.assignOwner)
+  const assignRequester = useMutation(api.keydevs.assignRequester)
   const markAsDone = useMutation(api.keydevs.markAsDone)
   const linkMockupRepo = useMutation(api.keydevs.linkMockupRepo)
   const updateRepoUrl = useMutation(api.keydevs.updateRepoUrl)
@@ -126,6 +127,8 @@ export default function KeyDevDetailPage() {
   const [penaltyWeight, setPenaltyWeight] = useState('')
   const [penaltyDescription, setPenaltyDescription] = useState('')
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>('')
+  const [isEditingRequester, setIsEditingRequester] = useState(false)
+  const [editingRequesterId, setEditingRequesterId] = useState<string>('')
   const [editingMockupRepoUrl, setEditingMockupRepoUrl] = useState('')
   const [editingRepoUrl, setEditingRepoUrl] = useState('')
   const [isEditingMockupRepoUrl, setIsEditingMockupRepoUrl] = useState(false)
@@ -146,6 +149,14 @@ export default function KeyDevDetailPage() {
       setSelectedOwnerId('')
     }
   }, [keydev?.ownerId])
+
+  // Aggiorna editingRequesterId quando cambia il keydev
+  useEffect(() => {
+    if (keydev?.requesterId) {
+      setEditingRequesterId(keydev.requesterId)
+    }
+    setIsEditingRequester(false)
+  }, [keydev?.requesterId, keydev?._id])
   
   // Aggiorna techWeight quando cambia il keydev
   useEffect(() => {
@@ -1289,8 +1300,66 @@ export default function KeyDevDetailPage() {
                 </div>
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Requester</dt>
-                  <dd className="font-medium text-gray-900 dark:text-gray-100">
-                    {users?.find((u) => u._id === keydev.requesterId)?.name || 'N/A'}
+                  <dd>
+                    {(userIsAdmin || userIsTechValidator) && isEditingRequester ? (
+                      <div className="space-y-2">
+                        <select
+                          value={editingRequesterId}
+                          onChange={(e) => setEditingRequesterId(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+                          autoFocus
+                        >
+                          {users?.map((u) => (
+                            <option key={u._id} value={u._id}>
+                              {u.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={async () => {
+                              try {
+                                await assignRequester({
+                                  id: keydev._id,
+                                  requesterId: editingRequesterId as Id<'users'>
+                                })
+                                setIsEditingRequester(false)
+                              } catch (error) {
+                                alert(error instanceof Error ? error.message : 'Errore nel cambio del requester')
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm"
+                          >
+                            Salva
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingRequesterId(keydev.requesterId)
+                              setIsEditingRequester(false)
+                            }}
+                            className="px-3 py-1.5 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 text-sm"
+                          >
+                            Annulla
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => (userIsAdmin || userIsTechValidator) && setIsEditingRequester(true)}
+                        className={`flex items-center gap-2 group ${(userIsAdmin || userIsTechValidator) ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded px-2 py-1 -mx-2 -my-1' : ''}`}
+                      >
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {users?.find((u) => u._id === keydev.requesterId)?.name || 'N/A'}
+                        </span>
+                        {(userIsAdmin || userIsTechValidator) && (
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 dark:text-gray-400" title="Clicca per modificare">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </dd>
                 </div>
                 <div>

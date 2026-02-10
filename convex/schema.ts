@@ -164,7 +164,9 @@ export default defineSchema({
     .index('by_requester', ['requesterId'])
     .index('by_status', ['status'])
     .index('by_owner', ['ownerId'])
-    .index('by_readableId', ['readableId']),
+    .index('by_readableId', ['readableId'])
+    .searchIndex('search_title', { searchField: 'title' })
+    .searchIndex('search_readableId', { searchField: 'readableId' }),
 
   // Notes (commenti, menzioni) - possono essere collegate a keydevs o coreApps
   notes: defineTable({

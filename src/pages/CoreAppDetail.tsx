@@ -434,6 +434,8 @@ export default function CoreAppDetailPage() {
   const [selectedNewSubscriber, setSelectedNewSubscriber] = useState<Id<'users'> | ''>('')
   const [isEditingCategory, setIsEditingCategory] = useState(false)
   const [selectedCategoryId, setSelectedCategoryId] = useState<Id<'coreAppsCategories'> | ''>('')
+  const [isEditingOwner, setIsEditingOwner] = useState(false)
+  const [selectedOwnerId, setSelectedOwnerId] = useState<Id<'users'> | ''>('')
   
   // Genera le opzioni per i mesi (6 mesi passati + mese corrente + mesi futuri dal DB)
   const monthOptions = useMemo(() => {
@@ -600,6 +602,22 @@ export default function CoreAppDetailPage() {
     }
   }, [coreApp])
 
+  const startEditingOwner = useCallback(() => {
+    if (coreApp) {
+      setSelectedOwnerId(coreApp.ownerId || '')
+      setIsEditingOwner(true)
+    }
+  }, [coreApp])
+
+  const handleSaveOwner = useCallback(async () => {
+    if (!coreApp) return
+    await updateCoreApp({
+      id: coreApp._id,
+      ownerId: selectedOwnerId || undefined
+    })
+    setIsEditingOwner(false)
+  }, [coreApp, selectedOwnerId, updateCoreApp])
+
   if (!coreApp) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -746,10 +764,52 @@ export default function CoreAppDetailPage() {
               </a>
             )}
             
-            {/* Owner */}
+            {/* Owner - editabile come in KeyDevDetail */}
             <div className="mt-4 pt-4 border-t dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Owner</h3>
-              {owner ? (
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase">Owner</h3>
+                {!isEditingOwner && (
+                  <button
+                    onClick={startEditingOwner}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                  >
+                    Modifica
+                  </button>
+                )}
+              </div>
+              {isEditingOwner ? (
+                <div className="space-y-2">
+                  <select
+                    value={selectedOwnerId}
+                    onChange={(e) => setSelectedOwnerId(e.target.value as Id<'users'> | '')}
+                    className="w-full px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  >
+                    <option value="">Nessun owner</option>
+                    {users?.map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveOwner}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
+                    >
+                      Salva
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedOwnerId(coreApp.ownerId || '')
+                        setIsEditingOwner(false)
+                      }}
+                      className="px-3 py-1 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-400 dark:hover:bg-gray-500 whitespace-nowrap"
+                    >
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              ) : owner ? (
                 <div className="flex items-center gap-2">
                   {owner.picture && (
                     <img 

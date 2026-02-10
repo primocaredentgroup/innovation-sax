@@ -363,27 +363,57 @@ function PieChart({
   )
 }
 
-// Componente per la legenda condivisa (mostra tutti gli stati possibili)
-function SharedLegend() {
+// Ordine del flusso: 1. Bozza, 2. Mockup terminato, 3. Rifiutato, 4. Approvato, 5. Front validato, 6. In corso, 7. Completato, 8. Controllato
+const statusFlowOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
+
+// Componente per la legenda condivisa (mostra tutti gli stati possibili con conteggio e frecce)
+function SharedLegend({ 
+  statusCounts, 
+  monthRef, 
+  showAllMonths 
+}: { 
+  statusCounts: Record<string, number>
+  monthRef: string | undefined
+  showAllMonths: boolean
+}) {
   const isDark = useDarkMode()
-  
-  // Tutti gli stati possibili nell'ordine desiderato
-  const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
+  const navigate = useNavigate()
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-      {allStatuses.map((status) => {
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-3 sm:gap-x-4 sm:gap-y-4">
+      {statusFlowOrder.map((status, index) => {
         const color = isDark ? statusColors[status]?.dark : statusColors[status]?.light || '#6b7280'
+        const count = statusCounts[status] ?? 0
         
         return (
-          <div key={status} className="flex items-center gap-2">
-            <div 
-              className="w-3 h-3 sm:w-4 sm:h-4 rounded-full shrink-0"
-              style={{ backgroundColor: color }}
-            />
-            <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
-              {formatStatus(status)}
-            </span>
+          <div key={status} className="flex items-center gap-x-2 sm:gap-x-3">
+            {index > 0 && (
+              <span className="text-gray-400 dark:text-gray-500 shrink-0 text-sm sm:text-base" aria-hidden="true">
+                →
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                navigate({
+                  to: '/keydevs',
+                  search: {
+                    month: showAllMonths ? 'all' : monthRef,
+                    status
+                  }
+                })
+              }}
+              className="flex items-center gap-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded px-2.5 py-1.5 sm:px-3 sm:py-2 transition-colors cursor-pointer shrink-0"
+              title={`Clicca per vedere i KeyDev in stato "${formatStatus(status)}"${showAllMonths ? ' (tutti i mesi)' : ''}`}
+            >
+              <div 
+                className="w-3 h-3 sm:w-4 sm:h-4 rounded-full shrink-0"
+                style={{ backgroundColor: color }}
+              />
+              <span className="text-sm sm:text-base font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                {formatStatus(status)} ({count})
+              </span>
+            </button>
           </div>
         )
       })}
@@ -400,7 +430,7 @@ export default function DashboardPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   }, [])
 
-  const [selectedMonth, setSelectedMonth] = useState<string | 'all'>(currentMonth)
+  const [selectedMonth, setSelectedMonth] = useState<string | 'all'>('all')
   const [activeTab, setActiveTab] = useState<'okr' | 'weeklyLoom' | 'pastKeyDevs'>('okr')
   const [openLoomDialog, setOpenLoomDialog] = useState<{ url: string; title?: string } | null>(null)
   const { width: windowWidth } = useWindowSize()
@@ -434,6 +464,19 @@ export default function DashboardPage() {
     showAllMonths ? 'skip' : (selectedMonth !== 'all' ? { monthRef: selectedMonth } : 'skip')
   )
   const keyDevsByTeam = showAllMonths ? keyDevsByTeamAllMonths : keyDevsByTeamSingleMonth
+  
+  // Aggrega i conteggi per stato su tutti i team (per la legenda)
+  const legendStatusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    if (!keyDevsByTeam?.byTeam) return counts
+    for (const team of keyDevsByTeam.byTeam) {
+      for (const item of team.byStatus) {
+        counts[item.status] = (counts[item.status] ?? 0) + item.count
+      }
+    }
+    return counts
+  }, [keyDevsByTeam])
+  
   const updatesByWeek = useQuery(
     api.dashboard.getUpdatesByWeek, 
     showAllMonths ? {} : { monthRef: selectedMonth }
@@ -659,10 +702,14 @@ export default function DashboardPage() {
                   
                   {/* Legenda unica condivisa */}
                   <div className="border-t border-gray-200 dark:border-gray-700 pt-4 sm:pt-6">
-                    <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 sm:mb-4">
-                      Legenda Stati
+                    <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 sm:mb-5">
+                      Legenda Stati (clicca per filtrare)
                     </h3>
-                    <SharedLegend />
+                    <SharedLegend 
+                      statusCounts={legendStatusCounts} 
+                      monthRef={showAllMonths ? undefined : selectedMonth}
+                      showAllMonths={showAllMonths}
+                    />
                   </div>
                 </>
               ) : (

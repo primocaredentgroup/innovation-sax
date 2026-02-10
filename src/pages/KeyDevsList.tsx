@@ -3,7 +3,7 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useMemo, useState, useRef, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
-import { ChevronDown, X, MessageSquare, Calendar, Search } from 'lucide-react'
+import { ChevronDown, ChevronUp, X, MessageSquare, Calendar, Search } from 'lucide-react'
 import PrioritySelector from '../components/PrioritySelector'
 
 // Componente Avatar con Tooltip
@@ -198,6 +198,49 @@ const statusLabels: Record<string, string> = {
 // Ordine degli stati per la visualizzazione
 const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
 
+// Colonne ordinabili
+type SortField = 'priority' | 'title' | 'status' | 'month' | 'department' | 'team' | 'owner' | 'notes'
+
+// Header colonna ordinabile
+function SortableHeader({
+  label,
+  field,
+  currentSortField,
+  sortDir,
+  onSort,
+  className = '',
+  center
+}: {
+  label: string
+  field: SortField
+  currentSortField: SortField
+  sortDir: 'asc' | 'desc'
+  onSort: (f: SortField) => void
+  className?: string
+  center?: boolean
+}) {
+  const isActive = currentSortField === field
+  return (
+    <th
+      className={`px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100 select-none cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors ${className} ${center ? 'text-center' : 'text-left'}`}
+      onClick={() => onSort(field)}
+    >
+      <div className={`flex items-center gap-1 ${center ? 'justify-center' : ''}`}>
+        {label}
+        {isActive ? (
+          sortDir === 'asc' ? (
+            <ChevronUp size={14} className="shrink-0" />
+          ) : (
+            <ChevronDown size={14} className="shrink-0" />
+          )
+        ) : (
+          <ChevronDown size={14} className="shrink-0 opacity-40" />
+        )}
+      </div>
+    </th>
+  )
+}
+
 // Helper per ottenere solo gli stati precedenti (incluso quello attuale)
 const getPreviousStatuses = (currentStatus: string): string[] => {
   const currentIndex = statusOrder.indexOf(currentStatus)
@@ -230,6 +273,10 @@ export default function KeyDevsListPage() {
   const [ownerChangeLoading, setOwnerChangeLoading] = useState(false)
   const [ownerChangeError, setOwnerChangeError] = useState('')
 
+  // Ordinamento tabella: default priorità (1,2,3,4,0)
+  const [sortField, setSortField] = useState<SortField>('priority')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
   // Di default mostra tutti i mesi senza filtro
   // Se search.month non è presente, mostra tutti i mesi
   // Se search.month === 'all', mostra tutti i mesi
@@ -237,13 +284,25 @@ export default function KeyDevsListPage() {
   const showAllMonths = !search.month || search.month === 'all'
   const selectedMonth = search.month && search.month !== 'all' ? search.month : undefined
 
+  // Modalità ricerca: quando c'è query, la ricerca è backend e resetta tutti i filtri
+  const searchQuery = search.query?.trim()
+  const isSearchMode = !!searchQuery
+
+  // Query di ricerca backend (full-text su title e readableId) - indipendente dai filtri
+  const searchResults = useQuery(
+    api.keydevs.search,
+    isSearchMode ? { q: searchQuery } : 'skip'
+  )
+
   // Query per keydevs filtrati per mese (tutti gli stati con monthRef)
+  // Skip quando in modalità ricerca per efficienza
   const keydevsByMonth = useQuery(
     api.keydevs.listByMonth, 
-    selectedMonth ? { monthRef: selectedMonth } : 'skip'
+    !isSearchMode && selectedMonth ? { monthRef: selectedMonth } : 'skip'
   )
   // Query per tutti i keydevs quando "Tutti i mesi" è selezionato
-  const allKeydevs = useQuery(api.keydevs.listAll, showAllMonths ? {} : 'skip')
+  // Skip quando in modalità ricerca per efficienza
+  const allKeydevs = useQuery(api.keydevs.listAll, !isSearchMode && showAllMonths ? {} : 'skip')
   
   const departments = useQuery(api.departments.list)
   const teams = useQuery(api.teams.list)
@@ -270,34 +329,28 @@ export default function KeyDevsListPage() {
   )
   
   // Combina i keydevs e ordina per priorità (urgenti per primi)
+  // In modalità ricerca usa searchResults (backend), altrimenti listAll/listByMonth
   const keydevs = useMemo(() => {
     let combined: typeof allKeydevs = []
     
-    if (showAllMonths) {
-      // Quando "Tutti i mesi" è selezionato, mostra tutti i keydevs
+    if (isSearchMode) {
+      combined = searchResults || []
+    } else if (showAllMonths) {
       combined = allKeydevs || []
     } else {
-      // Quando un mese specifico è selezionato, mostra solo i keydevs di quel mese
-      // Tutti gli stati con monthRef vengono filtrati per mese
       combined = keydevsByMonth || []
     }
     
     // Ordina per priorità: 1 (Urgent) per primi, poi 2, 3, 4, 0 (No priority)
-    // Se la priorità è undefined, trattala come 0 (No priority)
     return [...combined].sort((a, b) => {
       const priorityA = a.priority ?? 0
       const priorityB = b.priority ?? 0
-      
-      // Ordine: 1, 2, 3, 4, 0
-      // Se la priorità è 0, va alla fine
       if (priorityA === 0 && priorityB !== 0) return 1
       if (priorityB === 0 && priorityA !== 0) return -1
       if (priorityA === 0 && priorityB === 0) return 0
-      
-      // Altrimenti ordina normalmente (1, 2, 3, 4)
       return priorityA - priorityB
     })
-  }, [showAllMonths, allKeydevs, keydevsByMonth])
+  }, [isSearchMode, searchResults, showAllMonths, allKeydevs, keydevsByMonth])
   
   // Calcola i contatori basandosi sui keydevs filtrati per team/dipartimento
   // Questo assicura che i contatori corrispondano ai keydevs visibili nella lista
@@ -329,69 +382,99 @@ export default function KeyDevsListPage() {
     return [search.status]
   }, [search.status])
 
-  // Applica i filtri base (mese, dept, team, status) per calcolare i contatori
-  // Di default esclude "Draft" (Bozza) se non ci sono filtri di stato selezionati
+  // Applica i filtri base (mese, dept, team, status, owner) per calcolare i contatori
+  // In modalità ricerca (search.query) i risultati sono già dal backend, nessun filtro da applicare
   const baseFilteredKeyDevs = useMemo(() => {
     if (!keydevs) return []
+    if (isSearchMode) return keydevs
     let result = keydevs
-
-    if (search.dept) {
-      result = result.filter((kd) => kd.deptId === search.dept)
-    }
-    if (search.team) {
-      result = result.filter((kd) => kd.teamId === search.team)
-    }
+    if (search.dept) result = result.filter((kd) => kd.deptId === search.dept)
+    if (search.team) result = result.filter((kd) => kd.teamId === search.team)
     if (selectedStatuses.length > 0) {
       result = result.filter((kd) => selectedStatuses.includes(kd.status))
     } else {
-      // Di default escludi "Draft" (Bozza) quando non ci sono filtri di stato selezionati
       result = result.filter((kd) => kd.status !== 'Draft')
     }
-
-    return result
-  }, [keydevs, search.dept, search.team, selectedStatuses])
-
-  // Filter keydevs based on search params
-  // La ricerca testuale include sempre i Draft anche se sono nascosti dalla tabella
-  const filteredKeyDevs = useMemo(() => {
-    let result = baseFilteredKeyDevs
-    
-    // Applica filtro di ricerca testuale se presente
-    if (search.query && search.query.trim()) {
-      const queryLower = search.query.toLowerCase().trim()
-      
-      // Se non ci sono filtri di stato selezionati, cerca anche nei Draft nascosti
-      if (selectedStatuses.length === 0) {
-        // Crea un set con gli ID già inclusi per evitare duplicati
-        const includedIds = new Set(result.map(kd => kd._id))
-        
-        // Cerca nei Draft che sono stati esclusi di default
-        const draftKeyDevs = (keydevs || []).filter((kd) => {
-          // Applica gli stessi filtri base (dept, team) ma solo per Draft
-          if (kd.status !== 'Draft') return false
-          if (search.dept && kd.deptId !== search.dept) return false
-          if (search.team && kd.teamId !== search.team) return false
-          
-          // Cerca nella query
-          const titleMatch = kd.title.toLowerCase().includes(queryLower)
-          const readableIdMatch = kd.readableId.toLowerCase().includes(queryLower)
-          return titleMatch || readableIdMatch
-        })
-        
-        // Aggiungi i Draft trovati alla ricerca
-        result = [...result, ...draftKeyDevs.filter(kd => !includedIds.has(kd._id))]
-      }
-      
-      // Applica il filtro di ricerca sui risultati visibili
-      result = result.filter((kd) => {
-        const titleMatch = kd.title.toLowerCase().includes(queryLower)
-        const readableIdMatch = kd.readableId.toLowerCase().includes(queryLower)
-        return titleMatch || readableIdMatch
-      })
+    if (search.owner) {
+      result = search.owner === '__no_owner__'
+        ? result.filter((kd) => !kd.ownerId)
+        : result.filter((kd) => kd.ownerId === search.owner)
     }
-    
     return result
-  }, [baseFilteredKeyDevs, search.query, search.dept, search.team, selectedStatuses, keydevs])
+  }, [keydevs, isSearchMode, search.dept, search.team, search.owner, selectedStatuses])
+
+  // filteredKeyDevs: in modalità ricerca = baseFilteredKeyDevs (già da backend); altrimenti = baseFilteredKeyDevs
+  const filteredKeyDevs = baseFilteredKeyDevs
+
+  // Ordinamento: applica sort a filteredKeyDevs (default priorità asc = 1,2,3,4,0)
+  const sortedKeyDevs = useMemo(() => {
+    const list = [...filteredKeyDevs]
+    const mult = sortDir === 'asc' ? 1 : -1
+
+    const priorityOrder = (p: number) => (p === 0 ? 999 : p)
+    const statusOrderIdx = (s: string) => {
+      const i = statusOrder.indexOf(s)
+      return i >= 0 ? i : 999
+    }
+
+    list.sort((a, b) => {
+      switch (sortField) {
+        case 'priority': {
+          const pa = priorityOrder(a.priority ?? 0)
+          const pb = priorityOrder(b.priority ?? 0)
+          return mult * (pa - pb)
+        }
+        case 'title':
+          return mult * (a.title || '').localeCompare(b.title || '')
+        case 'status':
+          return mult * (statusOrderIdx(a.status) - statusOrderIdx(b.status))
+        case 'month':
+          return mult * (a.monthRef || '').localeCompare(b.monthRef || '')
+        case 'department': {
+          const da = departments?.find((d) => d._id === a.deptId)?.name || ''
+          const db = departments?.find((d) => d._id === b.deptId)?.name || ''
+          return mult * da.localeCompare(db)
+        }
+        case 'team': {
+          const ta = teams?.find((t) => t._id === a.teamId)?.name || ''
+          const tb = teams?.find((t) => t._id === b.teamId)?.name || ''
+          return mult * ta.localeCompare(tb)
+        }
+        case 'owner': {
+          const oa = users?.find((u) => u._id === a.ownerId)?.name || ''
+          const ob = users?.find((u) => u._id === b.ownerId)?.name || ''
+          return mult * oa.localeCompare(ob)
+        }
+        case 'notes': {
+          const na = a.notesCount ?? 0
+          const nb = b.notesCount ?? 0
+          return mult * (na - nb)
+        }
+        default:
+          return 0
+      }
+    })
+    return list
+  }, [filteredKeyDevs, sortField, sortDir, departments, teams, users])
+
+  // Contatori owner per i keydevs filtrati (manca solo owner) - per popolare gli avatar
+  const ownerCounts = useMemo(() => {
+    if (!keydevs) return {} as Record<string, number>
+    let filtered = keydevs
+    if (search.dept) filtered = filtered.filter((kd) => kd.deptId === search.dept)
+    if (search.team) filtered = filtered.filter((kd) => kd.teamId === search.team)
+    if (selectedStatuses.length > 0) {
+      filtered = filtered.filter((kd) => selectedStatuses.includes(kd.status))
+    } else {
+      filtered = filtered.filter((kd) => kd.status !== 'Draft')
+    }
+    const counts: Record<string, number> = {}
+    for (const kd of filtered) {
+      const id = kd.ownerId || '__no_owner__'
+      counts[id] = (counts[id] ?? 0) + 1
+    }
+    return counts
+  }, [keydevs, search.dept, search.team, selectedStatuses])
 
   // Calcola l'utilizzo del budget (slot occupati vs slot massimi disponibili)
   const budgetUtilization = useMemo(() => {
@@ -467,6 +550,32 @@ export default function KeyDevsListPage() {
       to: '/keydevs',
       search: { ...search, ...updates }
     })
+  }
+
+  // Quando l'utente usa la ricerca: resetta tutti gli altri filtri (backend search è indipendente)
+  const handleSearchChange = (value: string) => {
+    const trimmed = value.trim()
+    if (trimmed) {
+      updateSearch({
+        query: value,
+        month: 'all',
+        dept: undefined,
+        team: undefined,
+        status: undefined,
+        owner: undefined
+      })
+    } else {
+      updateSearch({ query: undefined })
+    }
+  }
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
   }
 
   const toggleStatus = (status: string) => {
@@ -810,29 +919,6 @@ export default function KeyDevsListPage() {
             style={{ width: `${Math.min(budgetUtilization.percentage, 100)}%` }}
           />
         </div>
-        {/* Warning se gli slot allocati ai dipartimenti non corrispondono al budget */}
-        {budgetUtilization.maxSlots > 0 && budgetUtilization.budgetAssigned !== budgetUtilization.maxSlots && (
-          <p className="mt-2 text-sm font-medium text-yellow-600 dark:text-yellow-400">
-            ⚠️ Mancano {Math.abs(budgetUtilization.budgetAssigned - budgetUtilization.maxSlots)} slot da allocare!
-          </p>
-        )}
-        {budgetUtilization.percentage < 100 && budgetUtilization.maxSlots > 0 && (
-          <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
-            {budgetUtilization.competitionSlots > 0 ? (
-              <>
-                <span className="font-medium">Attenzione:</span> {budgetUtilization.competitionSlots} dipartiment{budgetUtilization.competitionSlots === 1 ? 'o' : 'i'} perderanno lo slot. 
-                Valida il front rapidamente per assicurarti di non essere tra quelli esclusi!
-              </>
-            ) : (
-              <>
-                Rimangono {budgetUtilization.remainingSlots % 1 === 0 
-                  ? budgetUtilization.remainingSlots 
-                  : budgetUtilization.remainingSlots.toFixed(2)} slot disponibili. 
-                Valida il front per occupare il tuo slot!
-              </>
-            )}
-          </p>
-        )}
         {budgetUtilization.percentage >= 100 && (
           <p className="mt-2 text-sm text-green-600 dark:text-green-400 font-medium">
             Tutti gli slot disponibili sono stati occupati!
@@ -880,9 +966,9 @@ export default function KeyDevsListPage() {
               />
               <input
                 type="text"
-                placeholder="Cerca per titolo o ID..."
+                placeholder="Cerca per titolo o ID... (resetta i filtri)"
                 value={search.query || ''}
-                onChange={(e) => updateSearch({ query: e.target.value || undefined })}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 text-base shadow-sm hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
               />
             </div>
@@ -948,6 +1034,36 @@ export default function KeyDevsListPage() {
                     )
                   })}
                 </div>
+                {/* Filtra per Owner - Mobile */}
+                <div className="border-t border-gray-200 dark:border-gray-700 p-2">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 px-2">Filtra per Owner</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(ownerCounts)
+                      .filter(([, count]) => count > 0)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([ownerId]) => {
+                        const owner = ownerId === '__no_owner__' ? null : users?.find((u) => u._id === ownerId)
+                        const isSelected = search.owner === ownerId
+                        return (
+                          <button
+                            key={ownerId}
+                            type="button"
+                            onClick={() => {
+                              updateSearch({ owner: isSelected ? undefined : ownerId })
+                              if (isSelected) setDropdownOpen(false)
+                            }}
+                            className={`rounded-full p-0.5 transition-all ${
+                              isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
+                            }`}
+                            title={owner ? `${owner.name} (${ownerCounts[ownerId]})` : `Senza owner (${ownerCounts[ownerId]})`}
+                          >
+                            <OwnerAvatar owner={owner} size="sm" />
+                            <span className="sr-only">{owner ? owner.name : 'Senza owner'}</span>
+                          </button>
+                        )
+                      })}
+                  </div>
+                </div>
                 <div className="border-t border-gray-200 dark:border-gray-700 p-2">
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
@@ -984,6 +1100,18 @@ export default function KeyDevsListPage() {
                             Rimuovi
                           </button>
                         </div>
+                      )}
+                      {search.owner && (
+                        <button
+                          onClick={() => {
+                            updateSearch({ owner: undefined })
+                            setDropdownOpen(false)
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                        >
+                          <X size={14} />
+                          Rimuovi filtro owner
+                        </button>
                       )}
                     </div>
                     {selectedStatuses.length === 0 && (
@@ -1054,6 +1182,50 @@ export default function KeyDevsListPage() {
               )
             })}
           </div>
+          {/* Filtra per Owner - Desktop */}
+          <div className="mt-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Filtra per Owner
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              {Object.entries(ownerCounts)
+                .filter(([, count]) => count > 0)
+                .sort(([, a], [, b]) => b - a)
+                .map(([ownerId]) => {
+                  const owner = ownerId === '__no_owner__' ? null : users?.find((u) => u._id === ownerId)
+                  const isSelected = search.owner === ownerId
+                  const count = ownerCounts[ownerId] ?? 0
+                  return (
+                    <button
+                      key={ownerId}
+                      type="button"
+                      onClick={() => updateSearch({ owner: isSelected ? undefined : ownerId })}
+                      className={`rounded-full p-0.5 transition-all ${
+                        isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
+                      }`}
+                      title={owner ? `${owner.name} (${count})` : `Senza owner (${count})`}
+                    >
+                      <OwnerAvatar owner={owner} size="sm" />
+                      {count > 0 && (
+                        <span className="sr-only">
+                          {owner ? owner.name : 'Senza owner'} - {count} KeyDev
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              {search.owner && (
+                <button
+                  onClick={() => updateSearch({ owner: undefined })}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                  title="Rimuovi filtro owner"
+                >
+                  <X size={14} />
+                  Rimuovi filtro owner
+                </button>
+              )}
+            </div>
+          </div>
           <div className="flex items-center gap-4 mt-2 flex-wrap">
             {selectedStatuses.length === 0 && (
               <p className="text-xs text-gray-500 dark:text-gray-400 italic">
@@ -1096,12 +1268,12 @@ export default function KeyDevsListPage() {
 
       {/* KeyDev List - Card View (Mobile) */}
       <div className="md:hidden space-y-3">
-        {filteredKeyDevs.length === 0 ? (
+        {sortedKeyDevs.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center text-gray-500 dark:text-gray-400">
             Nessuno Sviluppo Chiave trovato per i filtri selezionati
           </div>
         ) : (
-          filteredKeyDevs.map((kd) => {
+          sortedKeyDevs.map((kd) => {
             return (
               <div
                 key={kd._id}
@@ -1239,18 +1411,18 @@ export default function KeyDevsListPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Titolo</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Stato</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Mese</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Priorità</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Dipartimento</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Team</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 hidden lg:table-cell">Owner</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Note</th>
+                <SortableHeader label="Titolo" field="title" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader label="Stato" field="status" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader label="Mese" field="month" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader label="Priorità" field="priority" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader label="Dipartimento" field="department" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader label="Team" field="team" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader label="Owner" field="owner" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} className="hidden lg:table-cell" center />
+                <SortableHeader label="Note" field="notes" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredKeyDevs.map((kd) => (
+              {sortedKeyDevs.map((kd) => (
                 <tr
                   key={kd._id}
                   onClick={() => navigate({ to: '/keydevs/$id', params: { id: kd.readableId } })}
@@ -1368,7 +1540,7 @@ export default function KeyDevsListPage() {
           </table>
         </div>
 
-        {filteredKeyDevs.length === 0 && (
+        {sortedKeyDevs.length === 0 && (
           <div className="p-8 text-center text-gray-500 dark:text-gray-400">
             Nessuno Sviluppo Chiave trovato per i filtri selezionati
           </div>

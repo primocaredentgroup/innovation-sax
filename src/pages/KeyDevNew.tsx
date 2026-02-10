@@ -1,4 +1,4 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useState, useEffect, useMemo } from 'react'
@@ -6,6 +6,7 @@ import type { Id } from '../../convex/_generated/dataModel'
 
 export default function KeyDevNewPage() {
   const navigate = useNavigate()
+  const search = useSearch({ strict: false }) as { title?: string; description?: string }
   const createKeyDev = useMutation(api.keydevs.create)
 
   const departments = useQuery(api.departments.list)
@@ -50,6 +51,12 @@ export default function KeyDevNewPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.deptId, departments, teams])
+
+  // Pre-popola titolo e descrizione dai parametri URL
+  useEffect(() => {
+    if (search?.title) setTitle(search.title)
+    if (search?.description) setDesc(search.description)
+  }, [search?.title, search?.description])
 
   // Filtra i team in base al dipartimento selezionato
   const availableTeams = useMemo(() => {

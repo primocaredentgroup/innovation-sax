@@ -1,8 +1,168 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { useMemo, useState } from 'react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
+
+// Componente Avatar con Tooltip - cliccabile per cambiare owner
+function OwnerAvatar({
+  owner,
+  size = 'sm',
+  onClick
+}: {
+  owner: { _id: string; name: string; picture?: string } | null | undefined
+  size?: 'sm' | 'md'
+  onClick?: () => void
+}) {
+  const [showTooltip, setShowTooltip] = useState(false)
+
+  if (!owner) {
+    return (
+      <div
+        className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 ${onClick ? 'cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-500' : ''}`}
+        title="Nessun owner"
+        onClick={onClick}
+      >
+        ?
+      </div>
+    )
+  }
+
+  const initials = owner.name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+
+  const colors = [
+    'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500',
+    'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-red-500'
+  ]
+  const colorIndex = owner.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
+  const bgColor = colors[colorIndex]
+
+  return (
+    <div className="relative">
+      <div
+        className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full ${bgColor} flex items-center justify-center text-white font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        onClick={onClick}
+        title={onClick ? 'Clicca per cambiare owner' : owner.name}
+      >
+        {owner.picture ? (
+          <img src={owner.picture} alt={owner.name} className="w-full h-full rounded-full object-cover" />
+        ) : (
+          initials
+        )}
+      </div>
+      {showTooltip && !onClick && (
+        <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 dark:bg-gray-700 rounded shadow-lg whitespace-nowrap">
+          {owner.name}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700" />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Modal per cambio owner
+function OwnerChangeModal({
+  isOpen,
+  appName,
+  appSlug,
+  currentOwner,
+  users,
+  onConfirm,
+  onCancel,
+  isLoading,
+  error
+}: {
+  isOpen: boolean
+  appName: string
+  appSlug: string
+  currentOwner: { _id: string; name: string } | null | undefined
+  users: Array<{ _id: string; name: string }> | undefined
+  onConfirm: (ownerId: Id<'users'> | undefined) => Promise<void>
+  onCancel: () => void
+  isLoading: boolean
+  error: string
+}) {
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string>(() => currentOwner?._id || '')
+
+  if (!isOpen) return null
+
+  const handleConfirm = async () => {
+    await onConfirm(selectedOwnerId ? (selectedOwnerId as Id<'users'>) : undefined)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={onCancel}>
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Cambia Owner
+        </h3>
+
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p className="text-sm text-blue-800 dark:text-blue-300">
+            <span className="font-medium">{appSlug}</span> - {appName}
+          </p>
+          {currentOwner && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              Owner attuale: <span className="font-medium">{currentOwner.name}</span>
+            </p>
+          )}
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Seleziona nuovo owner
+          </label>
+          <select
+            value={selectedOwnerId}
+            onChange={(e) => setSelectedOwnerId(e.target.value)}
+            disabled={isLoading}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 disabled:opacity-50"
+          >
+            <option value="">Nessun owner</option>
+            {users?.map((user) => (
+              <option key={user._id} value={user._id}>
+                {user.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isLoading}
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isLoading}
+            className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Salvataggio...' : 'Conferma'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const statusColors: Record<string, string> = {
   Planning: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
@@ -57,9 +217,27 @@ export default function CoreAppsListPage() {
   const coreApps = useQuery(api.coreApps.list)
   const categories = useQuery(api.coreAppsCategories.list)
   const users = useQuery(api.users.listUsers)
-  
+  const updateCoreApp = useMutation(api.coreApps.update)
+
   // Stato per la categoria selezionata (null = tutte)
   const [selectedCategoryId, setSelectedCategoryId] = useState<Id<'coreAppsCategories'> | null>(null)
+
+  // Stato per il modal di cambio owner
+  const [ownerChangeModal, setOwnerChangeModal] = useState<{
+    isOpen: boolean
+    coreAppId: Id<'coreApps'> | null
+    appName: string
+    appSlug: string
+    currentOwnerId: Id<'users'> | null | undefined
+  }>({
+    isOpen: false,
+    coreAppId: null,
+    appName: '',
+    appSlug: '',
+    currentOwnerId: null
+  })
+  const [ownerChangeLoading, setOwnerChangeLoading] = useState(false)
+  const [ownerChangeError, setOwnerChangeError] = useState('')
   
   // Stato per l'ordinamento
   const [sortField, setSortField] = useState<SortField>('name')
@@ -91,6 +269,56 @@ export default function CoreAppsListPage() {
       setSortField(field)
       setSortDirection('asc')
     }
+  }
+
+  // Handler per aprire il modal di cambio owner
+  const handleOpenOwnerChangeModal = (app: { _id: Id<'coreApps'>; name: string; slug: string; ownerId?: Id<'users'> }) => {
+    setOwnerChangeError('')
+    setOwnerChangeModal({
+      isOpen: true,
+      coreAppId: app._id,
+      appName: app.name,
+      appSlug: app.slug,
+      currentOwnerId: app.ownerId
+    })
+  }
+
+  // Handler per confermare il cambio owner
+  const handleConfirmOwnerChange = async (ownerId: Id<'users'> | undefined) => {
+    if (!ownerChangeModal.coreAppId) return
+
+    setOwnerChangeLoading(true)
+    setOwnerChangeError('')
+
+    try {
+      await updateCoreApp({
+        id: ownerChangeModal.coreAppId,
+        ownerId: ownerId
+      })
+      setOwnerChangeModal({
+        isOpen: false,
+        coreAppId: null,
+        appName: '',
+        appSlug: '',
+        currentOwnerId: null
+      })
+    } catch (err) {
+      setOwnerChangeError(err instanceof Error ? err.message : 'Errore durante il cambio owner')
+    } finally {
+      setOwnerChangeLoading(false)
+    }
+  }
+
+  // Handler per chiudere il modal di cambio owner
+  const handleCloseOwnerChangeModal = () => {
+    setOwnerChangeModal({
+      isOpen: false,
+      coreAppId: null,
+      appName: '',
+      appSlug: '',
+      currentOwnerId: null
+    })
+    setOwnerChangeError('')
   }
 
   // Filtra le app in base alla categoria selezionata
@@ -371,23 +599,26 @@ export default function CoreAppsListPage() {
                         {statusLabels[app.status]}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {app.ownerId && usersMap.get(app.ownerId) ? (
-                        <div className="flex items-center gap-2">
-                          {usersMap.get(app.ownerId)?.picture && (
-                            <img 
-                              src={usersMap.get(app.ownerId)?.picture} 
-                              alt={usersMap.get(app.ownerId)?.name} 
-                              className="w-6 h-6 rounded-full"
-                            />
-                          )}
+                    <td
+                      className="px-6 py-4 whitespace-nowrap"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleOpenOwnerChangeModal(app)
+                      }}
+                    >
+                      <div className="flex items-center gap-2 cursor-pointer hover:opacity-80">
+                        <OwnerAvatar
+                          owner={app.ownerId && usersMap.get(app.ownerId) ? { _id: app.ownerId, name: usersMap.get(app.ownerId)!.name, picture: usersMap.get(app.ownerId)?.picture } : null}
+                          onClick={() => handleOpenOwnerChangeModal(app)}
+                        />
+                        {app.ownerId && usersMap.get(app.ownerId) ? (
                           <span className="text-sm text-gray-900 dark:text-gray-100">
                             {usersMap.get(app.ownerId)?.name}
                           </span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
-                      )}
+                        ) : (
+                          <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
@@ -491,21 +722,24 @@ export default function CoreAppsListPage() {
                     </span>
                   )}
                 </div>
-                {/* Owner */}
-                {app.ownerId && usersMap.get(app.ownerId) && (
-                  <div className="flex items-center gap-2 mt-2">
-                    {usersMap.get(app.ownerId)?.picture && (
-                      <img 
-                        src={usersMap.get(app.ownerId)?.picture} 
-                        alt={usersMap.get(app.ownerId)?.name} 
-                        className="w-5 h-5 rounded-full"
-                      />
-                    )}
-                    <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                      Owner: {usersMap.get(app.ownerId)?.name}
-                    </span>
-                  </div>
-                )}
+                {/* Owner - cliccabile per cambiare */}
+                <div
+                  className="flex items-center gap-2 mt-2 cursor-pointer hover:opacity-80"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handleOpenOwnerChangeModal(app)
+                  }}
+                >
+                  <OwnerAvatar
+                    owner={app.ownerId && usersMap.get(app.ownerId) ? { _id: app.ownerId, name: usersMap.get(app.ownerId)!.name, picture: usersMap.get(app.ownerId)?.picture } : null}
+                    size="sm"
+                    onClick={() => handleOpenOwnerChangeModal(app)}
+                  />
+                  <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                    Owner: {app.ownerId && usersMap.get(app.ownerId) ? usersMap.get(app.ownerId)?.name : 'Nessuno'}
+                  </span>
+                </div>
                 {app.repoUrl && (
                   <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 mt-2 break-all">{app.repoUrl}</p>
                 )}
@@ -557,6 +791,20 @@ export default function CoreAppsListPage() {
           </div>
         )}
       </div>
+
+      {/* Modal per cambio owner */}
+      <OwnerChangeModal
+        key={ownerChangeModal.coreAppId || 'owner-modal'}
+        isOpen={ownerChangeModal.isOpen}
+        appName={ownerChangeModal.appName}
+        appSlug={ownerChangeModal.appSlug}
+        currentOwner={users?.find((u) => u._id === ownerChangeModal.currentOwnerId)}
+        users={users}
+        onConfirm={handleConfirmOwnerChange}
+        onCancel={handleCloseOwnerChangeModal}
+        isLoading={ownerChangeLoading}
+        error={ownerChangeError}
+      />
     </div>
   )
 }

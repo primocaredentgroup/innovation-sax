@@ -81,6 +81,49 @@ export const listAll = query({
 })
 
 /**
+ * Ricerca KeyDevs per titolo o readableId tramite full-text search.
+ * Usa search index per efficienza. Restituisce risultati in ordine di rilevanza.
+ * Include tutti i KeyDevs (indipendente da mese, dipartimento, team, stato).
+ */
+export const search = query({
+  args: { q: v.string() },
+  returns: v.array(keydevReturnValidator),
+  handler: async (ctx, args) => {
+    const q = args.q.trim()
+    if (!q) return []
+
+    const seen = new Set<string>()
+    const results: Array<typeof byTitle[number]> = []
+
+    // Cerca per titolo
+    const byTitle = await ctx.db
+      .query('keydevs')
+      .withSearchIndex('search_title', (qry) => qry.search('title', q))
+      .take(100)
+    for (const kd of byTitle) {
+      if (!kd.deletedAt && !seen.has(kd._id)) {
+        seen.add(kd._id)
+        results.push(kd)
+      }
+    }
+
+    // Cerca per readableId
+    const byReadableId = await ctx.db
+      .query('keydevs')
+      .withSearchIndex('search_readableId', (qry) => qry.search('readableId', q))
+      .take(100)
+    for (const kd of byReadableId) {
+      if (!kd.deletedAt && !seen.has(kd._id)) {
+        seen.add(kd._id)
+        results.push(kd)
+      }
+    }
+
+    return results
+  }
+})
+
+/**
  * Ottiene un KeyDev per ID.
  */
 export const getById = query({
@@ -1011,6 +1054,58 @@ export const assignOwner = mutation({
 
     await ctx.db.patch(args.id, {
       ownerId: args.ownerId
+    })
+    return null
+  }
+})
+
+/**
+ * Assegna un requester a un KeyDev.
+ * Solo Admin o TechValidator possono assegnare il requester.
+ */
+export const assignRequester = mutation({
+  args: {
+    id: v.id('keydevs'),
+    requesterId: v.id('users')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const keydev = await ctx.db.get(args.id)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
+    }
+
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+
+    if (!user) {
+      throw new Error('Utente non trovato')
+    }
+
+    const userRoles = user.roles as Role[] | undefined
+    const userIsAdmin = isAdmin(userRoles)
+
+    if (!userIsAdmin && !hasRole(userRoles, 'TechValidator')) {
+      throw new Error('Solo Admin o TechValidator possono assegnare il requester')
+    }
+
+    const requester = await ctx.db.get(args.requesterId)
+    if (!requester) {
+      throw new Error('Utente requester non trovato')
+    }
+
+    await ctx.db.patch(args.id, {
+      requesterId: args.requesterId
     })
     return null
   }
