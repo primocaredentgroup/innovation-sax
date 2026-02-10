@@ -12,7 +12,7 @@ function OwnerAvatar({
   size = 'sm', 
   onClick 
 }: { 
-  owner: { _id: string; name: string } | null | undefined
+  owner: { _id: string; name: string; picture?: string; pictureUrl?: string } | null | undefined
   size?: 'sm' | 'md'
   onClick?: () => void
 }) {
@@ -49,13 +49,17 @@ function OwnerAvatar({
   return (
     <div className="relative">
       <div 
-        className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full ${bgColor} flex items-center justify-center text-white font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+        className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full overflow-hidden ${bgColor} flex items-center justify-center text-white font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         onClick={onClick}
         title={onClick ? 'Clicca per cambiare owner' : owner.name}
       >
-        {initials}
+        {(owner.picture ?? owner.pictureUrl) ? (
+          <img src={owner.picture ?? owner.pictureUrl} alt={owner.name} className="w-full h-full object-cover" />
+        ) : (
+          initials
+        )}
       </div>
       {showTooltip && !onClick && (
         <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 dark:bg-gray-700 rounded shadow-lg whitespace-nowrap">
@@ -307,6 +311,13 @@ export default function KeyDevsListPage() {
   const departments = useQuery(api.departments.list)
   const teams = useQuery(api.teams.list)
   const users = useQuery(api.users.listUsers)
+
+  // Mappa userId -> user (come CoreAppsList) per pictureUrl/picture negli avatar
+  const usersMap = useMemo(() => {
+    if (!users) return new Map<Id<'users'>, { name: string; picture?: string }>()
+    return new Map(users.map(u => [u._id, { name: u.name, picture: u.pictureUrl ?? u.picture }]))
+  }, [users])
+
   const updateStatus = useMutation(api.keydevs.updateStatus)
   const updateMonth = useMutation(api.keydevs.updateMonth)
   const assignOwner = useMutation(api.keydevs.assignOwner)
@@ -392,8 +403,6 @@ export default function KeyDevsListPage() {
     if (search.team) result = result.filter((kd) => kd.teamId === search.team)
     if (selectedStatuses.length > 0) {
       result = result.filter((kd) => selectedStatuses.includes(kd.status))
-    } else {
-      result = result.filter((kd) => kd.status !== 'Draft')
     }
     if (search.owner) {
       result = search.owner === '__no_owner__'
@@ -465,8 +474,6 @@ export default function KeyDevsListPage() {
     if (search.team) filtered = filtered.filter((kd) => kd.teamId === search.team)
     if (selectedStatuses.length > 0) {
       filtered = filtered.filter((kd) => selectedStatuses.includes(kd.status))
-    } else {
-      filtered = filtered.filter((kd) => kd.status !== 'Draft')
     }
     const counts: Record<string, number> = {}
     for (const kd of filtered) {
@@ -557,7 +564,7 @@ export default function KeyDevsListPage() {
     const trimmed = value.trim()
     if (trimmed) {
       updateSearch({
-        query: value,
+        query: trimmed,
         month: 'all',
         dept: undefined,
         team: undefined,
@@ -1034,15 +1041,15 @@ export default function KeyDevsListPage() {
                     )
                   })}
                 </div>
-                {/* Filtra per Owner - Mobile */}
+                {/* Filtra per Owner - Mobile (con Filtro mese attivo affiancato) */}
                 <div className="border-t border-gray-200 dark:border-gray-700 p-2">
                   <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 px-2">Filtra per Owner</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {Object.entries(ownerCounts)
                       .filter(([, count]) => count > 0)
                       .sort(([, a], [, b]) => b - a)
                       .map(([ownerId]) => {
-                        const owner = ownerId === '__no_owner__' ? null : users?.find((u) => u._id === ownerId)
+                        const owner = ownerId === '__no_owner__' ? null : (usersMap.get(ownerId as Id<'users'>) ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture } : null)
                         const isSelected = search.owner === ownerId
                         return (
                           <button
@@ -1062,86 +1069,53 @@ export default function KeyDevsListPage() {
                           </button>
                         )
                       })}
-                  </div>
-                </div>
-                <div className="border-t border-gray-200 dark:border-gray-700 p-2">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      {selectedStatuses.length > 0 && (
-                        <button
-                          onClick={() => {
-                            updateSearch({ status: undefined })
-                            setDropdownOpen(false)
-                          }}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                        >
-                          <X size={14} />
-                          Rimuovi tutti i filtri per stato
-                        </button>
-                      )}
-                      {selectedMonth && !showAllMonths && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            Filtro mese: <span className="font-semibold text-gray-700 dark:text-gray-300">
-                              {(() => {
-                                const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
-                                return monthOpt?.label || formatMonthShort(selectedMonth)
-                              })()}
-                            </span>
+                    {selectedMonth && !showAllMonths && (
+                      <div className="flex items-center gap-2 ml-2 pl-2 border-l border-gray-200 dark:border-gray-600">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Filtro mese: <span className="font-semibold">
+                            {(() => {
+                              const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
+                              return monthOpt?.label || formatMonthShort(selectedMonth)
+                            })()}
                           </span>
-                          <button
-                            onClick={() => {
-                              updateSearch({ month: 'all' })
-                            }}
-                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                            title="Rimuovi filtro mese"
-                          >
-                            <X size={14} />
-                            Rimuovi
-                          </button>
-                        </div>
-                      )}
-                      {search.owner && (
+                        </span>
                         <button
                           onClick={() => {
-                            updateSearch({ owner: undefined })
-                            setDropdownOpen(false)
+                            updateSearch({ month: 'all' })
                           }}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                          title="Rimuovi filtro mese"
                         >
-                          <X size={14} />
-                          Rimuovi filtro owner
+                          <X size={16} />
+                          Rimuovi
                         </button>
-                      )}
-                    </div>
-                    {selectedStatuses.length === 0 && (
-                      <div className="flex flex-col gap-2">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 px-2 italic">
-                          Nota: Gli sviluppi in "Bozza" sono nascosti di default. Seleziona "Bozza" per visualizzarli.
-                        </p>
-                        {selectedMonth && !showAllMonths && (
-                          <div className="flex items-center gap-2 px-2">
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              Filtro mese attivo: <span className="font-semibold text-gray-700 dark:text-gray-300">
-                                {(() => {
-                                  const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
-                                  return monthOpt?.label || formatMonthShort(selectedMonth)
-                                })()}
-                              </span>
-                            </span>
-                            <button
-                              onClick={() => {
-                                updateSearch({ month: 'all' })
-                              }}
-                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                              title="Rimuovi filtro mese"
-                            >
-                              <X size={14} />
-                              Rimuovi
-                            </button>
-                          </div>
-                        )}
                       </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {selectedStatuses.length > 0 && (
+                      <button
+                        onClick={() => {
+                          updateSearch({ status: undefined })
+                          setDropdownOpen(false)
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                      >
+                        <X size={14} />
+                        Rimuovi tutti i filtri per stato
+                      </button>
+                    )}
+                    {search.owner && (
+                      <button
+                        onClick={() => {
+                          updateSearch({ owner: undefined })
+                          setDropdownOpen(false)
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                      >
+                        <X size={14} />
+                        Rimuovi filtro owner
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1182,7 +1156,7 @@ export default function KeyDevsListPage() {
               )
             })}
           </div>
-          {/* Filtra per Owner - Desktop */}
+          {/* Filtra per Owner - Desktop (con Filtro mese attivo affiancato) */}
           <div className="mt-3">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Filtra per Owner
@@ -1192,7 +1166,7 @@ export default function KeyDevsListPage() {
                 .filter(([, count]) => count > 0)
                 .sort(([, a], [, b]) => b - a)
                 .map(([ownerId]) => {
-                  const owner = ownerId === '__no_owner__' ? null : users?.find((u) => u._id === ownerId)
+                  const owner = ownerId === '__no_owner__' ? null : (usersMap.get(ownerId as Id<'users'>) ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture } : null)
                   const isSelected = search.owner === ownerId
                   const count = ownerCounts[ownerId] ?? 0
                   return (
@@ -1214,6 +1188,26 @@ export default function KeyDevsListPage() {
                     </button>
                   )
                 })}
+              {selectedMonth && !showAllMonths && (
+                <div className="flex items-center gap-2 ml-2 pl-3 border-l border-gray-200 dark:border-gray-600">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Filtro mese attivo: <span className="font-semibold text-gray-900 dark:text-gray-100">
+                      {(() => {
+                        const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
+                        return monthOpt?.label || formatMonthShort(selectedMonth)
+                      })()}
+                    </span>
+                  </span>
+                  <button
+                    onClick={() => updateSearch({ month: 'all' })}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                    title="Rimuovi filtro mese"
+                  >
+                    <X size={16} />
+                    Rimuovi
+                  </button>
+                </div>
+              )}
               {search.owner && (
                 <button
                   onClick={() => updateSearch({ owner: undefined })}
@@ -1227,11 +1221,6 @@ export default function KeyDevsListPage() {
             </div>
           </div>
           <div className="flex items-center gap-4 mt-2 flex-wrap">
-            {selectedStatuses.length === 0 && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                Nota: Gli sviluppi in "Bozza" sono nascosti di default. Clicca sul filtro "Bozza" per visualizzarli.
-              </p>
-            )}
             {selectedStatuses.length > 0 && (
               <button
                 onClick={() => updateSearch({ status: undefined })}
@@ -1239,28 +1228,6 @@ export default function KeyDevsListPage() {
               >
                 Rimuovi tutti i filtri per stato
               </button>
-            )}
-            {selectedMonth && !showAllMonths && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  Filtro mese attivo: <span className="font-semibold text-gray-700 dark:text-gray-300">
-                    {(() => {
-                      const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
-                      return monthOpt?.label || formatMonthShort(selectedMonth)
-                    })()}
-                  </span>
-                </span>
-                <button
-                  onClick={() => {
-                    updateSearch({ month: 'all' })
-                  }}
-                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                  title="Rimuovi filtro mese"
-                >
-                  <X size={14} />
-                  Rimuovi
-                </button>
-              </div>
             )}
           </div>
         </div>
@@ -1333,7 +1300,7 @@ export default function KeyDevsListPage() {
                     <span className="font-medium">Owner:</span>
                     <div onClick={(e) => e.stopPropagation()}>
                       <OwnerAvatar 
-                        owner={users?.find(u => u._id === kd.ownerId)} 
+                        owner={kd.ownerId && usersMap.get(kd.ownerId) ? { _id: kd.ownerId, name: usersMap.get(kd.ownerId)!.name, picture: usersMap.get(kd.ownerId)?.picture } : null}
                         size="sm"
                         onClick={() => handleOpenOwnerChangeModal(kd)}
                       />
@@ -1515,7 +1482,7 @@ export default function KeyDevsListPage() {
                   <td className="px-4 py-3 text-sm hidden lg:table-cell" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-center">
                       <OwnerAvatar 
-                        owner={users?.find(u => u._id === kd.ownerId)} 
+                        owner={kd.ownerId && usersMap.get(kd.ownerId) ? { _id: kd.ownerId, name: usersMap.get(kd.ownerId)!.name, picture: usersMap.get(kd.ownerId)?.picture } : null}
                         onClick={() => handleOpenOwnerChangeModal(kd)}
                       />
                     </div>

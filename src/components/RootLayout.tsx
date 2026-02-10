@@ -192,11 +192,11 @@ export default function RootLayout() {
             <Authenticated>
               {!sidebarCollapsed ? (
                 <div className="flex items-center gap-3">
-                  {user?.picture ? (
+                  {(currentUser?.pictureUrl ?? user?.picture) ? (
                     <img 
-                      src={user.picture} 
+                      src={currentUser?.pictureUrl ?? user?.picture} 
                       alt="Avatar" 
-                      className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
+                      className="w-8 h-8 rounded-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
                       onClick={() => {
                         navigate({ to: '/profile' })
                         setSidebarOpen(false)
@@ -232,11 +232,11 @@ export default function RootLayout() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2">
-                  {user?.picture ? (
+                  {(currentUser?.pictureUrl ?? user?.picture) ? (
                     <img 
-                      src={user.picture} 
+                      src={currentUser?.pictureUrl ?? user?.picture} 
                       alt="Avatar" 
-                      className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
+                      className="w-8 h-8 rounded-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
                       onClick={() => {
                         navigate({ to: '/profile' })
                         setSidebarOpen(false)

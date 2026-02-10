@@ -67,7 +67,8 @@ export const getOrCreateUser = mutation({
       if (identity.email) {
         updates.email = identity.email
       }
-      if (identity.pictureUrl) {
+      // Non sovrascrivere picture se l'utente ha già una foto custom (pictureStorageId)
+      if (identity.pictureUrl && !existingUser.pictureStorageId) {
         updates.picture = identity.pictureUrl
       }
       
@@ -104,6 +105,7 @@ export const getCurrentUser = query({
       name: v.string(),
       email: v.optional(v.string()),
       picture: v.optional(v.string()),
+      pictureUrl: v.optional(v.string()),
       sub: v.string(),
       roles: v.optional(rolesValidator),
       deptId: v.optional(v.id('departments')),
@@ -122,7 +124,16 @@ export const getCurrentUser = query({
       .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
       .first()
 
-    return user ?? null
+    if (!user) return null
+
+    let pictureUrl: string | undefined
+    if (user.pictureStorageId) {
+      pictureUrl = (await ctx.storage.getUrl(user.pictureStorageId)) ?? undefined
+    } else if (user.picture) {
+      pictureUrl = user.picture
+    }
+    const { pictureStorageId: _omit, ...rest } = user
+    return { ...rest, pictureUrl }
   }
 })
 
@@ -289,6 +300,7 @@ export const updateUserDepartment = mutation({
 
 /**
  * Lista tutti gli utenti (per admin).
+ * pictureUrl: risolto da pictureStorageId (Convex) o picture (Auth0 URL).
  */
 export const listUsers = query({
   args: {},
@@ -299,6 +311,7 @@ export const listUsers = query({
       name: v.string(),
       email: v.optional(v.string()),
       picture: v.optional(v.string()),
+      pictureUrl: v.optional(v.string()),
       sub: v.string(),
       roles: v.optional(rolesValidator),
       deptId: v.optional(v.id('departments')),
@@ -307,7 +320,18 @@ export const listUsers = query({
   ),
   handler: async (ctx) => {
     const users = await ctx.db.query('users').collect()
-    return users
+    return Promise.all(
+      users.map(async (user) => {
+        let pictureUrl: string | undefined
+        if (user.pictureStorageId) {
+          pictureUrl = (await ctx.storage.getUrl(user.pictureStorageId)) ?? undefined
+        } else if (user.picture) {
+          pictureUrl = user.picture
+        }
+        const { pictureStorageId: _omit, ...rest } = user
+        return { ...rest, pictureUrl }
+      })
+    )
   }
 })
 
@@ -387,6 +411,94 @@ export const updateUserTeam = mutation({
     }
 
     await ctx.db.patch(args.userId, { teamId: args.teamId ?? undefined })
+    return null
+  }
+})
+
+/**
+ * Genera URL per upload file (solo Admin).
+ */
+export const generateUploadUrl = mutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+    const currentUser = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+    if (!currentUser || !isAdmin(currentUser.roles)) {
+      throw new Error('Solo gli Admin possono caricare foto')
+    }
+    return await ctx.storage.generateUploadUrl()
+  }
+})
+
+/**
+ * Aggiorna la foto utente con file da Convex storage (solo Admin).
+ */
+export const updateUserPicture = mutation({
+  args: {
+    userId: v.id('users'),
+    storageId: v.id('_storage')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+    const currentUser = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+    if (!currentUser || !isAdmin(currentUser.roles)) {
+      throw new Error('Solo gli Admin possono modificare le foto utente')
+    }
+    const targetUser = await ctx.db.get(args.userId)
+    if (!targetUser) {
+      throw new Error('Utente non trovato')
+    }
+    const oldStorageId = targetUser.pictureStorageId
+    if (oldStorageId) {
+      await ctx.storage.delete(oldStorageId)
+    }
+    await ctx.db.patch(args.userId, { pictureStorageId: args.storageId })
+    return null
+  }
+})
+
+/**
+ * Rimuove la foto custom e torna al fallback Auth0 (solo Admin).
+ */
+export const removeUserPicture = mutation({
+  args: {
+    userId: v.id('users')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+    const currentUser = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+    if (!currentUser || !isAdmin(currentUser.roles)) {
+      throw new Error('Solo gli Admin possono rimuovere le foto utente')
+    }
+    const targetUser = await ctx.db.get(args.userId)
+    if (!targetUser) {
+      throw new Error('Utente non trovato')
+    }
+    if (targetUser.pictureStorageId) {
+      await ctx.storage.delete(targetUser.pictureStorageId)
+      await ctx.db.patch(args.userId, { pictureStorageId: undefined })
+    }
     return null
   }
 })

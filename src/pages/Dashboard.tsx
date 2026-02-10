@@ -3,7 +3,71 @@ import { api } from '../../convex/_generated/api'
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { oembed } from '@loomhq/loom-embed'
+import { X } from 'lucide-react'
 import type { Id } from '../../convex/_generated/dataModel'
+
+// Componente Avatar per il filtro owner (come in KeyDevsList)
+function OwnerAvatar({
+  owner,
+  size = 'sm',
+  onClick
+}: {
+  owner: { _id: string; name: string; picture?: string; pictureUrl?: string } | null | undefined
+  size?: 'sm' | 'md'
+  onClick?: () => void
+}) {
+  const [showTooltip, setShowTooltip] = useState(false)
+
+  if (!owner) {
+    return (
+      <div
+        className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 ${onClick ? 'cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-500' : ''}`}
+        title="Nessun owner"
+        onClick={onClick}
+      >
+        ?
+      </div>
+    )
+  }
+
+  const initials = owner.name
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+
+  const colors = [
+    'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500',
+    'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-red-500'
+  ]
+  const colorIndex = owner.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
+  const bgColor = colors[colorIndex]
+
+  return (
+    <div className="relative">
+      <div
+        className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full overflow-hidden ${bgColor} flex items-center justify-center text-white font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        onClick={onClick}
+        title={onClick ? 'Clicca per filtrare per owner' : owner.name}
+      >
+        {(owner.picture ?? owner.pictureUrl) ? (
+          <img src={owner.picture ?? owner.pictureUrl} alt={owner.name} className="w-full h-full object-cover" />
+        ) : (
+          initials
+        )}
+      </div>
+      {showTooltip && !onClick && (
+        <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 dark:bg-gray-700 rounded shadow-lg whitespace-nowrap">
+          {owner.name}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Funzione helper per formattare il nome dello stato
 function formatStatus(status: string): string {
@@ -222,16 +286,18 @@ function useWindowSize() {
 }
 
 // Componente per grafico a torta
-function PieChart({ 
-  data, 
+function PieChart({
+  data,
   size = 200,
   teamId,
-  monthRef
-}: { 
+  monthRef,
+  owner
+}: {
   data: Array<{ status: string; count: number }>
   size?: number
   teamId?: Id<'teams'>
   monthRef?: string
+  owner?: Id<'users'> | '__no_owner__'
 }) {
   const isDark = useDarkMode()
   const navigate = useNavigate()
@@ -334,7 +400,8 @@ function PieChart({
                       search: {
                         team: teamId,
                         status: path.status,
-                        month: monthRef
+                        month: monthRef,
+                        ...(owner && { owner })
                       }
                     })
                   }
@@ -367,14 +434,16 @@ function PieChart({
 const statusFlowOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
 
 // Componente per la legenda condivisa (mostra tutti gli stati possibili con conteggio e frecce)
-function SharedLegend({ 
-  statusCounts, 
-  monthRef, 
-  showAllMonths 
-}: { 
+function SharedLegend({
+  statusCounts,
+  monthRef,
+  showAllMonths,
+  owner
+}: {
   statusCounts: Record<string, number>
   monthRef: string | undefined
   showAllMonths: boolean
+  owner?: Id<'users'> | '__no_owner__'
 }) {
   const isDark = useDarkMode()
   const navigate = useNavigate()
@@ -384,7 +453,7 @@ function SharedLegend({
       {statusFlowOrder.map((status, index) => {
         const color = isDark ? statusColors[status]?.dark : statusColors[status]?.light || '#6b7280'
         const count = statusCounts[status] ?? 0
-        
+
         return (
           <div key={status} className="flex items-center gap-x-2 sm:gap-x-3">
             {index > 0 && (
@@ -399,7 +468,8 @@ function SharedLegend({
                   to: '/keydevs',
                   search: {
                     month: showAllMonths ? 'all' : monthRef,
-                    status
+                    status,
+                    ...(owner && { owner })
                   }
                 })
               }}
@@ -431,24 +501,52 @@ export default function DashboardPage() {
   }, [])
 
   const [selectedMonth, setSelectedMonth] = useState<string | 'all'>('all')
+  const [selectedOwner, setSelectedOwner] = useState<Id<'users'> | '__no_owner__' | undefined>(undefined)
   const [activeTab, setActiveTab] = useState<'okr' | 'weeklyLoom' | 'pastKeyDevs'>('okr')
   const [openLoomDialog, setOpenLoomDialog] = useState<{ url: string; title?: string } | null>(null)
   const { width: windowWidth } = useWindowSize()
 
   // Query per i mesi disponibili
   const months = useQuery(api.months.list)
-  
-  // Query per i dati del dashboard - usa query aggregate quando "Tutti i mesi" è selezionato
+  const users = useQuery(api.users.listUsers)
+
   const showAllMonths = selectedMonth === 'all'
+
+  // Query keydevs per calcolare owner counts (come KeyDevsList)
+  const allKeydevs = useQuery(api.keydevs.listAll, showAllMonths ? {} : 'skip')
+  const keydevsByMonth = useQuery(
+    api.keydevs.listByMonth,
+    !showAllMonths && selectedMonth !== 'all' ? { monthRef: selectedMonth } : 'skip'
+  )
+  const keydevs = useMemo(
+    () => (showAllMonths ? (allKeydevs ?? []) : (keydevsByMonth ?? [])),
+    [showAllMonths, allKeydevs, keydevsByMonth]
+  )
+
+  // Mappa userId -> user per avatar (come KeyDevsList)
+  const usersMap = useMemo(() => {
+    if (!users) return new Map<Id<'users'>, { name: string; picture?: string }>()
+    return new Map(users.map(u => [u._id, { name: u.name, picture: u.pictureUrl ?? u.picture }]))
+  }, [users])
+
+  // Contatori owner per i keydevs (come KeyDevsList)
+  const ownerCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const kd of keydevs) {
+      const id = kd.ownerId || '__no_owner__'
+      counts[id] = (counts[id] ?? 0) + 1
+    }
+    return counts
+  }, [keydevs])
   
   // Query OKR - chiama sempre entrambe le query e scegli quale usare
   const okrDataAllMonths = useQuery(
     api.dashboard.getOKRScoreAllMonths,
-    showAllMonths ? {} : 'skip'
+    showAllMonths ? { owner: selectedOwner } : 'skip'
   )
   const okrDataSingleMonth = useQuery(
     api.dashboard.getOKRScore,
-    showAllMonths ? 'skip' : (selectedMonth !== 'all' ? { monthRef: selectedMonth } : 'skip')
+    showAllMonths ? 'skip' : (selectedMonth !== 'all' ? { monthRef: selectedMonth, owner: selectedOwner } : 'skip')
   )
   const okrData = showAllMonths ? okrDataAllMonths : okrDataSingleMonth
   
@@ -457,11 +555,11 @@ export default function DashboardPage() {
   // Query KeyDevs by Team - chiama sempre entrambe le query e scegli quale usare
   const keyDevsByTeamAllMonths = useQuery(
     api.dashboard.getKeyDevsByTeamAndStatusAllMonths,
-    showAllMonths ? {} : 'skip'
+    showAllMonths ? { owner: selectedOwner } : 'skip'
   )
   const keyDevsByTeamSingleMonth = useQuery(
     api.dashboard.getKeyDevsByTeamAndStatus,
-    showAllMonths ? 'skip' : (selectedMonth !== 'all' ? { monthRef: selectedMonth } : 'skip')
+    showAllMonths ? 'skip' : (selectedMonth !== 'all' ? { monthRef: selectedMonth, owner: selectedOwner } : 'skip')
   )
   const keyDevsByTeam = showAllMonths ? keyDevsByTeamAllMonths : keyDevsByTeamSingleMonth
   
@@ -479,7 +577,7 @@ export default function DashboardPage() {
   
   const updatesByWeek = useQuery(
     api.dashboard.getUpdatesByWeek, 
-    showAllMonths ? {} : { monthRef: selectedMonth }
+    showAllMonths ? { owner: selectedOwner } : { monthRef: selectedMonth, owner: selectedOwner }
   )
   
   // Calcola il counter per Weekly Loom (totale update con loomUrl)
@@ -607,24 +705,68 @@ export default function DashboardPage() {
             </button>
           </div>
           
-          {/* Selettore mese in alto a destra - per le tab OKR e Aggiornamenti sul Core */}
+          {/* Selettore mese e Filtro owner - per le tab OKR e Aggiornamenti sul Core */}
           {(activeTab === 'okr' || activeTab === 'weeklyLoom') && (
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
-              <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap hidden sm:inline">
-                Mese:
-              </label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value === 'all' ? 'all' : e.target.value)}
-                className="flex-1 sm:flex-none px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 sm:min-w-[160px]"
-              >
-                <option value="all">Tutti i mesi</option>
-                {monthOptions.map((monthRef) => (
-                  <option key={monthRef} value={monthRef}>
-                    {formatMonth(monthRef)}
-                  </option>
-                ))}
-              </select>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap hidden sm:inline">
+                  Mese:
+                </label>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value === 'all' ? 'all' : e.target.value)}
+                  className="flex-1 sm:flex-none px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 sm:min-w-[160px]"
+                >
+                  <option value="all">Tutti i mesi</option>
+                  {monthOptions.map((monthRef) => (
+                    <option key={monthRef} value={monthRef}>
+                      {formatMonth(monthRef)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* Filtra per Owner - come ultimo elemento (come KeyDevsList) */}
+              {Object.keys(ownerCounts).filter(id => ownerCounts[id] > 0).length > 0 && (
+              <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-600">
+                <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                  Filtra per Owner:
+                </label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {Object.entries(ownerCounts)
+                    .filter(([, count]) => count > 0)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([ownerId]) => {
+                      const owner = ownerId === '__no_owner__' ? null : (usersMap.get(ownerId as Id<'users'>) ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture } : null)
+                      const isSelected = selectedOwner === ownerId
+                      const count = ownerCounts[ownerId] ?? 0
+                      return (
+                        <button
+                          key={ownerId}
+                          type="button"
+                          onClick={() => setSelectedOwner(isSelected ? undefined : (ownerId as Id<'users'> | '__no_owner__'))}
+                          className={`rounded-full p-0.5 transition-all ${
+                            isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
+                          }`}
+                          title={owner ? `${owner.name} (${count})` : `Senza owner (${count})`}
+                        >
+                          <OwnerAvatar owner={owner} size="sm" />
+                          <span className="sr-only">{owner ? owner.name : 'Senza owner'} - {count}</span>
+                        </button>
+                      )
+                    })}
+                  {selectedOwner && (
+                    <button
+                      onClick={() => setSelectedOwner(undefined)}
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                      title="Rimuovi filtro owner"
+                    >
+                      <X size={14} />
+                      Rimuovi
+                    </button>
+                  )}
+                </div>
+              </div>
+              )}
             </div>
           )}
         </div>
@@ -634,8 +776,14 @@ export default function DashboardPage() {
       {activeTab === 'okr' && (
         <>
           {/* OKR Score Card - cliccabile per navigare a KeyDevsList */}
-          <div 
-            onClick={() => navigate({ to: '/keydevs', search: { month: showAllMonths ? 'all' : selectedMonth } })}
+          <div
+            onClick={() => navigate({
+              to: '/keydevs',
+              search: {
+                month: showAllMonths ? 'all' : selectedMonth,
+                ...(selectedOwner && { owner: selectedOwner })
+              }
+            })}
             className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0 cursor-pointer hover:shadow-lg transition-shadow"
           >
             <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 break-words">
@@ -685,11 +833,12 @@ export default function DashboardPage() {
                             {team.teamName}
                           </h3>
                         <div className="w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] flex items-center justify-center">
-                          <PieChart 
-                            data={team.byStatus} 
-                            size={windowWidth < 640 ? 140 : 160} 
+                          <PieChart
+                            data={team.byStatus}
+                            size={windowWidth < 640 ? 140 : 160}
                             teamId={team.teamId}
                             monthRef={showAllMonths ? undefined : selectedMonth}
+                            owner={selectedOwner}
                           />
                         </div>
                           <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">
@@ -705,10 +854,11 @@ export default function DashboardPage() {
                     <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 sm:mb-5">
                       Legenda Stati (clicca per filtrare)
                     </h3>
-                    <SharedLegend 
-                      statusCounts={legendStatusCounts} 
+                    <SharedLegend
+                      statusCounts={legendStatusCounts}
                       monthRef={showAllMonths ? undefined : selectedMonth}
                       showAllMonths={showAllMonths}
+                      owner={selectedOwner}
                     />
                   </div>
                 </>

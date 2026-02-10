@@ -1,6 +1,20 @@
 import { query } from './_generated/server'
 import { v } from 'convex/values'
+import type { Id } from './_generated/dataModel'
 import { keydevStatusValidator } from './schema'
+
+const ownerFilterValidator = v.optional(v.union(v.id('users'), v.literal('__no_owner__')))
+
+/**
+ * Filtra i keydevs per owner (applicato dopo il fetch).
+ */
+function filterKeydevsByOwner<T extends { ownerId?: Id<'users'> | null }>(keydevs: T[], owner: Id<'users'> | '__no_owner__' | undefined): T[] {
+  if (!owner) return keydevs
+  if (owner === '__no_owner__') {
+    return keydevs.filter((kd) => !kd.ownerId)
+  }
+  return keydevs.filter((kd) => kd.ownerId === owner)
+}
 
 /**
  * Calcola l'OKR score per un mese.
@@ -8,7 +22,10 @@ import { keydevStatusValidator } from './schema'
  * Include anche le bozze senza mese associato.
  */
 export const getOKRScore = query({
-  args: { monthRef: v.string() },
+  args: {
+    monthRef: v.string(),
+    owner: ownerFilterValidator
+  },
   returns: v.object({
     score: v.number(),
     checkedCount: v.number(),
@@ -25,11 +42,13 @@ export const getOKRScore = query({
   handler: async (ctx, args) => {
     // Ottieni tutti i KeyDev del mese (solo quelli con monthRef specificato)
     // Non includiamo più le bozze senza mese per mantenere i numeri coerenti
-    const keydevs = await ctx.db
+    let keydevs = await ctx.db
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
       .then(kds => kds.filter(kd => !kd.deletedAt))
+
+    keydevs = filterKeydevsByOwner(keydevs, args.owner)
 
     const totalCount = keydevs.length
     const checkedCount = keydevs.filter((kd) => kd.status === 'Checked').length
@@ -208,7 +227,10 @@ export const getKeyDevsByStatus = query({
  * Include tutti gli stati possibili dato che ora è possibile associare il mese a prescindere dallo status.
  */
 export const getKeyDevsByTeamAndStatus = query({
-  args: { monthRef: v.string() },
+  args: {
+    monthRef: v.string(),
+    owner: ownerFilterValidator
+  },
   returns: v.object({
     byTeam: v.array(
       v.object({
@@ -225,11 +247,13 @@ export const getKeyDevsByTeamAndStatus = query({
   }),
   handler: async (ctx, args) => {
     // Ottieni tutti i KeyDev del mese (senza filtrare per status)
-    const keydevsByMonth = await ctx.db
+    let keydevsByMonth = await ctx.db
       .query('keydevs')
       .withIndex('by_month', (q) => q.eq('monthRef', args.monthRef))
       .collect()
       .then(kds => kds.filter(kd => !kd.deletedAt))
+
+    keydevsByMonth = filterKeydevsByOwner(keydevsByMonth, args.owner)
 
     // Tutti gli stati possibili
     const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
@@ -269,7 +293,9 @@ export const getKeyDevsByTeamAndStatus = query({
  * Include tutti i KeyDev (anche quelli con monthRef undefined).
  */
 export const getKeyDevsByTeamAndStatusAllMonths = query({
-  args: {},
+  args: {
+    owner: ownerFilterValidator
+  },
   returns: v.object({
     byTeam: v.array(
       v.object({
@@ -284,12 +310,14 @@ export const getKeyDevsByTeamAndStatusAllMonths = query({
       })
     )
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     // Ottieni tutti i KeyDev (inclusi quelli con monthRef undefined)
-    const allKeydevs = await ctx.db
+    let allKeydevs = await ctx.db
       .query('keydevs')
       .collect()
       .then(kds => kds.filter(kd => !kd.deletedAt))
+
+    allKeydevs = filterKeydevsByOwner(allKeydevs, args.owner)
 
     // Tutti gli stati possibili
     const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
@@ -330,7 +358,9 @@ export const getKeyDevsByTeamAndStatusAllMonths = query({
  * Include tutti i KeyDev (anche quelli con monthRef undefined).
  */
 export const getOKRScoreAllMonths = query({
-  args: {},
+  args: {
+    owner: ownerFilterValidator
+  },
   returns: v.object({
     score: v.number(),
     checkedCount: v.number(),
@@ -344,12 +374,14 @@ export const getOKRScoreAllMonths = query({
       })
     )
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     // Ottieni tutti i KeyDev (inclusi quelli con monthRef undefined)
-    const keydevs = await ctx.db
+    let keydevs = await ctx.db
       .query('keydevs')
       .collect()
       .then(kds => kds.filter(kd => !kd.deletedAt))
+
+    keydevs = filterKeydevsByOwner(keydevs, args.owner)
 
     const totalCount = keydevs.length
     const checkedCount = keydevs.filter((kd) => kd.status === 'Checked').length
@@ -455,9 +487,13 @@ export const getPastKeyDevs = query({
 
 /**
  * Ottiene tutti gli update divisi per settimana.
+ * Opzionalmente filtra per owner della Core App (ownerId sulla coreApp).
  */
 export const getUpdatesByWeek = query({
-  args: { monthRef: v.optional(v.string()) },
+  args: {
+    monthRef: v.optional(v.string()),
+    owner: ownerFilterValidator
+  },
   returns: v.array(
     v.object({
       weekRef: v.string(),
@@ -485,9 +521,23 @@ export const getUpdatesByWeek = query({
     } else {
       allUpdates = await ctx.db.query('coreAppUpdates').collect()
     }
-    
+
     const coreApps = await ctx.db.query('coreApps').collect()
     const coreAppsMap = new Map(coreApps.map((app) => [app._id, { name: app.name, percentComplete: app.percentComplete }]))
+
+    // Filtra per owner della Core App
+    if (args.owner) {
+      const allowedCoreAppIds = new Set(
+        coreApps
+          .filter((app) =>
+            args.owner === '__no_owner__'
+              ? !app.ownerId
+              : app.ownerId === args.owner
+          )
+          .map((app) => app._id)
+      )
+      allUpdates = allUpdates.filter((u) => allowedCoreAppIds.has(u.coreAppId))
+    }
 
     // Raggruppa per settimana
     const byWeek: Record<string, typeof allUpdates> = {}
@@ -508,8 +558,8 @@ export const getUpdatesByWeek = query({
             return {
               _id: update._id,
               coreAppId: update.coreAppId,
-              coreAppName: appInfo?.name || 'Unknown',
-              percentComplete: appInfo?.percentComplete || 0,
+              coreAppName: appInfo?.name ?? 'Unknown',
+              percentComplete: appInfo?.percentComplete ?? 0,
               loomUrl: update.loomUrl,
               title: update.title,
               notes: update.notes,

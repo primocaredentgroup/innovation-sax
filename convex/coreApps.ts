@@ -1,4 +1,6 @@
 import { query, mutation } from './_generated/server'
+import type { MutationCtx } from './_generated/server'
+import type { Id } from './_generated/dataModel'
 import { v } from 'convex/values'
 
 const coreAppStatusValidator = v.union(
@@ -20,6 +22,7 @@ const coreAppReturnValidator = v.object({
   ownerId: v.optional(v.id('users')),
   categoryId: v.optional(v.id('coreAppsCategories')),
   notesCount: v.optional(v.number()),
+  priority: v.optional(v.number()),
   lastUpdate: v.optional(v.object({
     createdAt: v.number(),
     weekRef: v.string()
@@ -129,7 +132,30 @@ function generateSlug(name: string): string {
 }
 
 /**
+ * Calcola la prossima priority unica per una categoria.
+ * La priority è univoca all'interno di ogni categoria (inclusa "senza categoria").
+ */
+async function getNextPriorityForCategory(
+  ctx: MutationCtx,
+  categoryId: Id<'coreAppsCategories'> | undefined
+): Promise<number> {
+  const appsInCategory = await ctx.db
+    .query('coreApps')
+    .withIndex('by_category', (q) => q.eq('categoryId', categoryId ?? undefined))
+    .collect()
+
+  const maxPriority = appsInCategory.reduce((max, app) => {
+    const p = app.priority
+    if (p === undefined) return max
+    return p > max ? p : max
+  }, -1)
+
+  return maxPriority + 1
+}
+
+/**
  * Crea una nuova Core App.
+ * La priority viene calcolata automaticamente: max(priority) + 1 per la categoria selezionata.
  */
 export const create = mutation({
   args: {
@@ -168,6 +194,9 @@ export const create = mutation({
       }
     }
 
+    // Calcola la prossima priority unica per la categoria
+    const priority = await getNextPriorityForCategory(ctx, args.categoryId)
+
     return await ctx.db.insert('coreApps', {
       name: args.name,
       slug,
@@ -176,7 +205,8 @@ export const create = mutation({
       repoUrl: args.repoUrl,
       status: 'Planning',
       ownerId: args.ownerId,
-      categoryId: args.categoryId
+      categoryId: args.categoryId,
+      priority
     })
   }
 })
@@ -195,11 +225,23 @@ export const update = mutation({
     hubMilestonesUrl: v.optional(v.string()),
     status: v.optional(coreAppStatusValidator),
     ownerId: v.optional(v.id('users')),
-    categoryId: v.optional(v.id('coreAppsCategories'))
+    categoryId: v.optional(v.id('coreAppsCategories')),
+    priority: v.optional(v.number()) // Ricalcolata automaticamente quando si cambia categoria
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const { id, ...updates } = args
+    const current = await ctx.db.get(id)
+    if (!current) return null
+
+    // Se si sta aggiornando la categoria, verifica che esista e assegna la nuova priority
+    if (updates.categoryId !== undefined && updates.categoryId !== current.categoryId) {
+      const category = await ctx.db.get(updates.categoryId)
+      if (!category) {
+        throw new Error('Categoria non trovata')
+      }
+      updates.priority = await getNextPriorityForCategory(ctx, updates.categoryId)
+    }
 
     // Se si sta aggiornando lo slug, verifica che sia unico
     if (updates.slug) {
@@ -221,15 +263,52 @@ export const update = mutation({
       }
     }
 
-    // Se si sta aggiornando la categoria, verifica che esista
-    if (updates.categoryId) {
-      const category = await ctx.db.get(updates.categoryId)
-      if (!category) {
-        throw new Error('Categoria non trovata')
-      }
+    await ctx.db.patch(id, updates)
+    return null
+  }
+})
+
+/**
+ * Imposta la priority di una Core App.
+ * Se la priority target è già occupata da un'altra app nella stessa categoria, effettua uno swap.
+ */
+export const setPriority = mutation({
+  args: {
+    id: v.id('coreApps'),
+    priority: v.number()
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const current = await ctx.db.get(args.id)
+    if (!current) return null
+
+    if (args.priority < 0) {
+      throw new Error('La priority deve essere >= 0')
     }
 
-    await ctx.db.patch(id, updates)
+    const categoryId = current.categoryId ?? undefined
+
+    // Trova l'app che ha già questa priority nella stessa categoria
+    const appsInCategory = await ctx.db
+      .query('coreApps')
+      .withIndex('by_category', (q) => q.eq('categoryId', categoryId))
+      .collect()
+
+    const otherWithSamePriority = appsInCategory.find(
+      (app) => app._id !== args.id && app.priority === args.priority
+    )
+
+    const currentPriority = current.priority ?? -1
+
+    if (otherWithSamePriority) {
+      // Swap: questa app prende la priority target, l'altra prende la nostra
+      await ctx.db.patch(args.id, { priority: args.priority })
+      await ctx.db.patch(otherWithSamePriority._id, { priority: currentPriority })
+    } else {
+      // Nessun conflitto: imposta direttamente
+      await ctx.db.patch(args.id, { priority: args.priority })
+    }
+
     return null
   }
 })

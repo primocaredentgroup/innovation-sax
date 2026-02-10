@@ -1,10 +1,43 @@
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 
 // Tipo per i ruoli
 type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
+
+// Avatar utente (foto o iniziali)
+function UserAvatar({
+  name,
+  pictureUrl,
+  size = 'md'
+}: {
+  name: string
+  pictureUrl?: string | null
+  size?: 'sm' | 'md'
+}) {
+  const initials = name
+    .split(' ')
+    .map((p) => p[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+  const colors = [
+    'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500',
+    'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-red-500'
+  ]
+  const colorIndex = name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % colors.length
+  const cls = size === 'sm' ? 'w-8 h-8 text-xs' : 'w-12 h-12 text-sm'
+  return (
+    <div className={`rounded-full flex items-center justify-center text-white font-medium shrink-0 overflow-hidden ${cls} ${!pictureUrl ? colors[colorIndex] : ''}`}>
+      {pictureUrl ? (
+        <img src={pictureUrl} alt={name} className="w-full h-full object-cover" />
+      ) : (
+        initials
+      )}
+    </div>
+  )
+}
 
 const roleLabels: Record<Role, string> = {
   Requester: 'Richiedente',
@@ -25,8 +58,14 @@ export default function UsersManagementPage() {
   const updateUserDepartment = useMutation(api.users.updateUserDepartment)
   const updateUserName = useMutation(api.users.updateUserName)
   const updateUserTeam = useMutation(api.users.updateUserTeam)
+  const generateUploadUrl = useMutation(api.users.generateUploadUrl)
+  const updateUserPicture = useMutation(api.users.updateUserPicture)
+  const removeUserPicture = useMutation(api.users.removeUserPicture)
 
   const [editingUser, setEditingUser] = useState<Id<'users'> | null>(null)
+  const [pictureUploading, setPictureUploading] = useState(false)
+  const [pictureError, setPictureError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedDeptId, setSelectedDeptId] = useState<Id<'departments'> | ''>('')
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([])
   const [editedName, setEditedName] = useState<string>('')
@@ -102,6 +141,39 @@ export default function UsersManagementPage() {
     setSelectedDeptId('')
     setSelectedRoles([])
     setSelectedTeamId('')
+    setPictureError('')
+  }
+
+  const handleUploadPhoto = async (userId: Id<'users'>, file: File) => {
+    setPictureError('')
+    setPictureUploading(true)
+    try {
+      const postUrl = await generateUploadUrl()
+      const result = await fetch(postUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type },
+        body: file
+      })
+      const { storageId } = await result.json()
+      await updateUserPicture({ userId, storageId })
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    } catch (err) {
+      setPictureError(err instanceof Error ? err.message : 'Errore durante il caricamento')
+    } finally {
+      setPictureUploading(false)
+    }
+  }
+
+  const handleRemovePhoto = async (userId: Id<'users'>) => {
+    setPictureError('')
+    setPictureUploading(true)
+    try {
+      await removeUserPicture({ userId })
+    } catch (err) {
+      setPictureError(err instanceof Error ? err.message : 'Errore durante la rimozione')
+    } finally {
+      setPictureUploading(false)
+    }
   }
 
   return (
@@ -121,6 +193,34 @@ export default function UsersManagementPage() {
             <div key={user._id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
               {isEditing ? (
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Foto</label>
+                    <div className="flex items-center gap-4">
+                      <UserAvatar name={user.name} pictureUrl={user.pictureUrl} size="md" />
+                      <div className="flex flex-col gap-2">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="text-sm text-gray-600 dark:text-gray-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-blue-100 file:text-blue-700 dark:file:bg-blue-900/30 dark:file:text-blue-300"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleUploadPhoto(user._id, file)
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhoto(user._id)}
+                          disabled={pictureUploading}
+                          className="text-sm text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                        >
+                          Rimuovi
+                        </button>
+                        {pictureError && <span className="text-xs text-red-600 dark:text-red-400">{pictureError}</span>}
+                        {pictureUploading && <span className="text-xs text-gray-500">Caricamento...</span>}
+                      </div>
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Nome
@@ -207,9 +307,12 @@ export default function UsersManagementPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Nome</div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{user.name}</div>
+                  <div className="flex items-center gap-3">
+                    <UserAvatar name={user.name} pictureUrl={user.pictureUrl} size="md" />
+                    <div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Nome</div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{user.name}</div>
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Email</div>
@@ -276,6 +379,7 @@ export default function UsersManagementPage() {
           <table className="w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700 border-b">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Foto</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Nome</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">Ruolo</th>
@@ -291,6 +395,32 @@ export default function UsersManagementPage() {
 
                 return (
                   <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-700">
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <div className="flex flex-col gap-2">
+                          <UserAvatar name={user.name} pictureUrl={user.pictureUrl} size="sm" />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="text-xs"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) handleUploadPhoto(user._id, file)
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePhoto(user._id)}
+                            disabled={pictureUploading}
+                            className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                          >
+                            Rimuovi
+                          </button>
+                        </div>
+                      ) : (
+                        <UserAvatar name={user.name} pictureUrl={user.pictureUrl} size="sm" />
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm">
                       {isEditing ? (
                         <input

@@ -87,7 +87,8 @@ export default defineSchema({
   users: defineTable({
     name: v.string(),
     email: v.optional(v.string()),
-    picture: v.optional(v.string()),
+    picture: v.optional(v.string()), // URL Auth0 (fallback)
+    pictureStorageId: v.optional(v.id('_storage')), // Foto custom Convex storage (priorità)
     sub: v.string(), // Auth0 user ID
     roles: v.optional(rolesValidator), // Array di ruoli (utenti possono avere più ruoli)
     deptId: v.optional(v.id('departments')),
@@ -216,12 +217,14 @@ export default defineSchema({
     ),
     ownerId: v.optional(v.id('users')), // Owner responsabile dell'app (temporaneamente opzionale per migrazione)
     categoryId: v.optional(v.id('coreAppsCategories')), // Categoria di appartenenza
-    notesCount: v.optional(v.number()) // Contatore delle note associate (default: 0)
+    notesCount: v.optional(v.number()), // Contatore delle note associate (default: 0)
+    priority: v.optional(v.number()) // Priorità unica per categoria (0 = prima, usata per ordinamento)
   })
     .index('by_slug', ['slug'])
     .index('by_owner', ['ownerId'])
     .index('by_status', ['status'])
-    .index('by_category', ['categoryId']),
+    .index('by_category', ['categoryId'])
+    .index('by_category_and_priority', ['categoryId', 'priority']),
 
   // Core App Weekly Updates (Loom videos)
   coreAppUpdates: defineTable({

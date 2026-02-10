@@ -51,6 +51,18 @@ const getPreviousStatuses = (currentStatus: string): string[] => {
   return statusOrder.slice(0, currentIndex + 1)
 }
 
+// Avatar piccolo per utente (foto o iniziali)
+function UserAvatar({ name, pictureUrl }: { name: string; pictureUrl?: string | null }) {
+  const initials = name.split(' ').map((p) => p[0]).join('').toUpperCase().slice(0, 2)
+  const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-red-500']
+  const colorIndex = name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % colors.length
+  return (
+    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium shrink-0 overflow-hidden ${!pictureUrl ? colors[colorIndex] : ''}`}>
+      {pictureUrl ? <img src={pictureUrl} alt={name} className="w-full h-full object-cover" /> : initials}
+    </div>
+  )
+}
+
 // Helper per troncare URL mantenendo inizio e fine
 const truncateUrl = (url: string, maxLength: number = 50): string => {
   if (url.length <= maxLength) return url
@@ -1309,6 +1321,7 @@ export default function KeyDevDetailPage() {
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
                           autoFocus
                         >
+                          <option value="" disabled>Seleziona requester</option>
                           {users?.map((u) => (
                             <option key={u._id} value={u._id}>
                               {u.name}
@@ -1318,6 +1331,7 @@ export default function KeyDevDetailPage() {
                         <div className="flex gap-2">
                           <button
                             onClick={async () => {
+                              if (!editingRequesterId) return
                               try {
                                 await assignRequester({
                                   id: keydev._id,
@@ -1328,7 +1342,8 @@ export default function KeyDevDetailPage() {
                                 alert(error instanceof Error ? error.message : 'Errore nel cambio del requester')
                               }
                             }}
-                            className="px-3 py-1.5 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm"
+                            disabled={!editingRequesterId}
+                            className="px-3 py-1.5 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Salva
                           </button>
@@ -1345,9 +1360,18 @@ export default function KeyDevDetailPage() {
                       </div>
                     ) : (
                       <div
-                        onClick={() => (userIsAdmin || userIsTechValidator) && setIsEditingRequester(true)}
+                        onClick={() => {
+                          if (userIsAdmin || userIsTechValidator) {
+                            setEditingRequesterId(keydev.requesterId ?? '')
+                            setIsEditingRequester(true)
+                          }
+                        }}
                         className={`flex items-center gap-2 group ${(userIsAdmin || userIsTechValidator) ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded px-2 py-1 -mx-2 -my-1' : ''}`}
                       >
+                        {(() => {
+                          const u = users?.find((x) => x._id === keydev.requesterId)
+                          return u ? <UserAvatar name={u.name} pictureUrl={u.pictureUrl} /> : null
+                        })()}
                         <span className="font-medium text-gray-900 dark:text-gray-100">
                           {users?.find((u) => u._id === keydev.requesterId)?.name || 'N/A'}
                         </span>
@@ -1504,9 +1528,15 @@ export default function KeyDevDetailPage() {
               <dl className="space-y-3">
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Approvato da (TechValidator)</dt>
-                  <dd className="font-medium text-gray-900 dark:text-gray-100">
+                  <dd className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                     {keydev.techValidatorId ? (
-                      users?.find((u) => u._id === keydev.techValidatorId)?.name || 'N/A'
+                      <>
+                        {(() => {
+                          const u = users?.find((x) => x._id === keydev.techValidatorId)
+                          return u ? <UserAvatar name={u.name} pictureUrl={u.pictureUrl} /> : null
+                        })()}
+                        {users?.find((u) => u._id === keydev.techValidatorId)?.name || 'N/A'}
+                      </>
                     ) : (
                       <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
                     )}
@@ -1525,9 +1555,15 @@ export default function KeyDevDetailPage() {
                 </div>
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Validato da (BusinessValidator)</dt>
-                  <dd className="font-medium text-gray-900 dark:text-gray-100">
+                  <dd className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                     {keydev.businessValidatorId ? (
-                      users?.find((u) => u._id === keydev.businessValidatorId)?.name || 'N/A'
+                      <>
+                        {(() => {
+                          const u = users?.find((x) => x._id === keydev.businessValidatorId)
+                          return u ? <UserAvatar name={u.name} pictureUrl={u.pictureUrl} /> : null
+                        })()}
+                        {users?.find((u) => u._id === keydev.businessValidatorId)?.name || 'N/A'}
+                      </>
                     ) : (
                       <span className="text-gray-400 dark:text-gray-500 italic">Non assegnato</span>
                     )}
@@ -1546,7 +1582,11 @@ export default function KeyDevDetailPage() {
                 </div>
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Owner (Sviluppatore)</dt>
-                  <dd>
+                  <dd className="flex items-center gap-2">
+                    {keydev.ownerId && (() => {
+                      const u = users?.find((x) => x._id === keydev.ownerId)
+                      return u ? <UserAvatar name={u.name} pictureUrl={u.pictureUrl} /> : null
+                    })()}
                     <select
                       value={selectedOwnerId}
                       onChange={async (e) => {
@@ -1561,7 +1601,7 @@ export default function KeyDevDetailPage() {
                         }
                       }}
                       disabled={!userIsAdmin && !userIsTechValidator}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value="">Nessun owner</option>
                       {users?.filter(u => hasRole(u.roles as Role[] | undefined, 'TechValidator') || isAdmin(u.roles as Role[] | undefined))

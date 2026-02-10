@@ -29,8 +29,8 @@ export default function ProfilePage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Informazioni Utente</h2>
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
-              {user?.picture ? (
-                <img src={user.picture} alt="Avatar" className="w-20 h-20 sm:w-16 sm:h-16 rounded-full shrink-0" />
+              {(currentUser?.pictureUrl ?? user?.picture) ? (
+                <img src={currentUser?.pictureUrl ?? user?.picture ?? ''} alt="Avatar" className="w-20 h-20 sm:w-16 sm:h-16 rounded-full object-cover shrink-0" />
               ) : (
                 <div className="w-20 h-20 sm:w-16 sm:h-16 rounded-full bg-green-600 dark:bg-green-700 flex items-center justify-center shrink-0">
                   <span className="text-white text-2xl sm:text-xl font-semibold">

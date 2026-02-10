@@ -414,6 +414,7 @@ export default function CoreAppDetailPage() {
   const updateUpdate = useMutation(api.coreAppUpdates.update)
   const deleteUpdate = useMutation(api.coreAppUpdates.remove)
   const updateCoreApp = useMutation(api.coreApps.update)
+  const setPriority = useMutation(api.coreApps.setPriority)
   const addCategorySubscriber = useMutation(api.coreAppsCategories.addSubscriber)
   const removeCategorySubscriber = useMutation(api.coreAppsCategories.removeSubscriber)
 
@@ -436,6 +437,8 @@ export default function CoreAppDetailPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<Id<'coreAppsCategories'> | ''>('')
   const [isEditingOwner, setIsEditingOwner] = useState(false)
   const [selectedOwnerId, setSelectedOwnerId] = useState<Id<'users'> | ''>('')
+  const [isEditingPriority, setIsEditingPriority] = useState(false)
+  const [tempPriority, setTempPriority] = useState<number>(0)
   
   // Genera le opzioni per i mesi (6 mesi passati + mese corrente + mesi futuri dal DB)
   const monthOptions = useMemo(() => {
@@ -617,6 +620,20 @@ export default function CoreAppDetailPage() {
     })
     setIsEditingOwner(false)
   }, [coreApp, selectedOwnerId, updateCoreApp])
+
+  const startEditingPriority = useCallback(() => {
+    if (coreApp) {
+      setTempPriority(coreApp.priority ?? 0)
+      setIsEditingPriority(true)
+    }
+  }, [coreApp])
+
+  const handleSavePriority = useCallback(async () => {
+    if (!coreApp) return
+    const value = Math.max(0, Math.floor(tempPriority))
+    await setPriority({ id: coreApp._id, priority: value })
+    setIsEditingPriority(false)
+  }, [coreApp, tempPriority, setPriority])
 
   if (!coreApp) {
     return (
@@ -811,11 +828,11 @@ export default function CoreAppDetailPage() {
                 </div>
               ) : owner ? (
                 <div className="flex items-center gap-2">
-                  {owner.picture && (
+                  {(owner.pictureUrl ?? owner.picture) && (
                     <img 
-                      src={owner.picture} 
+                      src={owner.pictureUrl ?? owner.picture} 
                       alt={owner.name} 
-                      className="w-8 h-8 rounded-full"
+                      className="w-8 h-8 rounded-full object-cover"
                     />
                   )}
                   <div>
@@ -936,11 +953,11 @@ export default function CoreAppDetailPage() {
                         {categorySubscribers.map((subscriber) => (
                           <div key={subscriber._id} className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              {subscriber.picture && (
+                              {(subscriber.pictureUrl ?? subscriber.picture) && (
                                 <img 
-                                  src={subscriber.picture} 
+                                  src={subscriber.pictureUrl ?? subscriber.picture} 
                                   alt={subscriber.name} 
-                                  className="w-6 h-6 rounded-full"
+                                  className="w-6 h-6 rounded-full object-cover"
                                 />
                               )}
                               <span className="text-gray-900 dark:text-gray-100 text-sm">{subscriber.name}</span>
@@ -1170,6 +1187,47 @@ export default function CoreAppDetailPage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Riepilogo</h3>
             <dl className="space-y-3">
+              <div>
+                <dt className="text-sm text-gray-500 dark:text-gray-400">Priorità</dt>
+                <dd className="font-medium text-gray-900 dark:text-gray-100">
+                  {isEditingPriority ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={tempPriority}
+                        onChange={(e) => setTempPriority(Number(e.target.value))}
+                        className="w-20 px-2 py-1 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSavePriority()
+                          if (e.key === 'Escape') setIsEditingPriority(false)
+                        }}
+                      />
+                      <button
+                        onClick={handleSavePriority}
+                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Salva
+                      </button>
+                      <button
+                        onClick={() => setIsEditingPriority(false)}
+                        className="px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                      >
+                        Annulla
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={startEditingPriority}
+                      className="hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded transition-colors cursor-pointer text-left"
+                      title="Clicca per modificare"
+                    >
+                      {coreApp.priority ?? '-'}
+                    </button>
+                  )}
+                </dd>
+              </div>
               <div>
                 <dt className="text-sm text-gray-500 dark:text-gray-400">Totale Aggiornamenti</dt>
                 <dd className="font-medium text-gray-900 dark:text-gray-100">{updates?.length || 0}</dd>

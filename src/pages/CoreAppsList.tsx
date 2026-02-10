@@ -1,6 +1,7 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { useMemo, useState } from 'react'
+import { X } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 
@@ -209,7 +210,7 @@ function isRecentUpdate(weekRef: string | undefined): boolean {
   return weekRef === currentWeek || weekRef === previousWeek
 }
 
-type SortField = 'name' | 'category' | 'status' | 'owner' | 'progress' | 'lastUpdate'
+type SortField = 'priority' | 'name' | 'category' | 'status' | 'owner' | 'progress' | 'lastUpdate'
 type SortDirection = 'asc' | 'desc'
 
 export default function CoreAppsListPage() {
@@ -218,9 +219,16 @@ export default function CoreAppsListPage() {
   const categories = useQuery(api.coreAppsCategories.list)
   const users = useQuery(api.users.listUsers)
   const updateCoreApp = useMutation(api.coreApps.update)
+  const setPriority = useMutation(api.coreApps.setPriority)
 
   // Stato per la categoria selezionata (null = tutte)
   const [selectedCategoryId, setSelectedCategoryId] = useState<Id<'coreAppsCategories'> | null>(null)
+  
+  // Stato per il filtro owner (null = tutti, '__no_owner__' = senza owner)
+  const [selectedOwnerId, setSelectedOwnerId] = useState<Id<'users'> | '__no_owner__' | null>(null)
+  
+  // Stato per la ricerca
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Stato per il modal di cambio owner
   const [ownerChangeModal, setOwnerChangeModal] = useState<{
@@ -239,14 +247,18 @@ export default function CoreAppsListPage() {
   const [ownerChangeLoading, setOwnerChangeLoading] = useState(false)
   const [ownerChangeError, setOwnerChangeError] = useState('')
   
-  // Stato per l'ordinamento
-  const [sortField, setSortField] = useState<SortField>('name')
+  // Stato per editing priority inline
+  const [editingPriorityId, setEditingPriorityId] = useState<Id<'coreApps'> | null>(null)
+  const [tempPriorityValue, setTempPriorityValue] = useState<number>(0)
+  
+  // Stato per l'ordinamento (default: priority ascendente)
+  const [sortField, setSortField] = useState<SortField>('priority')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   
   // Mappa userId -> user per trovare velocemente gli owner
   const usersMap = useMemo(() => {
     if (!users) return new Map<Id<'users'>, { name: string; picture?: string }>()
-    return new Map(users.map(u => [u._id, { name: u.name, picture: u.picture }]))
+    return new Map(users.map(u => [u._id, { name: u.name, picture: u.pictureUrl ?? u.picture }]))
   }, [users])
 
   // Mappa categoryId -> category per trovare velocemente le categorie
@@ -321,18 +333,60 @@ export default function CoreAppsListPage() {
     setOwnerChangeError('')
   }
 
-  // Filtra le app in base alla categoria selezionata
+  // Handler per avviare editing priority
+  const handleStartEditPriority = (app: { _id: Id<'coreApps'>; priority?: number }, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingPriorityId(app._id)
+    setTempPriorityValue(app.priority ?? 0)
+  }
+
+  // Handler per salvare priority
+  const handleSavePriority = async (appId: Id<'coreApps'>) => {
+    if (editingPriorityId !== appId) return
+    const value = Math.max(0, Math.floor(tempPriorityValue))
+    try {
+      await setPriority({ id: appId, priority: value })
+      setEditingPriorityId(null)
+    } catch {
+      // Mantieni in editing in caso di errore
+    }
+  }
+
+  // Filtra le app in base alla categoria selezionata, owner e ricerca
   const filteredApps = useMemo(() => {
     if (!coreApps) return []
-    const apps = selectedCategoryId === null 
+    let apps = selectedCategoryId === null 
       ? coreApps 
       : coreApps.filter(app => app.categoryId === selectedCategoryId)
+    
+    // Filtra per owner
+    if (selectedOwnerId) {
+      apps = selectedOwnerId === '__no_owner__'
+        ? apps.filter(app => !app.ownerId)
+        : apps.filter(app => app.ownerId === selectedOwnerId)
+    }
+    
+    // Filtra per search query (nome e slug)
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase()
+      apps = apps.filter(
+        app =>
+          app.name.toLowerCase().includes(q) ||
+          app.slug.toLowerCase().includes(q)
+      )
+    }
     
     // Applica l'ordinamento
     const sortedApps = [...apps].sort((a, b) => {
       let comparison = 0
       
       switch (sortField) {
+        case 'priority': {
+          const pA = a.priority ?? 999999
+          const pB = b.priority ?? 999999
+          comparison = pA - pB
+          break
+        }
         case 'name':
           comparison = a.name.localeCompare(b.name, 'it', { sensitivity: 'base' })
           break
@@ -367,7 +421,21 @@ export default function CoreAppsListPage() {
     })
     
     return sortedApps
-  }, [coreApps, selectedCategoryId, sortField, sortDirection, categoriesMap, usersMap])
+  }, [coreApps, selectedCategoryId, selectedOwnerId, searchQuery, sortField, sortDirection, categoriesMap, usersMap])
+
+  // Contatori owner per le app filtrate per categoria (per popolare gli avatar del filtro)
+  const ownerCounts = useMemo(() => {
+    if (!coreApps) return {} as Record<string, number>
+    const apps = selectedCategoryId === null
+      ? coreApps
+      : coreApps.filter(app => app.categoryId === selectedCategoryId)
+    const counts: Record<string, number> = {}
+    for (const app of apps) {
+      const id = app.ownerId || '__no_owner__'
+      counts[id] = (counts[id] ?? 0) + 1
+    }
+    return counts
+  }, [coreApps, selectedCategoryId])
 
   // Conta le app per categoria (per mostrare il badge)
   const appCountByCategory = useMemo(() => {
@@ -393,74 +461,122 @@ export default function CoreAppsListPage() {
         </Link>
       </div>
 
-      {/* Filtro categorie - Desktop: dropdown, Mobile: tab */}
-      {categories && categories.length > 0 && (
-        <>
-          {/* Filtro dropdown per desktop */}
-          <div className="hidden md:block mb-6">
-            <div className="flex items-center gap-3">
-              <label htmlFor="category-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Filtra per categoria:
-              </label>
-              <select
-                id="category-filter"
-                value={selectedCategoryId || ''}
-                onChange={(e) => setSelectedCategoryId(e.target.value ? (e.target.value as Id<'coreAppsCategories'>) : null)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              >
-                <option value="">Tutte ({coreApps?.length || 0})</option>
-                {categories.map((category) => (
-                  <option key={category._id} value={category._id}>
-                    {category.name} ({appCountByCategory.get(category._id) || 0})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Tab per categorie - Solo mobile */}
-          <div className="md:hidden mb-6 overflow-x-auto scrollbar-hide">
-            <div className="flex gap-2 min-w-max pb-2">
-              {/* Tab "Tutte" */}
-              <button
-                onClick={() => setSelectedCategoryId(null)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                  selectedCategoryId === null
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                Tutte
-                <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-white/20">
-                  {coreApps?.length || 0}
-                </span>
-              </button>
-              
-              {/* Tab per ogni categoria */}
-              {categories.map((category) => (
+      {/* Tab categorie + Filtro owner + Search */}
+      <div className="mb-6 flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          {/* Tab per categorie */}
+          {categories && categories.length > 0 && (
+            <div className="flex-1 overflow-x-auto scrollbar-hide min-w-0">
+              <div className="flex gap-2 min-w-max pb-2">
                 <button
-                  key={category._id}
-                  onClick={() => setSelectedCategoryId(category._id)}
+                  onClick={() => setSelectedCategoryId(null)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedCategoryId === category._id
+                    selectedCategoryId === null
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                   }`}
                 >
-                  {category.name}
+                  Tutte
                   <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                    selectedCategoryId === category._id
-                      ? 'bg-white/20'
-                      : 'bg-gray-200 dark:bg-gray-600'
+                    selectedCategoryId === null ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-600'
                   }`}>
-                    {appCountByCategory.get(category._id) || 0}
+                    {coreApps?.length || 0}
                   </span>
                 </button>
-              ))}
+                {categories.map((category) => (
+                  <button
+                    key={category._id}
+                    onClick={() => setSelectedCategoryId(category._id)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                      selectedCategoryId === category._id
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {category.name}
+                    <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                      selectedCategoryId === category._id
+                        ? 'bg-white/20'
+                        : 'bg-gray-200 dark:bg-gray-600'
+                    }`}>
+                      {appCountByCategory.get(category._id) || 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Search input */}
+          <div className="shrink-0 w-full sm:w-64">
+            <div className="relative">
+              <input
+                type="search"
+                placeholder="Cerca core apps..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+              />
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
             </div>
           </div>
-        </>
-      )}
+        </div>
+
+        {/* Filtra per Owner */}
+        {Object.keys(ownerCounts).length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Filtra per Owner
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              {Object.entries(ownerCounts)
+                .filter(([, count]) => count > 0)
+                .sort(([, a], [, b]) => b - a)
+                .map(([ownerId]) => {
+                  const owner = ownerId === '__no_owner__'
+                    ? null
+                    : usersMap.get(ownerId as Id<'users'>)
+                      ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture }
+                      : null
+                  const isSelected = selectedOwnerId === ownerId
+                  const count = ownerCounts[ownerId] ?? 0
+                  return (
+                    <button
+                      key={ownerId}
+                      type="button"
+                      onClick={() => setSelectedOwnerId(isSelected ? null : (ownerId as Id<'users'> | '__no_owner__'))}
+                      className={`rounded-full p-0.5 transition-all ${
+                        isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
+                      }`}
+                      title={owner ? `${owner.name} (${count})` : `Senza owner (${count})`}
+                    >
+                      <OwnerAvatar owner={owner} size="sm" />
+                      <span className="sr-only">
+                        {owner ? owner.name : 'Senza owner'} - {count} app
+                      </span>
+                    </button>
+                  )
+                })}
+              {selectedOwnerId && (
+                <button
+                  onClick={() => setSelectedOwnerId(null)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                  title="Rimuovi filtro owner"
+                >
+                  <X size={14} />
+                  Rimuovi filtro owner
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Tabella desktop */}
       <div className="hidden md:block overflow-x-auto">
@@ -468,6 +584,19 @@ export default function CoreAppsListPage() {
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900/50">
               <tr>
+                <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 select-none"
+                  onClick={(e) => handleSort('priority', e)}
+                >
+                  <div className="flex items-center gap-2">
+                    #
+                    {sortField === 'priority' && (
+                      <span className="text-blue-600 dark:text-blue-400">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
                 <th 
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 select-none"
                   onClick={(e) => handleSort('name', e)}
@@ -556,6 +685,34 @@ export default function CoreAppsListPage() {
                     onClick={() => navigate({ to: '/core-apps/$slug', params: { slug: app.slug } })}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
                   >
+                    <td
+                      className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-600 dark:text-gray-400"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {editingPriorityId === app._id ? (
+                        <input
+                          type="number"
+                          min={0}
+                          value={tempPriorityValue}
+                          onChange={(e) => setTempPriorityValue(Number(e.target.value))}
+                          onBlur={() => handleSavePriority(app._id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSavePriority(app._id)
+                            if (e.key === 'Escape') setEditingPriorityId(null)
+                          }}
+                          className="w-14 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          onClick={(e) => handleStartEditPriority(app, e)}
+                          className="hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded transition-colors cursor-pointer text-left w-full min-w-[2rem]"
+                          title="Clicca per modificare"
+                        >
+                          {app.priority ?? '-'}
+                        </button>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <Link
@@ -665,10 +822,14 @@ export default function CoreAppsListPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-                    {selectedCategoryId !== null 
-                      ? 'Nessuna Applicazione Core in questa categoria'
-                      : 'Nessuna Applicazione Core presente'
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                    {searchQuery.trim()
+                      ? selectedCategoryId !== null
+                        ? 'Nessun risultato per la ricerca in questa categoria'
+                        : 'Nessun risultato per la ricerca'
+                      : selectedCategoryId !== null
+                        ? 'Nessuna Applicazione Core in questa categoria'
+                        : 'Nessuna Applicazione Core presente'
                     }
                   </td>
                 </tr>
@@ -690,6 +851,34 @@ export default function CoreAppsListPage() {
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  {editingPriorityId === app._id ? (
+                    <input
+                      type="number"
+                      min={0}
+                      value={tempPriorityValue}
+                      onChange={(e) => setTempPriorityValue(Number(e.target.value))}
+                      onBlur={() => handleSavePriority(app._id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSavePriority(app._id)
+                        if (e.key === 'Escape') setEditingPriorityId(null)
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-14 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shrink-0"
+                      autoFocus
+                    />
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleStartEditPriority(app, e)
+                      }}
+                      className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded transition-colors"
+                      title="Clicca per modificare"
+                    >
+                      #{app.priority ?? '-'}
+                    </button>
+                  )}
                   <div className="flex items-center gap-2">
                     <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 wrap-break-word">{app.name}</h3>
                     <a
@@ -784,9 +973,13 @@ export default function CoreAppsListPage() {
 
         {filteredApps?.length === 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 sm:p-8 text-center text-gray-500 dark:text-gray-400">
-            {selectedCategoryId !== null 
-              ? 'Nessuna Applicazione Core in questa categoria'
-              : 'Nessuna Applicazione Core presente'
+            {searchQuery.trim()
+              ? selectedCategoryId !== null
+                ? 'Nessun risultato per la ricerca in questa categoria'
+                : 'Nessun risultato per la ricerca'
+              : selectedCategoryId !== null
+                ? 'Nessuna Applicazione Core in questa categoria'
+                : 'Nessuna Applicazione Core presente'
             }
           </div>
         )}
