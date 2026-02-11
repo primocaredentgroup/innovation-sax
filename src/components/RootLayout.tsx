@@ -180,6 +180,17 @@ export default function RootLayout() {
                   <span className="text-lg">👥</span>
                   {!sidebarCollapsed && <span>Gestione Utenti</span>}
                 </Link>
+                <Link
+                  to="/admin/agents"
+                  onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-blue-50 dark:[&.active]:bg-blue-900/30 [&.active]:text-blue-700 dark:[&.active]:text-blue-400 ${
+                    sidebarCollapsed ? 'justify-center' : ''
+                  }`}
+                  title="Agenti"
+                >
+                  <span className="text-lg">🤖</span>
+                  {!sidebarCollapsed && <span>Agenti</span>}
+                </Link>
               </>
             )}
           </nav>

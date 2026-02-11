@@ -241,6 +241,22 @@ export default defineSchema({
     .index('by_month', ['monthRef'])
     .index('by_coreApp_and_month', ['coreAppId', 'monthRef']),
 
+  // Agent Apps
+  agentApps: defineTable({
+    name: v.string(),
+    baseUrl: v.string(),
+    appKey: v.string()
+  }).index('by_name', ['name']),
+
+  // Agents
+  agents: defineTable({
+    name: v.string(),
+    provider: v.string(),
+    providerUserId: v.string()
+  })
+    .index('by_provider', ['provider'])
+    .index('by_providerUserId', ['providerUserId']),
+
   // Penalties (penalità applicate dall'admin aziendale dopo il controllo)
   penalties: defineTable({
     keyDevId: v.id('keydevs'),

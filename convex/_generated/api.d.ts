@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as agentApps from "../agentApps.js";
+import type * as agents from "../agents.js";
 import type * as budget from "../budget.js";
 import type * as coreAppUpdates from "../coreAppUpdates.js";
 import type * as coreApps from "../coreApps.js";
@@ -33,6 +35,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  agentApps: typeof agentApps;
+  agents: typeof agents;
   budget: typeof budget;
   coreAppUpdates: typeof coreAppUpdates;
   coreApps: typeof coreApps;

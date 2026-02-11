@@ -132,7 +132,8 @@ export const getCurrentUser = query({
     } else if (user.picture) {
       pictureUrl = user.picture
     }
-    const { pictureStorageId: _omit, ...rest } = user
+    const { pictureStorageId, ...rest } = user
+    void pictureStorageId
     return { ...rest, pictureUrl }
   }
 })
@@ -328,7 +329,8 @@ export const listUsers = query({
         } else if (user.picture) {
           pictureUrl = user.picture
         }
-        const { pictureStorageId: _omit, ...rest } = user
+        const { pictureStorageId, ...rest } = user
+        void pictureStorageId
         return { ...rest, pictureUrl }
       })
     )
