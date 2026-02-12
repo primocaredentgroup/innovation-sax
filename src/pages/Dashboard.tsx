@@ -481,7 +481,7 @@ function SharedLegend({
                 style={{ backgroundColor: color }}
               />
               <span className="text-sm sm:text-base font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                {formatStatus(status)} ({count})
+                {formatStatus(status)}{status === 'MockupDone' && count > 0 ? ' ⚠' : ''} ({count})
               </span>
             </button>
           </div>
@@ -528,6 +528,11 @@ export default function DashboardPage() {
     if (!users) return new Map<Id<'users'>, { name: string; picture?: string }>()
     return new Map(users.map(u => [u._id, { name: u.name, picture: u.pictureUrl ?? u.picture }]))
   }, [users])
+  const selectedOwnerName = useMemo(() => {
+    if (!selectedOwner) return undefined
+    if (selectedOwner === '__no_owner__') return 'Senza owner'
+    return usersMap.get(selectedOwner)?.name ?? 'Owner sconosciuto'
+  }, [selectedOwner, usersMap])
 
   // Contatori owner per i keydevs (come KeyDevsList)
   const ownerCounts = useMemo(() => {
@@ -574,6 +579,8 @@ export default function DashboardPage() {
     }
     return counts
   }, [keyDevsByTeam])
+
+  const mockupDoneCount = legendStatusCounts.MockupDone ?? 0
   
   const updatesByWeek = useQuery(
     api.dashboard.getUpdatesByWeek, 
@@ -743,7 +750,13 @@ export default function DashboardPage() {
                         <button
                           key={ownerId}
                           type="button"
-                          onClick={() => setSelectedOwner(isSelected ? undefined : (ownerId as Id<'users'> | '__no_owner__'))}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedOwner(undefined)
+                              return
+                            }
+                            setSelectedOwner(ownerId as Id<'users'> | '__no_owner__')
+                          }}
                           className={`rounded-full p-0.5 transition-all ${
                             isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
                           }`}
@@ -754,23 +767,64 @@ export default function DashboardPage() {
                         </button>
                       )
                     })}
-                  {selectedOwner && (
-                    <button
-                      onClick={() => setSelectedOwner(undefined)}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                      title="Rimuovi filtro owner"
-                    >
-                      <X size={14} />
-                      Rimuovi
-                    </button>
-                  )}
                 </div>
               </div>
+              )}
+              {!showAllMonths && (
+                <div className="flex items-center gap-2 ml-2 pl-3 border-l border-gray-200 dark:border-gray-600">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Filtro mese attivo: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatMonth(selectedMonth)}</span>
+                  </span>
+                  <button
+                    onClick={() => setSelectedMonth('all')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                    title="Rimuovi filtro mese"
+                  >
+                    <X size={16} />
+                    Rimuovi
+                  </button>
+                </div>
+              )}
+              {selectedOwner && (
+                <button
+                  onClick={() => setSelectedOwner(undefined)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                  title="Rimuovi filtro owner"
+                >
+                  <X size={14} />
+                  Rimuovi filtro owner
+                </button>
               )}
             </div>
           )}
         </div>
       </div>
+
+      {mockupDoneCount > 0 && (
+        <div className="mb-6 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 dark:border-yellow-700 dark:bg-yellow-900/20">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium text-yellow-900 dark:text-yellow-200">
+              ⚠ Ci sono {mockupDoneCount} {mockupDoneCount > 1 ? 'Sviluppi Chiave' : 'Sviluppo Chiave'} in stato "Mockup Terminato": e richiesta un'azione.
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                navigate({
+                  to: '/keydevs',
+                  search: {
+                    month: showAllMonths ? 'all' : selectedMonth,
+                    status: 'MockupDone',
+                    ...(selectedOwner && { owner: selectedOwner })
+                  }
+                })
+              }
+              className="self-start rounded-md border border-yellow-500 px-3 py-1.5 text-xs font-semibold text-yellow-800 transition-colors hover:bg-yellow-100 dark:border-yellow-500 dark:text-yellow-300 dark:hover:bg-yellow-900/40 sm:self-auto"
+            >
+              Apri i Mockup Terminati
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Contenuto Tab OKR */}
       {activeTab === 'okr' && (
@@ -787,8 +841,15 @@ export default function DashboardPage() {
             className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0 cursor-pointer hover:shadow-lg transition-shadow"
           >
             <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 break-words">
-              Sviluppi Chiave - {showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)}
+              {selectedOwnerName
+                ? `Sviluppi Chiave - ${showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)} - ${selectedOwnerName}`
+                : `Sviluppi Chiave - ${showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)}`}
             </h2>
+            {selectedOwnerName && (
+              <div className="mb-4 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                Filtro owner attivo: {selectedOwnerName}
+              </div>
+            )}
             {okrData ? (
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 min-w-0">
                 <div className="text-center sm:text-left shrink-0">
@@ -873,9 +934,30 @@ export default function DashboardPage() {
       {/* Contenuto Tab Weekly Loom */}
       {activeTab === 'weeklyLoom' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 min-w-0">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 break-words">
-            Aggiornamenti sul Core
-          </h2>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 break-words">
+              Aggiornamenti sul Core - {showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)}
+            </h2>
+            <button
+              type="button"
+              onClick={() =>
+                navigate({
+                  to: '/core-apps',
+                  search: {
+                    ...(selectedOwner && { owner: selectedOwner }),
+                  },
+                })
+              }
+              className="self-start rounded-lg border border-blue-600 px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/30"
+            >
+              Apri lista Core Apps filtrata
+            </button>
+          </div>
+          {selectedOwnerName && (
+            <div className="mb-4 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+              Filtro owner attivo: {selectedOwnerName}
+            </div>
+          )}
           {updatesByWeek ? (
             <div>
               {updatesByCoreApp.length > 0 ? (

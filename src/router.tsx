@@ -20,6 +20,7 @@ import ProfilePage from './pages/Profile'
 import UsersManagementPage from './pages/UsersManagement'
 import AdminPage from './pages/Admin'
 import AgentsPage from './pages/Agents'
+import AgentSkillDetailPage from './pages/AgentSkillDetail'
 import LoginPage from './pages/Login'
 
 // Define routes
@@ -81,7 +82,11 @@ const planningRoute = createRoute({
 const coreAppsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/core-apps',
-  component: CoreAppsListPage
+  component: CoreAppsListPage,
+  validateSearch: z.object({
+    owner: z.string().optional(),
+    status: z.string().optional()
+  })
 })
 
 const coreAppDetailRoute = createRoute({
@@ -135,6 +140,12 @@ const agentsRoute = createRoute({
   component: AgentsPage
 })
 
+const agentSkillDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/agents/skills/$skillId',
+  component: AgentSkillDetailPage
+})
+
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
@@ -158,6 +169,7 @@ const routeTree = rootRoute.addChildren([
   usersManagementRoute,
   adminRoute,
   agentsRoute,
+  agentSkillDetailRoute,
   loginRoute
 ])
 

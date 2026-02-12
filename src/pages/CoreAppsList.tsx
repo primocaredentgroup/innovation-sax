@@ -1,6 +1,6 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
@@ -212,8 +212,10 @@ function isRecentUpdate(weekRef: string | undefined): boolean {
 
 type SortField = 'priority' | 'name' | 'category' | 'status' | 'owner' | 'progress' | 'lastUpdate'
 type SortDirection = 'asc' | 'desc'
+type CoreAppStatus = keyof typeof statusLabels
 
 export default function CoreAppsListPage() {
+  const search = useSearch({ strict: false })
   const navigate = useNavigate()
   const coreApps = useQuery(api.coreApps.list)
   const categories = useQuery(api.coreAppsCategories.list)
@@ -225,13 +227,36 @@ export default function CoreAppsListPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<Id<'coreAppsCategories'> | null>(null)
   
   // Stato per il filtro owner (null = tutti, '__no_owner__' = senza owner)
-  const [selectedOwnerId, setSelectedOwnerId] = useState<Id<'users'> | '__no_owner__' | null>(null)
+  const [selectedOwnerId, setSelectedOwnerId] = useState<Id<'users'> | '__no_owner__' | null>(() => {
+    if (!search.owner) return null
+    return search.owner === '__no_owner__' ? '__no_owner__' : (search.owner as Id<'users'>)
+  })
   
   // Stato per la ricerca
   const [searchQuery, setSearchQuery] = useState('')
   
   // Stato per il filtro status (default: In Corso)
-  const [selectedStatus, setSelectedStatus] = useState<keyof typeof statusLabels>('InProgress')
+  const [selectedStatus, setSelectedStatus] = useState<CoreAppStatus>(() => {
+    const statusFromSearch = typeof search.status === 'string' ? search.status : undefined
+    if (statusFromSearch && Object.prototype.hasOwnProperty.call(statusLabels, statusFromSearch)) {
+      return statusFromSearch as CoreAppStatus
+    }
+    return 'InProgress'
+  })
+
+  // Sincronizza lo stato locale quando arrivano nuovi filtri dalla URL.
+  useEffect(() => {
+    if (!search.owner) {
+      setSelectedOwnerId(null)
+    } else {
+      setSelectedOwnerId(search.owner === '__no_owner__' ? '__no_owner__' : (search.owner as Id<'users'>))
+    }
+
+    const statusFromSearch = typeof search.status === 'string' ? search.status : undefined
+    if (statusFromSearch && Object.prototype.hasOwnProperty.call(statusLabels, statusFromSearch)) {
+      setSelectedStatus(statusFromSearch as CoreAppStatus)
+    }
+  }, [search.owner, search.status])
 
   // Stato per il modal di cambio owner
   const [ownerChangeModal, setOwnerChangeModal] = useState<{

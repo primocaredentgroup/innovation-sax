@@ -199,6 +199,14 @@ const statusLabels: Record<string, string> = {
   Checked: 'Controllato'
 }
 
+const getStatusLabel = (status: string, showWarning: boolean): string => {
+  const label = statusLabels[status] ?? status
+  if (status === 'MockupDone' && showWarning) {
+    return `${label} ⚠`
+  }
+  return label
+}
+
 // Ordine degli stati per la visualizzazione
 const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
 
@@ -363,12 +371,12 @@ export default function KeyDevsListPage() {
     })
   }, [isSearchMode, searchResults, showAllMonths, allKeydevs, keydevsByMonth])
   
-  // Calcola i contatori basandosi sui keydevs filtrati per team/dipartimento
+  // Calcola i contatori basandosi sui keydevs filtrati (dept/team/owner)
   // Questo assicura che i contatori corrispondano ai keydevs visibili nella lista
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     
-    // Applica i filtri base (mese, dept, team) per calcolare i contatori corretti
+    // Applica i filtri base (mese, dept, team, owner) per calcolare i contatori corretti
     let filteredForCounts = keydevs || []
     
     if (search.dept) {
@@ -377,6 +385,11 @@ export default function KeyDevsListPage() {
     if (search.team) {
       filteredForCounts = filteredForCounts.filter((kd) => kd.teamId === search.team)
     }
+    if (search.owner) {
+      filteredForCounts = search.owner === '__no_owner__'
+        ? filteredForCounts.filter((kd) => !kd.ownerId)
+        : filteredForCounts.filter((kd) => kd.ownerId === search.owner)
+    }
     
     // Conta gli stati nei keydevs filtrati
     for (const kd of filteredForCounts) {
@@ -384,7 +397,7 @@ export default function KeyDevsListPage() {
     }
     
     return counts
-  }, [keydevs, search.dept, search.team])
+  }, [keydevs, search.dept, search.team, search.owner])
 
   // Normalizza gli status selezionati (può essere stringa o array)
   const selectedStatuses = useMemo(() => {
@@ -689,16 +702,18 @@ export default function KeyDevsListPage() {
     }
   }, [dropdownOpen, monthDropdownOpen])
 
+  const hasMockupDone = (statusCounts?.MockupDone ?? 0) > 0
+
   // Testo del pulsante dropdown
   const dropdownButtonText = useMemo(() => {
     if (selectedStatuses.length === 0) {
       return 'Tutti gli stati'
     }
     if (selectedStatuses.length === 1) {
-      return statusLabels[selectedStatuses[0]]
+      return getStatusLabel(selectedStatuses[0], hasMockupDone)
     }
     return `${selectedStatuses.length} stati selezionati`
-  }, [selectedStatuses])
+  }, [selectedStatuses, hasMockupDone])
 
   return (
     <div>
@@ -1010,7 +1025,7 @@ export default function KeyDevsListPage() {
               <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-[320px] overflow-y-auto">
                 <div className="p-2 space-y-1">
                   {statusOrder.map((key) => {
-                    const label = statusLabels[key]
+                    const label = getStatusLabel(key, hasMockupDone)
                     const isSelected = selectedStatuses.includes(key)
                     const count = statusCounts?.[key] || 0
                     
@@ -1131,7 +1146,7 @@ export default function KeyDevsListPage() {
           </label>
           <div className="flex flex-wrap gap-2">
             {statusOrder.map((key) => {
-              const label = statusLabels[key]
+              const label = getStatusLabel(key, hasMockupDone)
               const isSelected = selectedStatuses.includes(key)
               const count = statusCounts?.[key] || 0
               return (
@@ -1241,11 +1256,16 @@ export default function KeyDevsListPage() {
           </div>
         ) : (
           sortedKeyDevs.map((kd) => {
+            const isMockupDone = kd.status === 'MockupDone'
             return (
               <div
                 key={kd._id}
                 onClick={() => navigate({ to: '/keydevs/$id', params: { id: kd.readableId } })}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 hover:shadow-md transition-shadow cursor-pointer border border-gray-200 dark:border-gray-700"
+                className={`rounded-lg shadow p-4 hover:shadow-md transition-shadow cursor-pointer border ${
+                  isMockupDone
+                    ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700/70'
+                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                }`}
               >
                 {/* Header con ID e Stato */}
                 <div className="flex items-start justify-between mb-3">
@@ -1267,7 +1287,7 @@ export default function KeyDevsListPage() {
                         >
                           {getPreviousStatuses(kd.status).map((status) => (
                             <option key={status} value={status} className="bg-white dark:bg-gray-800">
-                              {statusLabels[status]}
+                              {getStatusLabel(status, hasMockupDone)}
                             </option>
                           ))}
                         </select>
@@ -1393,7 +1413,11 @@ export default function KeyDevsListPage() {
                 <tr
                   key={kd._id}
                   onClick={() => navigate({ to: '/keydevs/$id', params: { id: kd.readableId } })}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                  className={`cursor-pointer ${
+                    kd.status === 'MockupDone'
+                      ? 'bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
                 >
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                     <div className="flex items-center gap-2">
@@ -1416,7 +1440,7 @@ export default function KeyDevsListPage() {
                     >
                       {getPreviousStatuses(kd.status).map((status) => (
                         <option key={status} value={status} className="bg-white dark:bg-gray-800">
-                          {statusLabels[status]}
+                          {getStatusLabel(status, hasMockupDone)}
                         </option>
                       ))}
                     </select>

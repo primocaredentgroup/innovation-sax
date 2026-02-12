@@ -257,6 +257,16 @@ export default defineSchema({
     .index('by_provider', ['provider'])
     .index('by_providerUserId', ['providerUserId']),
 
+  // Skills per agent
+  skills: defineTable({
+    name: v.string(),
+    description: v.string(),
+    text: v.string(), // Contenuto markdown (.md)
+    zipFile: v.optional(v.id('_storage')) // Skill.zip caricato su Convex storage
+  })
+    .index('by_name', ['name'])
+    .searchIndex('search_name', { searchField: 'name' }),
+
   // Penalties (penalità applicate dall'admin aziendale dopo il controllo)
   penalties: defineTable({
     keyDevId: v.id('keydevs'),

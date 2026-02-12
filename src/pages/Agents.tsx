@@ -2,10 +2,12 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useState } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
+import { useNavigate } from '@tanstack/react-router'
 
-type AgentsTab = 'agentApps' | 'agents'
+type AgentsTab = 'agentApps' | 'agents' | 'skills'
 
 export default function AgentsPage() {
+  const navigate = useNavigate()
   const currentUser = useQuery(api.users.getCurrentUser)
 
   const agentApps = useQuery(api.agentApps.list)
@@ -17,6 +19,15 @@ export default function AgentsPage() {
   const createAgent = useMutation(api.agents.create)
   const updateAgent = useMutation(api.agents.update)
   const removeAgent = useMutation(api.agents.remove)
+
+  const [skillsSearch, setSkillsSearch] = useState('')
+  const skills = useQuery(api.skills.list, {
+    search: skillsSearch.trim() ? skillsSearch.trim() : undefined
+  })
+  const createSkill = useMutation(api.skills.create)
+  const updateSkill = useMutation(api.skills.update)
+  const removeSkill = useMutation(api.skills.remove)
+  const generateSkillUploadUrl = useMutation(api.skills.generateUploadUrl)
 
   const [activeTab, setActiveTab] = useState<AgentsTab>('agentApps')
 
@@ -35,6 +46,18 @@ export default function AgentsPage() {
   const [editAgentName, setEditAgentName] = useState('')
   const [editAgentProvider, setEditAgentProvider] = useState('')
   const [editAgentProviderUserId, setEditAgentProviderUserId] = useState('')
+
+  const [newSkillName, setNewSkillName] = useState('')
+  const [newSkillDescription, setNewSkillDescription] = useState('')
+  const [newSkillText, setNewSkillText] = useState('')
+  const [newSkillZipFile, setNewSkillZipFile] = useState<File | null>(null)
+  const [skillUploading, setSkillUploading] = useState(false)
+  const [isCreateSkillDialogOpen, setIsCreateSkillDialogOpen] = useState(false)
+  const [editingSkill, setEditingSkill] = useState<Id<'skills'> | null>(null)
+  const [editSkillName, setEditSkillName] = useState('')
+  const [editSkillDescription, setEditSkillDescription] = useState('')
+  const [editSkillText, setEditSkillText] = useState('')
+  const [editSkillZipFile, setEditSkillZipFile] = useState<File | null>(null)
 
   if (!currentUser?.roles?.includes('Admin')) {
     return (
@@ -152,6 +175,87 @@ export default function AgentsPage() {
     await removeAgent({ id })
   }
 
+  const uploadSkillZipIfNeeded = async (zipFile: File | null) => {
+    if (!zipFile) return undefined
+    const postUrl = await generateSkillUploadUrl()
+    const result = await fetch(postUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': zipFile.type || 'application/zip' },
+      body: zipFile
+    })
+    const { storageId } = await result.json()
+    return storageId as Id<'_storage'>
+  }
+
+  const handleCreateSkill = async () => {
+    if (!newSkillName.trim() || !newSkillDescription.trim() || !newSkillText.trim()) return
+    setSkillUploading(true)
+    try {
+      const zipStorageId = await uploadSkillZipIfNeeded(newSkillZipFile)
+      await createSkill({
+        name: newSkillName.trim(),
+        description: newSkillDescription.trim(),
+        text: newSkillText,
+        zipFile: zipStorageId
+      })
+      setNewSkillName('')
+      setNewSkillDescription('')
+      setNewSkillText('')
+      setNewSkillZipFile(null)
+      setIsCreateSkillDialogOpen(false)
+    } finally {
+      setSkillUploading(false)
+    }
+  }
+
+  const handleStartEditSkill = (skill: {
+    _id: Id<'skills'>
+    name: string
+    description: string
+    text: string
+  }) => {
+    setEditingSkill(skill._id)
+    setEditSkillName(skill.name)
+    setEditSkillDescription(skill.description)
+    setEditSkillText(skill.text)
+    setEditSkillZipFile(null)
+  }
+
+  const handleUpdateSkill = async (id: Id<'skills'>) => {
+    if (!editSkillName.trim() || !editSkillDescription.trim() || !editSkillText.trim()) return
+    setSkillUploading(true)
+    try {
+      const zipStorageId = await uploadSkillZipIfNeeded(editSkillZipFile)
+      await updateSkill({
+        id,
+        name: editSkillName.trim(),
+        description: editSkillDescription.trim(),
+        text: editSkillText,
+        zipFile: zipStorageId
+      })
+      setEditingSkill(null)
+      setEditSkillName('')
+      setEditSkillDescription('')
+      setEditSkillText('')
+      setEditSkillZipFile(null)
+    } finally {
+      setSkillUploading(false)
+    }
+  }
+
+  const handleCancelEditSkill = () => {
+    setEditingSkill(null)
+    setEditSkillName('')
+    setEditSkillDescription('')
+    setEditSkillText('')
+    setEditSkillZipFile(null)
+  }
+
+  const handleRemoveSkill = async (id: Id<'skills'>) => {
+    if (!confirm('Sei sicuro di voler eliminare questa skill?')) return
+    await removeSkill({ id })
+  }
+
   return (
     <div className="w-full max-w-full">
       <div className="mb-4 lg:mb-6">
@@ -180,6 +284,16 @@ export default function AgentsPage() {
             }`}
           >
             Agents
+          </button>
+          <button
+            onClick={() => setActiveTab('skills')}
+            className={`py-3 lg:py-4 px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap ${
+              activeTab === 'skills'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Skills
           </button>
         </nav>
       </div>
@@ -453,6 +567,220 @@ export default function AgentsPage() {
               {agents?.length === 0 && (
                 <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">Nessun agent presente</div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'skills' && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Skills</h2>
+          </div>
+
+          <div className="p-4 lg:p-6 space-y-4">
+            <div className="flex justify-end">
+              <button
+                onClick={() => setIsCreateSkillDialogOpen(true)}
+                className="px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+              >
+                Nuova Skill
+              </button>
+            </div>
+
+            <div className="pt-2">
+              <input
+                type="text"
+                value={skillsSearch}
+                onChange={(e) => setSkillsSearch(e.target.value)}
+                placeholder="Cerca skill per nome..."
+                className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
+            </div>
+
+            <div className="space-y-3">
+              {skills?.map((skill) => {
+                const isEditing = editingSkill === skill._id
+                return (
+                  <div
+                    key={skill._id}
+                    onClick={() => {
+                      if (isEditing) return
+                      navigate({ to: '/admin/agents/skills/$skillId', params: { skillId: skill._id } })
+                    }}
+                    className={`border border-gray-200 dark:border-gray-700 rounded-lg p-4 ${
+                      isEditing
+                        ? ''
+                        : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors'
+                    }`}
+                  >
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          value={editSkillName}
+                          onChange={(e) => setEditSkillName(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                        />
+                        <input
+                          type="text"
+                          value={editSkillDescription}
+                          onChange={(e) => setEditSkillDescription(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                        />
+                        <textarea
+                          value={editSkillText}
+                          onChange={(e) => setEditSkillText(e.target.value)}
+                          rows={8}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                        />
+                        <input
+                          type="file"
+                          accept=".zip,.tar.gz,.tgz,application/zip,application/gzip,application/x-gzip"
+                          onChange={(e) => setEditSkillZipFile(e.target.files?.[0] ?? null)}
+                          className="text-sm text-gray-700 dark:text-gray-300"
+                        />
+                        {editSkillZipFile && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            File selezionato: {editSkillZipFile.name}
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleUpdateSkill(skill._id)}
+                            disabled={skillUploading}
+                            className="px-3 py-1 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50"
+                          >
+                            Salva
+                          </button>
+                          <button
+                            onClick={handleCancelEditSkill}
+                            className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                          >
+                            Annulla
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm lg:text-base font-medium text-gray-900 dark:text-gray-100">{skill.name}</h3>
+                          <p className="text-xs lg:text-sm text-gray-600 dark:text-gray-400">{skill.description}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            {skill.hasZipFile ? 'Archivio disponibile (.zip/.tar.gz)' : 'Solo markdown'}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleStartEditSkill(skill)
+                            }}
+                            className="px-3 py-1 text-xs lg:text-sm bg-gray-700 dark:bg-gray-600 text-white rounded-md hover:bg-gray-800 dark:hover:bg-gray-500"
+                          >
+                            Modifica
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleRemoveSkill(skill._id)
+                            }}
+                            className="px-3 py-1 text-xs lg:text-sm bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600"
+                          >
+                            Elimina
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              {skills?.length === 0 && (
+                <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">Nessuna skill presente</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isCreateSkillDialogOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700">
+            <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Nuova Skill</h3>
+              <button
+                onClick={() => {
+                  setIsCreateSkillDialogOpen(false)
+                  setNewSkillName('')
+                  setNewSkillDescription('')
+                  setNewSkillText('')
+                  setNewSkillZipFile(null)
+                }}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 lg:p-6 space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  value={newSkillName}
+                  onChange={(e) => setNewSkillName(e.target.value)}
+                  placeholder="Nome skill"
+                  className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+                <input
+                  type="text"
+                  value={newSkillDescription}
+                  onChange={(e) => setNewSkillDescription(e.target.value)}
+                  placeholder="Descrizione skill"
+                  className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+              </div>
+              <textarea
+                value={newSkillText}
+                onChange={(e) => setNewSkillText(e.target.value)}
+                placeholder="Testo completo markdown (.md) della skill"
+                rows={10}
+                className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
+              <div className="flex flex-col gap-2">
+                <input
+                  type="file"
+                  accept=".zip,.tar.gz,.tgz,application/zip,application/gzip,application/x-gzip"
+                  onChange={(e) => setNewSkillZipFile(e.target.files?.[0] ?? null)}
+                  className="text-sm text-gray-700 dark:text-gray-300"
+                />
+                {newSkillZipFile && (
+                  <span className="text-xs lg:text-sm text-gray-500 dark:text-gray-400">
+                    File selezionato: {newSkillZipFile.name}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setIsCreateSkillDialogOpen(false)
+                    setNewSkillName('')
+                    setNewSkillDescription('')
+                    setNewSkillText('')
+                    setNewSkillZipFile(null)
+                  }}
+                  className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleCreateSkill}
+                  disabled={skillUploading}
+                  className="px-4 py-2 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50"
+                >
+                  {skillUploading ? 'Caricamento...' : 'Crea Skill'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

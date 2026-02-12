@@ -25,6 +25,7 @@ import type * as labels from "../labels.js";
 import type * as months from "../months.js";
 import type * as notes from "../notes.js";
 import type * as penalties from "../penalties.js";
+import type * as skills from "../skills.js";
 import type * as teams from "../teams.js";
 import type * as users from "../users.js";
 
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   months: typeof months;
   notes: typeof notes;
   penalties: typeof penalties;
+  skills: typeof skills;
   teams: typeof teams;
   users: typeof users;
 }>;
