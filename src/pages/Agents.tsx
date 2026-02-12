@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 import { useNavigate } from '@tanstack/react-router'
 
@@ -30,10 +30,15 @@ export default function AgentsPage() {
   const generateSkillUploadUrl = useMutation(api.skills.generateUploadUrl)
 
   const [activeTab, setActiveTab] = useState<AgentsTab>('agentApps')
+  const sortedSkills = useMemo(() => {
+    if (!skills) return []
+    return [...skills].sort((a, b) => b.starsCount - a.starsCount)
+  }, [skills])
 
   const [newAgentAppName, setNewAgentAppName] = useState('')
   const [newAgentAppBaseUrl, setNewAgentAppBaseUrl] = useState('')
   const [newAgentAppKey, setNewAgentAppKey] = useState('')
+  const [isCreateAgentAppDialogOpen, setIsCreateAgentAppDialogOpen] = useState(false)
   const [editingAgentApp, setEditingAgentApp] = useState<Id<'agentApps'> | null>(null)
   const [editAgentAppName, setEditAgentAppName] = useState('')
   const [editAgentAppBaseUrl, setEditAgentAppBaseUrl] = useState('')
@@ -42,6 +47,7 @@ export default function AgentsPage() {
   const [newAgentName, setNewAgentName] = useState('')
   const [newAgentProvider, setNewAgentProvider] = useState('')
   const [newAgentProviderUserId, setNewAgentProviderUserId] = useState('')
+  const [isCreateAgentDialogOpen, setIsCreateAgentDialogOpen] = useState(false)
   const [editingAgent, setEditingAgent] = useState<Id<'agents'> | null>(null)
   const [editAgentName, setEditAgentName] = useState('')
   const [editAgentProvider, setEditAgentProvider] = useState('')
@@ -79,6 +85,7 @@ export default function AgentsPage() {
     setNewAgentAppName('')
     setNewAgentAppBaseUrl('')
     setNewAgentAppKey('')
+    setIsCreateAgentAppDialogOpen(false)
   }
 
   const handleStartEditAgentApp = (app: {
@@ -133,6 +140,7 @@ export default function AgentsPage() {
     setNewAgentName('')
     setNewAgentProvider('')
     setNewAgentProviderUserId('')
+    setIsCreateAgentDialogOpen(false)
   }
 
   const handleStartEditAgent = (agent: {
@@ -300,41 +308,17 @@ export default function AgentsPage() {
 
       {activeTab === 'agentApps' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-          <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
             <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Agent Apps</h2>
-          </div>
-
-          <div className="p-4 lg:p-6">
-            <div className="mb-4 grid grid-cols-1 lg:grid-cols-3 gap-2">
-              <input
-                type="text"
-                value={newAgentAppName}
-                onChange={(e) => setNewAgentAppName(e.target.value)}
-                placeholder="Nome app"
-                className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-              <input
-                type="text"
-                value={newAgentAppBaseUrl}
-                onChange={(e) => setNewAgentAppBaseUrl(e.target.value)}
-                placeholder="Base URL"
-                className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-              <input
-                type="text"
-                value={newAgentAppKey}
-                onChange={(e) => setNewAgentAppKey(e.target.value)}
-                placeholder="App Key"
-                className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-            </div>
             <button
-              onClick={handleCreateAgentApp}
-              className="mb-4 px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+              onClick={() => setIsCreateAgentAppDialogOpen(true)}
+              className="px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
             >
               Aggiungi Agent App
             </button>
+          </div>
 
+          <div className="p-4 lg:p-6">
             <div className="overflow-x-auto -mx-4 lg:mx-0">
               <div className="inline-block min-w-full align-middle">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -437,41 +421,17 @@ export default function AgentsPage() {
 
       {activeTab === 'agents' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-          <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
             <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Agents</h2>
-          </div>
-
-          <div className="p-4 lg:p-6">
-            <div className="mb-4 grid grid-cols-1 lg:grid-cols-3 gap-2">
-              <input
-                type="text"
-                value={newAgentName}
-                onChange={(e) => setNewAgentName(e.target.value)}
-                placeholder="Nome agent"
-                className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-              <input
-                type="text"
-                value={newAgentProvider}
-                onChange={(e) => setNewAgentProvider(e.target.value)}
-                placeholder="Provider"
-                className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-              <input
-                type="text"
-                value={newAgentProviderUserId}
-                onChange={(e) => setNewAgentProviderUserId(e.target.value)}
-                placeholder="Provider User ID"
-                className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-              />
-            </div>
             <button
-              onClick={handleCreateAgent}
-              className="mb-4 px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+              onClick={() => setIsCreateAgentDialogOpen(true)}
+              className="px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
             >
               Aggiungi Agent
             </button>
+          </div>
 
+          <div className="p-4 lg:p-6">
             <div className="overflow-x-auto -mx-4 lg:mx-0">
               <div className="inline-block min-w-full align-middle">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -574,20 +534,17 @@ export default function AgentsPage() {
 
       {activeTab === 'skills' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-          <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
             <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Skills</h2>
+            <button
+              onClick={() => setIsCreateSkillDialogOpen(true)}
+              className="px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+            >
+              Nuova Skill
+            </button>
           </div>
 
           <div className="p-4 lg:p-6 space-y-4">
-            <div className="flex justify-end">
-              <button
-                onClick={() => setIsCreateSkillDialogOpen(true)}
-                className="px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
-              >
-                Nuova Skill
-              </button>
-            </div>
-
             <div className="pt-2">
               <input
                 type="text"
@@ -599,7 +556,7 @@ export default function AgentsPage() {
             </div>
 
             <div className="space-y-3">
-              {skills?.map((skill) => {
+              {sortedSkills.map((skill) => {
                 const isEditing = editingSkill === skill._id
                 return (
                   <div
@@ -669,6 +626,7 @@ export default function AgentsPage() {
                           <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                             {skill.hasZipFile ? 'Archivio disponibile (.zip/.tar.gz)' : 'Solo markdown'}
                           </p>
+                          <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">★ {skill.starsCount} stelle</p>
                         </div>
                         <div className="flex gap-2 flex-wrap">
                           <button
@@ -695,7 +653,7 @@ export default function AgentsPage() {
                   </div>
                 )
               })}
-              {skills?.length === 0 && (
+              {skills !== undefined && sortedSkills.length === 0 && (
                 <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">Nessuna skill presente</div>
               )}
             </div>
@@ -779,6 +737,140 @@ export default function AgentsPage() {
                   className="px-4 py-2 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50"
                 >
                   {skillUploading ? 'Caricamento...' : 'Crea Skill'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isCreateAgentAppDialogOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700">
+            <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Nuova Agent App</h3>
+              <button
+                onClick={() => {
+                  setIsCreateAgentAppDialogOpen(false)
+                  setNewAgentAppName('')
+                  setNewAgentAppBaseUrl('')
+                  setNewAgentAppKey('')
+                }}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 lg:p-6 space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+                <input
+                  type="text"
+                  value={newAgentAppName}
+                  onChange={(e) => setNewAgentAppName(e.target.value)}
+                  placeholder="Nome app"
+                  className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+                <input
+                  type="text"
+                  value={newAgentAppBaseUrl}
+                  onChange={(e) => setNewAgentAppBaseUrl(e.target.value)}
+                  placeholder="Base URL"
+                  className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+                <input
+                  type="text"
+                  value={newAgentAppKey}
+                  onChange={(e) => setNewAgentAppKey(e.target.value)}
+                  placeholder="App Key"
+                  className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setIsCreateAgentAppDialogOpen(false)
+                    setNewAgentAppName('')
+                    setNewAgentAppBaseUrl('')
+                    setNewAgentAppKey('')
+                  }}
+                  className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleCreateAgentApp}
+                  className="px-4 py-2 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                >
+                  Crea Agent App
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isCreateAgentDialogOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700">
+            <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Nuovo Agent</h3>
+              <button
+                onClick={() => {
+                  setIsCreateAgentDialogOpen(false)
+                  setNewAgentName('')
+                  setNewAgentProvider('')
+                  setNewAgentProviderUserId('')
+                }}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 lg:p-6 space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+                <input
+                  type="text"
+                  value={newAgentName}
+                  onChange={(e) => setNewAgentName(e.target.value)}
+                  placeholder="Nome agent"
+                  className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+                <input
+                  type="text"
+                  value={newAgentProvider}
+                  onChange={(e) => setNewAgentProvider(e.target.value)}
+                  placeholder="Provider"
+                  className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+                <input
+                  type="text"
+                  value={newAgentProviderUserId}
+                  onChange={(e) => setNewAgentProviderUserId(e.target.value)}
+                  placeholder="Provider User ID"
+                  className="px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setIsCreateAgentDialogOpen(false)
+                    setNewAgentName('')
+                    setNewAgentProvider('')
+                    setNewAgentProviderUserId('')
+                  }}
+                  className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleCreateAgent}
+                  className="px-4 py-2 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                >
+                  Crea Agent
                 </button>
               </div>
             </div>

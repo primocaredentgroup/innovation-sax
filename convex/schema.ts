@@ -262,7 +262,8 @@ export default defineSchema({
     name: v.string(),
     description: v.string(),
     text: v.string(), // Contenuto markdown (.md)
-    zipFile: v.optional(v.id('_storage')) // Skill.zip caricato su Convex storage
+    zipFile: v.optional(v.id('_storage')), // Skill.zip caricato su Convex storage
+    stars: v.optional(v.array(v.id('users'))) // User IDs che hanno consigliato la skill
   })
     .index('by_name', ['name'])
     .searchIndex('search_name', { searchField: 'name' }),
