@@ -213,6 +213,7 @@ function isRecentUpdate(weekRef: string | undefined): boolean {
 type SortField = 'priority' | 'name' | 'category' | 'status' | 'owner' | 'progress' | 'lastUpdate'
 type SortDirection = 'asc' | 'desc'
 type CoreAppStatus = keyof typeof statusLabels
+type StatusFilter = CoreAppStatus | 'All'
 
 export default function CoreAppsListPage() {
   const search = useSearch({ strict: false })
@@ -236,10 +237,10 @@ export default function CoreAppsListPage() {
   const [searchQuery, setSearchQuery] = useState('')
   
   // Stato per il filtro status (default: In Corso)
-  const [selectedStatus, setSelectedStatus] = useState<CoreAppStatus>(() => {
+  const [selectedStatus, setSelectedStatus] = useState<StatusFilter>(() => {
     const statusFromSearch = typeof search.status === 'string' ? search.status : undefined
-    if (statusFromSearch && Object.prototype.hasOwnProperty.call(statusLabels, statusFromSearch)) {
-      return statusFromSearch as CoreAppStatus
+    if (statusFromSearch === 'All' || (statusFromSearch && Object.prototype.hasOwnProperty.call(statusLabels, statusFromSearch))) {
+      return statusFromSearch as StatusFilter
     }
     return 'InProgress'
   })
@@ -253,8 +254,8 @@ export default function CoreAppsListPage() {
     }
 
     const statusFromSearch = typeof search.status === 'string' ? search.status : undefined
-    if (statusFromSearch && Object.prototype.hasOwnProperty.call(statusLabels, statusFromSearch)) {
-      setSelectedStatus(statusFromSearch as CoreAppStatus)
+    if (statusFromSearch === 'All' || (statusFromSearch && Object.prototype.hasOwnProperty.call(statusLabels, statusFromSearch))) {
+      setSelectedStatus(statusFromSearch as StatusFilter)
     }
   }, [search.owner, search.status])
 
@@ -380,8 +381,8 @@ export default function CoreAppsListPage() {
     }
   }
 
-  // Filtra le app in base alla categoria selezionata, owner, status e ricerca
-  const filteredApps = useMemo(() => {
+  // App filtrate da categoria + owner + ricerca (base per i contatori status)
+  const appsMatchingOwnerAndSearch = useMemo(() => {
     if (!coreApps) return []
     let apps = selectedCategoryId === null 
       ? coreApps 
@@ -394,9 +395,6 @@ export default function CoreAppsListPage() {
         : apps.filter(app => app.ownerId === selectedOwnerId)
     }
     
-    // Filtra per status
-    apps = apps.filter(app => app.status === selectedStatus)
-    
     // Filtra per search query (nome e slug)
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase()
@@ -405,6 +403,15 @@ export default function CoreAppsListPage() {
           app.name.toLowerCase().includes(q) ||
           app.slug.toLowerCase().includes(q)
       )
+    }
+    return apps
+  }, [coreApps, selectedCategoryId, selectedOwnerId, searchQuery])
+
+  // Filtra le app in base a categoria, owner, status e ricerca
+  const filteredApps = useMemo(() => {
+    let apps = appsMatchingOwnerAndSearch
+    if (selectedStatus !== 'All') {
+      apps = apps.filter(app => app.status === selectedStatus)
     }
     
     // Applica l'ordinamento
@@ -452,32 +459,79 @@ export default function CoreAppsListPage() {
     })
     
     return sortedApps
-  }, [coreApps, selectedCategoryId, selectedOwnerId, selectedStatus, searchQuery, sortField, sortDirection, categoriesMap, usersMap])
+  }, [appsMatchingOwnerAndSearch, selectedStatus, sortField, sortDirection, categoriesMap, usersMap])
 
-  // Contatori owner per le app filtrate per categoria (per popolare gli avatar del filtro)
+  // Contatori status con gli altri filtri attivi (escluso il filtro status)
+  const statusCounts = useMemo(() => {
+    const counts: Record<CoreAppStatus, number> = {
+      Planning: 0,
+      InProgress: 0,
+      Completed: 0
+    }
+    for (const app of appsMatchingOwnerAndSearch) {
+      counts[app.status] += 1
+    }
+    return counts
+  }, [appsMatchingOwnerAndSearch])
+
+  // Contatori owner con filtri categoria + status + ricerca (escludendo il filtro owner)
   const ownerCounts = useMemo(() => {
     if (!coreApps) return {} as Record<string, number>
-    const apps = selectedCategoryId === null
+    const appsByCategory = selectedCategoryId === null
       ? coreApps
       : coreApps.filter(app => app.categoryId === selectedCategoryId)
+    const appsByStatus = selectedStatus === 'All'
+      ? appsByCategory
+      : appsByCategory.filter(app => app.status === selectedStatus)
+    const apps = searchQuery.trim()
+      ? appsByStatus.filter((app) => {
+          const q = searchQuery.trim().toLowerCase()
+          return app.name.toLowerCase().includes(q) || app.slug.toLowerCase().includes(q)
+        })
+      : appsByStatus
     const counts: Record<string, number> = {}
     for (const app of apps) {
       const id = app.ownerId || '__no_owner__'
       counts[id] = (counts[id] ?? 0) + 1
     }
     return counts
-  }, [coreApps, selectedCategoryId])
+  }, [coreApps, selectedCategoryId, selectedStatus, searchQuery])
 
-  // Conta le app per categoria (per mostrare il badge)
+  // Conta le app per categoria con gli altri filtri attivi (owner + status + ricerca)
   const appCountByCategory = useMemo(() => {
     if (!coreApps) return new Map<Id<'coreAppsCategories'> | 'uncategorized', number>()
+    let apps = coreApps
+    if (selectedOwnerId) {
+      apps = selectedOwnerId === '__no_owner__'
+        ? apps.filter(app => !app.ownerId)
+        : apps.filter(app => app.ownerId === selectedOwnerId)
+    }
+    if (selectedStatus !== 'All') {
+      apps = apps.filter(app => app.status === selectedStatus)
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase()
+      apps = apps.filter(
+        app =>
+          app.name.toLowerCase().includes(q) ||
+          app.slug.toLowerCase().includes(q)
+      )
+    }
     const counts = new Map<Id<'coreAppsCategories'> | 'uncategorized', number>()
-    for (const app of coreApps) {
+    for (const app of apps) {
       const key = app.categoryId || 'uncategorized'
       counts.set(key, (counts.get(key) || 0) + 1)
     }
     return counts
-  }, [coreApps])
+  }, [coreApps, selectedOwnerId, selectedStatus, searchQuery])
+
+  const totalAppsForCategoryTabs = useMemo(() => {
+    let total = 0
+    for (const count of appCountByCategory.values()) {
+      total += count
+    }
+    return total
+  }, [appCountByCategory])
 
   return (
     <div className="w-full max-w-full overflow-x-hidden">
@@ -511,7 +565,7 @@ export default function CoreAppsListPage() {
                   <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
                     selectedCategoryId === null ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-600'
                   }`}>
-                    {coreApps?.length || 0}
+                    {totalAppsForCategoryTabs}
                   </span>
                 </button>
                 {categories.map((category) => (
@@ -541,13 +595,14 @@ export default function CoreAppsListPage() {
             {/* Filtro status */}
             <select
               value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as keyof typeof statusLabels)}
+              onChange={(e) => setSelectedStatus(e.target.value as StatusFilter)}
               className="w-full sm:w-44 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               aria-label="Filtra per status"
             >
-              <option value="Planning">{statusLabels.Planning}</option>
-              <option value="InProgress">{statusLabels.InProgress}</option>
-              <option value="Completed">{statusLabels.Completed}</option>
+              <option value="All">Tutti ({appsMatchingOwnerAndSearch.length})</option>
+              <option value="Planning">{statusLabels.Planning} ({statusCounts.Planning})</option>
+              <option value="InProgress">{statusLabels.InProgress} ({statusCounts.InProgress})</option>
+              <option value="Completed">{statusLabels.Completed} ({statusCounts.Completed})</option>
             </select>
 
             {/* Search input */}

@@ -439,6 +439,8 @@ export default function CoreAppDetailPage() {
   const [selectedOwnerId, setSelectedOwnerId] = useState<Id<'users'> | ''>('')
   const [isEditingPriority, setIsEditingPriority] = useState(false)
   const [tempPriority, setTempPriority] = useState<number>(0)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [tempName, setTempName] = useState('')
   
   // Genera le opzioni per i mesi (6 mesi passati + mese corrente + mesi futuri dal DB)
   const monthOptions = useMemo(() => {
@@ -635,6 +637,25 @@ export default function CoreAppDetailPage() {
     setIsEditingPriority(false)
   }, [coreApp, tempPriority, setPriority])
 
+  const startEditingName = useCallback(() => {
+    if (coreApp) {
+      setTempName(coreApp.name)
+      setIsEditingName(true)
+    }
+  }, [coreApp])
+
+  const handleSaveName = useCallback(async () => {
+    if (!coreApp) return
+    const nextName = tempName.trim()
+    if (!nextName) return
+
+    await updateCoreApp({
+      id: coreApp._id,
+      name: nextName
+    })
+    setIsEditingName(false)
+  }, [coreApp, tempName, updateCoreApp])
+
   if (!coreApp) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -651,7 +672,54 @@ export default function CoreAppDetailPage() {
           ← Torna alla lista
         </Link>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">{coreApp.name}</h1>
+          {isEditingName ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0 flex-1">
+              <input
+                type="text"
+                value={tempName}
+                onChange={(e) => setTempName(e.target.value)}
+                className="min-w-0 flex-1 px-3 py-1.5 text-xl sm:text-2xl font-bold border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveName()
+                  if (e.key === 'Escape') {
+                    setTempName(coreApp.name)
+                    setIsEditingName(false)
+                  }
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSaveName}
+                  disabled={!tempName.trim()}
+                  className="px-3 py-1.5 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                >
+                  Salva
+                </button>
+                <button
+                  onClick={() => {
+                    setTempName(coreApp.name)
+                    setIsEditingName(false)
+                  }}
+                  className="px-3 py-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 whitespace-nowrap"
+                >
+                  Annulla
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">{coreApp.name}</h1>
+              <button
+                onClick={startEditingName}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 whitespace-nowrap"
+                title="Modifica nome"
+                aria-label="Modifica nome"
+              >
+                ✏️
+              </button>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Link Note */}
             <Link
