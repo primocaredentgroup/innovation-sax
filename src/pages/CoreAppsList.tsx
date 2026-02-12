@@ -210,7 +210,7 @@ function isRecentUpdate(weekRef: string | undefined): boolean {
   return weekRef === currentWeek || weekRef === previousWeek
 }
 
-type SortField = 'priority' | 'name' | 'category' | 'status' | 'owner' | 'progress' | 'lastUpdate'
+type SortField = 'priority' | 'name' | 'category' | 'status' | 'owner' | 'weight' | 'progress' | 'lastUpdate'
 type SortDirection = 'asc' | 'desc'
 type CoreAppStatus = keyof typeof statusLabels
 type StatusFilter = CoreAppStatus | 'All'
@@ -279,10 +279,13 @@ export default function CoreAppsListPage() {
   // Stato per editing priority inline
   const [editingPriorityId, setEditingPriorityId] = useState<Id<'coreApps'> | null>(null)
   const [tempPriorityValue, setTempPriorityValue] = useState<number>(0)
+  const [editingWeightId, setEditingWeightId] = useState<Id<'coreApps'> | null>(null)
+  const [tempWeightValue, setTempWeightValue] = useState<number>(1)
   
   // Stato per l'ordinamento (default: priority ascendente)
   const [sortField, setSortField] = useState<SortField>('priority')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [showProgressTooltip, setShowProgressTooltip] = useState(false)
   
   // Mappa userId -> user per trovare velocemente gli owner
   const usersMap = useMemo(() => {
@@ -381,6 +384,25 @@ export default function CoreAppsListPage() {
     }
   }
 
+  // Handler per avviare editing weight
+  const handleStartEditWeight = (app: { _id: Id<'coreApps'>; weight?: number }, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingWeightId(app._id)
+    setTempWeightValue(app.weight ?? 1)
+  }
+
+  // Handler per salvare weight
+  const handleSaveWeight = async (appId: Id<'coreApps'>) => {
+    if (editingWeightId !== appId) return
+    const value = Math.max(1, Math.min(10, Math.floor(tempWeightValue)))
+    try {
+      await updateCoreApp({ id: appId, weight: value })
+      setEditingWeightId(null)
+    } catch {
+      // Mantieni in editing in caso di errore
+    }
+  }
+
   // App filtrate da categoria + owner + ricerca (base per i contatori status)
   const appsMatchingOwnerAndSearch = useMemo(() => {
     if (!coreApps) return []
@@ -443,6 +465,9 @@ export default function CoreAppsListPage() {
           comparison = ownerA.localeCompare(ownerB, 'it', { sensitivity: 'base' })
           break
         }
+        case 'weight':
+          comparison = (a.weight ?? 1) - (b.weight ?? 1)
+          break
         case 'progress':
           comparison = a.percentComplete - b.percentComplete
           break
@@ -460,6 +485,38 @@ export default function CoreAppsListPage() {
     
     return sortedApps
   }, [appsMatchingOwnerAndSearch, selectedStatus, sortField, sortDirection, categoriesMap, usersMap])
+
+  // Progresso totale pesato (calcolato al volo sui risultati filtrati)
+  const weightedTotalProgress = useMemo(() => {
+    if (filteredApps.length === 0) return 0
+
+    let totalWeight = 0
+    let weightedProgressSum = 0
+
+    for (const app of filteredApps) {
+      const rawWeight = app.weight ?? 1
+      const normalizedWeight = Math.min(10, Math.max(1, Math.floor(rawWeight)))
+      totalWeight += normalizedWeight
+      weightedProgressSum += app.percentComplete * normalizedWeight
+    }
+
+    if (totalWeight === 0) return 0
+    return weightedProgressSum / totalWeight
+  }, [filteredApps])
+
+  const progressPoints = useMemo(() => {
+    let totalPossiblePoints = 0
+    let completedPoints = 0
+
+    for (const app of filteredApps) {
+      const rawWeight = app.weight ?? 1
+      const normalizedWeight = Math.min(10, Math.max(1, Math.floor(rawWeight)))
+      totalPossiblePoints += normalizedWeight
+      completedPoints += normalizedWeight * (app.percentComplete / 100)
+    }
+
+    return { totalPossiblePoints, completedPoints }
+  }, [filteredApps])
 
   // Contatori status con gli altri filtri attivi (escluso il filtro status)
   const statusCounts = useMemo(() => {
@@ -538,12 +595,51 @@ export default function CoreAppsListPage() {
       {/* Header responsive */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Applicazioni Core</h1>
-        <Link
-          to="/core-apps/new"
-          className="px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-medium rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors border border-blue-600 dark:border-blue-500 text-sm sm:text-base whitespace-nowrap self-start sm:self-auto"
-        >
-          + Nuova Applicazione Core
-        </Link>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 self-start sm:self-auto">
+          <div className="relative px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Progresso totale pesato</p>
+              <button
+                type="button"
+                onClick={() => setShowProgressTooltip((prev) => !prev)}
+                className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60"
+                aria-label="Mostra spiegazione calcolo progresso pesato"
+                title="Mostra spiegazione"
+              >
+                ?
+              </button>
+            </div>
+            <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {weightedTotalProgress.toFixed(1)}%
+            </p>
+            {showProgressTooltip && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowProgressTooltip(false)}
+                />
+                <div className="absolute right-0 top-full mt-2 z-20 w-72 max-w-[80vw] rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-3 text-xs text-gray-700 dark:text-gray-200">
+                  <p className="font-semibold mb-2">Come viene calcolato</p>
+                  <p className="mb-2">
+                    Progresso pesato = (somma di <code>percentuale x peso</code>) / (somma dei pesi).
+                  </p>
+                  <p className="mb-1">
+                    Punti possibili totali: <span className="font-semibold">{progressPoints.totalPossiblePoints.toFixed(1)}</span>
+                  </p>
+                  <p>
+                    Punti completati: <span className="font-semibold">{progressPoints.completedPoints.toFixed(1)}</span>
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+          <Link
+            to="/core-apps/new"
+            className="px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-medium rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors border border-blue-600 dark:border-blue-500 text-sm sm:text-base whitespace-nowrap self-start sm:self-auto"
+          >
+            + Nuova Applicazione Core
+          </Link>
+        </div>
       </div>
 
       {/* Tab categorie + Filtro owner + Search */}
@@ -756,6 +852,19 @@ export default function CoreAppsListPage() {
                 </th>
                 <th 
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 select-none"
+                  onClick={(e) => handleSort('weight', e)}
+                >
+                  <div className="flex items-center gap-2">
+                    Peso
+                    {sortField === 'weight' && (
+                      <span className="text-blue-600 dark:text-blue-400">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 select-none"
                   onClick={(e) => handleSort('progress', e)}
                 >
                   <div className="flex items-center gap-2">
@@ -876,6 +985,33 @@ export default function CoreAppsListPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
+                      {editingWeightId === app._id ? (
+                        <input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={tempWeightValue}
+                          onChange={(e) => setTempWeightValue(Number(e.target.value))}
+                          onFocus={(e) => e.target.select()}
+                          onBlur={() => handleSaveWeight(app._id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveWeight(app._id)
+                            if (e.key === 'Escape') setEditingWeightId(null)
+                          }}
+                          className="w-14 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          onClick={(e) => handleStartEditWeight(app, e)}
+                          className="hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded transition-colors cursor-pointer text-left w-full min-w-[2rem]"
+                          title="Clicca per modificare"
+                        >
+                          {app.weight ?? 1}
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-900 dark:text-gray-100 w-12">
                           {app.percentComplete}%
@@ -920,7 +1056,7 @@ export default function CoreAppsListPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     {searchQuery.trim()
                       ? selectedCategoryId !== null
                         ? 'Nessun risultato per la ricerca in questa categoria'
@@ -998,6 +1134,36 @@ export default function CoreAppsListPage() {
                   <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${statusColors[app.status]}`}>
                     {statusLabels[app.status]}
                   </span>
+                  {editingWeightId === app._id ? (
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={tempWeightValue}
+                      onChange={(e) => setTempWeightValue(Number(e.target.value))}
+                      onFocus={(e) => e.target.select()}
+                      onBlur={() => handleSaveWeight(app._id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveWeight(app._id)
+                        if (e.key === 'Escape') setEditingWeightId(null)
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-14 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shrink-0"
+                      autoFocus
+                    />
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleStartEditWeight(app, e)
+                      }}
+                      className="px-2 py-1 text-xs rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors whitespace-nowrap"
+                      title="Clicca per modificare il peso"
+                    >
+                      Peso: {app.weight ?? 1}
+                    </button>
+                  )}
                   {/* Badge categoria */}
                   {app.categoryId && categoriesMap.get(app.categoryId) ? (
                     <span className="px-2 py-1 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 whitespace-nowrap">

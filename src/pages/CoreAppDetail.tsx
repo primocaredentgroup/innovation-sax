@@ -439,6 +439,8 @@ export default function CoreAppDetailPage() {
   const [selectedOwnerId, setSelectedOwnerId] = useState<Id<'users'> | ''>('')
   const [isEditingPriority, setIsEditingPriority] = useState(false)
   const [tempPriority, setTempPriority] = useState<number>(0)
+  const [isEditingWeight, setIsEditingWeight] = useState(false)
+  const [tempWeight, setTempWeight] = useState<number>(1)
   const [isEditingName, setIsEditingName] = useState(false)
   const [tempName, setTempName] = useState('')
   
@@ -636,6 +638,23 @@ export default function CoreAppDetailPage() {
     await setPriority({ id: coreApp._id, priority: value })
     setIsEditingPriority(false)
   }, [coreApp, tempPriority, setPriority])
+
+  const startEditingWeight = useCallback(() => {
+    if (coreApp) {
+      setTempWeight(coreApp.weight ?? 1)
+      setIsEditingWeight(true)
+    }
+  }, [coreApp])
+
+  const handleSaveWeight = useCallback(async () => {
+    if (!coreApp) return
+    const nextWeight = Math.max(1, Math.min(10, Math.floor(tempWeight)))
+    await updateCoreApp({
+      id: coreApp._id,
+      weight: nextWeight
+    })
+    setIsEditingWeight(false)
+  }, [coreApp, tempWeight, updateCoreApp])
 
   const startEditingName = useCallback(() => {
     if (coreApp) {
@@ -1255,6 +1274,49 @@ export default function CoreAppDetailPage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Riepilogo</h3>
             <dl className="space-y-3">
+              <div>
+                <dt className="text-sm text-gray-500 dark:text-gray-400">Peso (1-10)</dt>
+                <dd className="font-medium text-gray-900 dark:text-gray-100">
+                  {isEditingWeight ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        step={1}
+                        value={tempWeight}
+                        onChange={(e) => setTempWeight(Number(e.target.value))}
+                        className="w-20 px-2 py-1 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveWeight()
+                          if (e.key === 'Escape') setIsEditingWeight(false)
+                        }}
+                      />
+                      <button
+                        onClick={handleSaveWeight}
+                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Salva
+                      </button>
+                      <button
+                        onClick={() => setIsEditingWeight(false)}
+                        className="px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                      >
+                        Annulla
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={startEditingWeight}
+                      className="hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded transition-colors cursor-pointer text-left"
+                      title="Clicca per modificare"
+                    >
+                      {coreApp.weight ?? 1}
+                    </button>
+                  )}
+                </dd>
+              </div>
               <div>
                 <dt className="text-sm text-gray-500 dark:text-gray-400">Priorità</dt>
                 <dd className="font-medium text-gray-900 dark:text-gray-100">

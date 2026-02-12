@@ -208,6 +208,7 @@ export default defineSchema({
     slug: v.string(), // URL-friendly identifier
     description: v.optional(v.string()),
     percentComplete: v.number(), // 0-100
+    weight: v.optional(v.number()), // Peso per progresso totale (1-10)
     repoUrl: v.optional(v.string()),
     hubMilestonesUrl: v.optional(v.string()), // URL per collegare la percentuale a milestone in altro applicativo
     status: v.union(

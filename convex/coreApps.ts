@@ -16,6 +16,7 @@ const coreAppReturnValidator = v.object({
   slug: v.string(),
   description: v.optional(v.string()),
   percentComplete: v.number(),
+  weight: v.optional(v.number()),
   repoUrl: v.optional(v.string()),
   hubMilestonesUrl: v.optional(v.string()),
   status: coreAppStatusValidator,
@@ -164,7 +165,8 @@ export const create = mutation({
     description: v.optional(v.string()),
     repoUrl: v.optional(v.string()),
     ownerId: v.id('users'),
-    categoryId: v.optional(v.id('coreAppsCategories'))
+    categoryId: v.optional(v.id('coreAppsCategories')),
+    weight: v.optional(v.number())
   },
   returns: v.id('coreApps'),
   handler: async (ctx, args) => {
@@ -196,12 +198,17 @@ export const create = mutation({
 
     // Calcola la prossima priority unica per la categoria
     const priority = await getNextPriorityForCategory(ctx, args.categoryId)
+    const weight = args.weight ?? 1
+    if (!Number.isFinite(weight) || weight < 1 || weight > 10) {
+      throw new Error('Il peso deve essere un numero tra 1 e 10')
+    }
 
     return await ctx.db.insert('coreApps', {
       name: args.name,
       slug,
       description: args.description,
       percentComplete: 0,
+      weight: Math.floor(weight),
       repoUrl: args.repoUrl,
       status: 'Planning',
       ownerId: args.ownerId,
@@ -226,6 +233,7 @@ export const update = mutation({
     status: v.optional(coreAppStatusValidator),
     ownerId: v.optional(v.id('users')),
     categoryId: v.optional(v.id('coreAppsCategories')),
+    weight: v.optional(v.number()),
     priority: v.optional(v.number()) // Ricalcolata automaticamente quando si cambia categoria
   },
   returns: v.null(),
@@ -261,6 +269,13 @@ export const update = mutation({
       if (!owner) {
         throw new Error('Owner non trovato')
       }
+    }
+
+    if (updates.weight !== undefined) {
+      if (!Number.isFinite(updates.weight) || updates.weight < 1 || updates.weight > 10) {
+        throw new Error('Il peso deve essere un numero tra 1 e 10')
+      }
+      updates.weight = Math.floor(updates.weight)
     }
 
     await ctx.db.patch(id, updates)
