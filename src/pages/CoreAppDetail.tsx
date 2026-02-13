@@ -375,6 +375,13 @@ function getCurrentWeekRef(): string {
   return `${year}-W${weekNumber.toString().padStart(2, '0')}`
 }
 
+function normalizeExternalUrl(url: string): string {
+  const trimmedUrl = url.trim()
+  if (!trimmedUrl) return ''
+  if (/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(trimmedUrl)) return trimmedUrl
+  return `https://${trimmedUrl}`
+}
+
 export default function CoreAppDetailPage() {
   const { slug } = useParams({ strict: false }) as { slug: string }
 
@@ -426,10 +433,12 @@ export default function CoreAppDetailPage() {
   // Stati per l'editing della percentuale, dell'URL e della descrizione
   const [isEditingPercent, setIsEditingPercent] = useState(false)
   const [isEditingHubUrl, setIsEditingHubUrl] = useState(false)
+  const [isEditingRepoUrl, setIsEditingRepoUrl] = useState(false)
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false)
   const [tempPercent, setTempPercent] = useState<number>(0)
   const [tempHubUrl, setTempHubUrl] = useState<string>('')
+  const [tempRepoUrl, setTempRepoUrl] = useState<string>('')
   const [tempDescription, setTempDescription] = useState<string>('')
   const [isAddingSubscriber, setIsAddingSubscriber] = useState(false)
   const [selectedNewSubscriber, setSelectedNewSubscriber] = useState<Id<'users'> | ''>('')
@@ -482,6 +491,9 @@ export default function CoreAppDetailPage() {
   // Usa valori derivati quando non si sta editando, altrimenti usa lo stato locale
   const currentPercent = isEditingPercent ? tempPercent : (coreApp?.percentComplete || 0)
   const currentHubUrl = isEditingHubUrl ? tempHubUrl : (coreApp?.hubMilestonesUrl || '')
+  const currentRepoUrl = isEditingRepoUrl ? tempRepoUrl : (coreApp?.repoUrl || '')
+  const currentHubHref = normalizeExternalUrl(currentHubUrl)
+  const currentRepoHref = normalizeExternalUrl(currentRepoUrl)
   const currentDescription = isEditingDescription ? tempDescription : (coreApp?.description || '')
 
   // Inizializza lo stato locale quando si entra in modalità editing
@@ -496,6 +508,13 @@ export default function CoreAppDetailPage() {
     if (coreApp) {
       setTempHubUrl(coreApp.hubMilestonesUrl || '')
       setIsEditingHubUrl(true)
+    }
+  }, [coreApp])
+
+  const startEditingRepoUrl = useCallback(() => {
+    if (coreApp) {
+      setTempRepoUrl(coreApp.repoUrl || '')
+      setIsEditingRepoUrl(true)
     }
   }, [coreApp])
 
@@ -556,6 +575,15 @@ export default function CoreAppDetailPage() {
     })
     setIsEditingHubUrl(false)
   }, [coreApp, tempHubUrl, updateCoreApp])
+
+  const handleSaveRepoUrl = useCallback(async () => {
+    if (!coreApp) return
+    await updateCoreApp({
+      id: coreApp._id,
+      repoUrl: tempRepoUrl.trim() || undefined
+    })
+    setIsEditingRepoUrl(false)
+  }, [coreApp, tempRepoUrl, updateCoreApp])
 
   const handleSaveDescription = useCallback(async () => {
     if (!coreApp) return
@@ -857,16 +885,75 @@ export default function CoreAppDetailPage() {
                 </div>
               )}
             </div>
-            {coreApp.repoUrl && (
-              <a
-                href={coreApp.repoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 break-all"
-              >
-                {coreApp.repoUrl}
-              </a>
-            )}
+            <div className="mt-4 pt-4 border-t dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Repository GitHub</h3>
+              {isEditingRepoUrl ? (
+                <div className="space-y-2">
+                  <input
+                    type="url"
+                    value={tempRepoUrl}
+                    onChange={(e) => setTempRepoUrl(e.target.value)}
+                    placeholder="https://github.com/..."
+                    className="w-full px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSaveRepoUrl()
+                      } else if (e.key === 'Escape') {
+                        setTempRepoUrl(coreApp.repoUrl || '')
+                        setIsEditingRepoUrl(false)
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveRepoUrl}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
+                    >
+                      Salva
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTempRepoUrl(coreApp.repoUrl || '')
+                        setIsEditingRepoUrl(false)
+                      }}
+                      className="px-3 py-1 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-400 dark:hover:bg-gray-500 whitespace-nowrap"
+                    >
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="wrap-break-word">
+                  {currentRepoUrl ? (
+                    <div className="flex items-start gap-2">
+                      <a
+                        href={currentRepoHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm break-all flex-1 min-w-0"
+                      >
+                        {currentRepoUrl}
+                      </a>
+                      <button
+                        onClick={startEditingRepoUrl}
+                        className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 shrink-0"
+                        title="Modifica repository"
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={startEditingRepoUrl}
+                      className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 text-sm underline"
+                    >
+                      + Aggiungi repository
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             
             {/* Owner - editabile come in KeyDevDetail */}
             <div className="mt-4 pt-4 border-t dark:border-gray-700">
@@ -1241,7 +1328,7 @@ export default function CoreAppDetailPage() {
                     {currentHubUrl ? (
                       <div className="flex items-start gap-2">
                         <a
-                          href={currentHubUrl}
+                          href={currentHubHref}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm break-all flex-1 min-w-0"

@@ -214,6 +214,28 @@ type SortField = 'priority' | 'name' | 'category' | 'status' | 'owner' | 'weight
 type SortDirection = 'asc' | 'desc'
 type CoreAppStatus = keyof typeof statusLabels
 type StatusFilter = CoreAppStatus | 'All'
+type OwnerFilterValue = Id<'users'> | '__no_owner__'
+
+function parseOwnerFilterFromSearch(ownerParam: unknown): Array<OwnerFilterValue> {
+  const rawValues =
+    typeof ownerParam === 'string'
+      ? ownerParam.split(',')
+      : Array.isArray(ownerParam)
+        ? ownerParam.flatMap((value) => String(value).split(','))
+        : []
+
+  const normalized: Array<OwnerFilterValue> = []
+  const seen = new Set<string>()
+
+  for (const value of rawValues) {
+    const trimmedValue = value.trim()
+    if (!trimmedValue || seen.has(trimmedValue)) continue
+    seen.add(trimmedValue)
+    normalized.push(trimmedValue === '__no_owner__' ? '__no_owner__' : (trimmedValue as Id<'users'>))
+  }
+
+  return normalized
+}
 
 export default function CoreAppsListPage() {
   const search = useSearch({ strict: false })
@@ -227,11 +249,10 @@ export default function CoreAppsListPage() {
   // Stato per la categoria selezionata (null = tutte)
   const [selectedCategoryId, setSelectedCategoryId] = useState<Id<'coreAppsCategories'> | null>(null)
   
-  // Stato per il filtro owner (null = tutti, '__no_owner__' = senza owner)
-  const [selectedOwnerId, setSelectedOwnerId] = useState<Id<'users'> | '__no_owner__' | null>(() => {
-    if (!search.owner) return null
-    return search.owner === '__no_owner__' ? '__no_owner__' : (search.owner as Id<'users'>)
-  })
+  // Stato per il filtro owner (array vuoto = tutti)
+  const [selectedOwnerIds, setSelectedOwnerIds] = useState<Array<OwnerFilterValue>>(() =>
+    parseOwnerFilterFromSearch(search.owner)
+  )
   
   // Stato per la ricerca
   const [searchQuery, setSearchQuery] = useState('')
@@ -242,20 +263,18 @@ export default function CoreAppsListPage() {
     if (statusFromSearch === 'All' || (statusFromSearch && Object.prototype.hasOwnProperty.call(statusLabels, statusFromSearch))) {
       return statusFromSearch as StatusFilter
     }
-    return 'InProgress'
+    return 'All'
   })
 
   // Sincronizza lo stato locale quando arrivano nuovi filtri dalla URL.
   useEffect(() => {
-    if (!search.owner) {
-      setSelectedOwnerId(null)
-    } else {
-      setSelectedOwnerId(search.owner === '__no_owner__' ? '__no_owner__' : (search.owner as Id<'users'>))
-    }
+    setSelectedOwnerIds(parseOwnerFilterFromSearch(search.owner))
 
     const statusFromSearch = typeof search.status === 'string' ? search.status : undefined
     if (statusFromSearch === 'All' || (statusFromSearch && Object.prototype.hasOwnProperty.call(statusLabels, statusFromSearch))) {
       setSelectedStatus(statusFromSearch as StatusFilter)
+    } else {
+      setSelectedStatus('All')
     }
   }, [search.owner, search.status])
 
@@ -298,6 +317,8 @@ export default function CoreAppsListPage() {
     if (!categories) return new Map<Id<'coreAppsCategories'>, { name: string; slug: string }>()
     return new Map(categories.map(c => [c._id, { name: c.name, slug: c.slug }]))
   }, [categories])
+
+  const selectedOwnerIdSet = useMemo(() => new Set(selectedOwnerIds), [selectedOwnerIds])
 
   // Gestione ordinamento
   const handleSort = (field: SortField, e?: React.MouseEvent) => {
@@ -411,10 +432,11 @@ export default function CoreAppsListPage() {
       : coreApps.filter(app => app.categoryId === selectedCategoryId)
     
     // Filtra per owner
-    if (selectedOwnerId) {
-      apps = selectedOwnerId === '__no_owner__'
-        ? apps.filter(app => !app.ownerId)
-        : apps.filter(app => app.ownerId === selectedOwnerId)
+    if (selectedOwnerIdSet.size > 0) {
+      apps = apps.filter((app) => {
+        const ownerKey = (app.ownerId ?? '__no_owner__') as OwnerFilterValue
+        return selectedOwnerIdSet.has(ownerKey)
+      })
     }
     
     // Filtra per search query (nome e slug)
@@ -427,7 +449,7 @@ export default function CoreAppsListPage() {
       )
     }
     return apps
-  }, [coreApps, selectedCategoryId, selectedOwnerId, searchQuery])
+  }, [coreApps, selectedCategoryId, selectedOwnerIdSet, searchQuery])
 
   // Filtra le app in base a categoria, owner, status e ricerca
   const filteredApps = useMemo(() => {
@@ -558,10 +580,11 @@ export default function CoreAppsListPage() {
   const appCountByCategory = useMemo(() => {
     if (!coreApps) return new Map<Id<'coreAppsCategories'> | 'uncategorized', number>()
     let apps = coreApps
-    if (selectedOwnerId) {
-      apps = selectedOwnerId === '__no_owner__'
-        ? apps.filter(app => !app.ownerId)
-        : apps.filter(app => app.ownerId === selectedOwnerId)
+    if (selectedOwnerIdSet.size > 0) {
+      apps = apps.filter((app) => {
+        const ownerKey = (app.ownerId ?? '__no_owner__') as OwnerFilterValue
+        return selectedOwnerIdSet.has(ownerKey)
+      })
     }
     if (selectedStatus !== 'All') {
       apps = apps.filter(app => app.status === selectedStatus)
@@ -580,7 +603,7 @@ export default function CoreAppsListPage() {
       counts.set(key, (counts.get(key) || 0) + 1)
     }
     return counts
-  }, [coreApps, selectedOwnerId, selectedStatus, searchQuery])
+  }, [coreApps, selectedOwnerIdSet, selectedStatus, searchQuery])
 
   const totalAppsForCategoryTabs = useMemo(() => {
     let total = 0
@@ -594,7 +617,20 @@ export default function CoreAppsListPage() {
     <div className="w-full max-w-full overflow-x-hidden">
       {/* Header responsive */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Applicazioni Core</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Applicazioni Core</h1>
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value as StatusFilter)}
+            className="w-full sm:w-44 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            aria-label="Filtra per status"
+          >
+            <option value="All">Tutti ({appsMatchingOwnerAndSearch.length})</option>
+            <option value="Planning">{statusLabels.Planning} ({statusCounts.Planning})</option>
+            <option value="InProgress">{statusLabels.InProgress} ({statusCounts.InProgress}) ★</option>
+            <option value="Completed">{statusLabels.Completed} ({statusCounts.Completed})</option>
+          </select>
+        </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 self-start sm:self-auto">
           <div className="relative px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
             <div className="flex items-center gap-2">
@@ -688,19 +724,6 @@ export default function CoreAppsListPage() {
             </div>
           )}
           <div className="shrink-0 w-full sm:w-auto flex flex-col sm:flex-row gap-2 sm:items-center">
-            {/* Filtro status */}
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as StatusFilter)}
-              className="w-full sm:w-44 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              aria-label="Filtra per status"
-            >
-              <option value="All">Tutti ({appsMatchingOwnerAndSearch.length})</option>
-              <option value="Planning">{statusLabels.Planning} ({statusCounts.Planning})</option>
-              <option value="InProgress">{statusLabels.InProgress} ({statusCounts.InProgress})</option>
-              <option value="Completed">{statusLabels.Completed} ({statusCounts.Completed})</option>
-            </select>
-
             {/* Search input */}
             <div className="w-full sm:w-64">
               <div className="relative">
@@ -745,13 +768,20 @@ export default function CoreAppsListPage() {
                     : usersMap.get(ownerId as Id<'users'>)
                       ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture }
                       : null
-                  const isSelected = selectedOwnerId === ownerId
+                  const ownerFilterValue = ownerId as OwnerFilterValue
+                  const isSelected = selectedOwnerIdSet.has(ownerFilterValue)
                   const count = ownerCounts[ownerId] ?? 0
                   return (
                     <button
                       key={ownerId}
                       type="button"
-                      onClick={() => setSelectedOwnerId(isSelected ? null : (ownerId as Id<'users'> | '__no_owner__'))}
+                      onClick={() =>
+                        setSelectedOwnerIds((currentValues) =>
+                          isSelected
+                            ? currentValues.filter((value) => value !== ownerFilterValue)
+                            : [...currentValues, ownerFilterValue]
+                        )
+                      }
                       className={`rounded-full p-0.5 transition-all ${
                         isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
                       }`}
@@ -764,9 +794,9 @@ export default function CoreAppsListPage() {
                     </button>
                   )
                 })}
-              {selectedOwnerId && (
+              {selectedOwnerIds.length > 0 && (
                 <button
-                  onClick={() => setSelectedOwnerId(null)}
+                  onClick={() => setSelectedOwnerIds([])}
                   className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
                   title="Rimuovi filtro owner"
                 >
