@@ -18,7 +18,7 @@ export const rolesValidator = v.array(singleRoleValidator)
 // 2. MockupDone (Mockup Terminato) - quando viene aggiunto mockupRepoUrl
 // 3. Approved (Approvato) - dopo approvazione TechValidator
 // 4. Rejected (Rifiutato) - se TechValidator rifiuta (con motivo)
-// 5. FrontValidated (Front Validato) - dopo validazione BusinessValidator del dipartimento
+// 5. FrontValidated (Mese Stabilito) - dopo validazione BusinessValidator del dipartimento
 // 6. InProgress (In Corso) - quando un TechValidator diventa owner
 // 7. Done (Completato) - quando l'owner dichiara completato
 // 8. Checked (Controllato) - quando l'admin aziendale ha controllato e applicato eventuali penalità

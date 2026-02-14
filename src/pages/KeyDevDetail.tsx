@@ -35,7 +35,7 @@ const statusLabels: Record<string, string> = {
   MockupDone: 'Mockup Terminato',
   Approved: 'Approvato',
   Rejected: 'Rifiutato',
-  FrontValidated: 'Front Validato',
+  FrontValidated: 'Mese stabilito',
   InProgress: 'In Corso',
   Done: 'Completato',
   Checked: 'Controllato'
@@ -75,7 +75,7 @@ const truncateUrl = (url: string, maxLength: number = 50): string => {
 const statusDescriptions: Record<string, string> = {
   Draft: 'Aggiungi il mockupRepoUrl e poi dichiara "Mockup Terminato" quando sei pronto',
   MockupDone: 'Avvia Start Questions: finché almeno una domanda non è validata lo stato resta Rifiutato',
-  Approved: 'In attesa di validazione frontend da parte del BusinessValidator del dipartimento',
+  Approved: 'In attesa di stabilimento del mese da parte del BusinessValidator del dipartimento',
   Rejected: 'Rifiutato dal TechValidator - vedere motivo',
   FrontValidated: 'In attesa che un TechValidator prenda in carico lo sviluppo',
   InProgress: 'In sviluppo - l\'owner può dichiararlo completato',
@@ -816,14 +816,14 @@ export default function KeyDevDetailPage() {
                 {keydev.status === 'Approved' && (isBusinessValidatorOfDept || userIsAdmin) && (
                   <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                     <p className="text-sm text-green-800 dark:text-green-300 mb-4">
-                      Come BusinessValidator del dipartimento, puoi validare il frontend.
-                      Seleziona il mese di riferimento per l'allocazione del budget e inserisci il commit validato.
+                      Come BusinessValidator del dipartimento, puoi stabilire il mese.
+                      Seleziona il mese di riferimento per l'allocazione del budget e, se necessario, inserisci il commit validato.
                     </p>
                     
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Mese di riferimento
+                          Mese di riferimento <span className="text-red-500">*</span>
                         </label>
                         <select
                           value={validationMonth}
@@ -831,7 +831,12 @@ export default function KeyDevDetailPage() {
                             setValidationMonth(e.target.value)
                             setValidationError('')
                           }}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                          className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 ${
+                            !validationMonth 
+                              ? 'border-red-300 dark:border-red-600' 
+                              : 'border-gray-300 dark:border-gray-600'
+                          }`}
+                          required
                         >
                           {monthOptions.map((opt) => (
                             <option key={opt.value} value={opt.value}>
@@ -839,12 +844,22 @@ export default function KeyDevDetailPage() {
                             </option>
                           ))}
                         </select>
+                        <p className={`mt-1 text-xs ${
+                          !validationMonth 
+                            ? 'text-red-500 dark:text-red-400' 
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}>
+                          {!validationMonth 
+                            ? 'Obbligatorio: seleziona il mese di riferimento per l\'allocazione del budget'
+                            : 'Seleziona il mese di riferimento per l\'allocazione del budget'
+                          }
+                        </p>
                       </div>
                       
                       <div>
                         <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Commit Validato dal Business <span className="text-red-500">*</span>
+                            Commit Validato dal Business
                           </label>
                           {keydev.mockupRepoUrl && (
                             <a
@@ -865,23 +880,11 @@ export default function KeyDevDetailPage() {
                           type="text"
                           value={validationCommit}
                           onChange={(e) => setValidationCommit(e.target.value)}
-                          placeholder="es. abc1234 o hash completo del commit"
-                          className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 font-mono text-sm ${
-                            !validationCommit.trim() 
-                              ? 'border-red-300 dark:border-red-600' 
-                              : 'border-gray-300 dark:border-gray-600'
-                          }`}
-                          required
+                          placeholder="es. abc1234 o hash completo del commit (opzionale)"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 font-mono text-sm"
                         />
-                        <p className={`mt-1 text-xs ${
-                          !validationCommit.trim() 
-                            ? 'text-red-500 dark:text-red-400' 
-                            : 'text-gray-500 dark:text-gray-400'
-                        }`}>
-                          {!validationCommit.trim() 
-                            ? 'Obbligatorio: inserisci l\'hash del commit del mockup che stai validando'
-                            : 'Inserisci l\'hash del commit del mockup che stai validando'
-                          }
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Opzionale: inserisci l'hash del commit del mockup che stai validando
                         </p>
                       </div>
                       
@@ -917,24 +920,24 @@ export default function KeyDevDetailPage() {
                         onClick={async () => {
                           try {
                             setValidationError('')
-                            if (!validationCommit.trim()) {
-                              setValidationError('Devi specificare il commit del mockup validato')
+                            if (!validationMonth) {
+                              setValidationError('Devi selezionare il mese di riferimento')
                               return
                             }
                             await updateStatus({ 
                               id: keydev._id, 
                               status: 'FrontValidated',
                               monthRef: validationMonth,
-                              validatedMockupCommit: validationCommit.trim()
+                              validatedMockupCommit: validationCommit.trim() || undefined
                             })
                           } catch (err) {
-                            setValidationError(err instanceof Error ? err.message : 'Errore durante la validazione')
+                            setValidationError(err instanceof Error ? err.message : 'Errore durante lo stabilimento del mese')
                           }
                         }}
-                        disabled={!budgetForValidation || budgetForValidation.maxAlloc <= 0 || !validationCommit.trim()}
+                        disabled={!budgetForValidation || budgetForValidation.maxAlloc <= 0 || !validationMonth}
                         className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Valida Frontend per {monthOptions.find(m => m.value === validationMonth)?.label}
+                        Stabilisci Mese per {monthOptions.find(m => m.value === validationMonth)?.label}
                       </button>
                     </div>
                   </div>

@@ -53,9 +53,7 @@ export default function KeyDevQuestionsPage() {
   const canQuickAssign = isAdmin(userRoles) || hasRole(userRoles, 'TechValidator')
   const [isEditingRequester, setIsEditingRequester] = useState(false)
   const [isEditingOwner, setIsEditingOwner] = useState(false)
-
-  const requester = users?.find((u) => u._id === keydev.requesterId)
-  const owner = keydev.ownerId ? users?.find((u) => u._id === keydev.ownerId) : undefined
+  const [questionSearchTerm, setQuestionSearchTerm] = useState('')
 
   if (!keydev) {
     return (
@@ -64,6 +62,9 @@ export default function KeyDevQuestionsPage() {
       </div>
     )
   }
+
+  const requester = users?.find((u) => u._id === keydev.requesterId)
+  const owner = keydev.ownerId ? users?.find((u) => u._id === keydev.ownerId) : undefined
 
   return (
     <div className="w-full max-w-full overflow-x-hidden">
@@ -172,6 +173,26 @@ export default function KeyDevQuestionsPage() {
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{owner?.name || 'Non assegnato'}</p>
             </div>
           </button>
+
+          <div className="w-full sm:w-80 sm:ml-auto">
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+              Filtro domande
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 dark:text-gray-500">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </span>
+              <input
+                type="text"
+                value={questionSearchTerm}
+                onChange={(e) => setQuestionSearchTerm(e.target.value)}
+                placeholder="Cerca domanda o risposta validata"
+                className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+            </div>
+          </div>
         </div>
 
         {isEditingRequester && canQuickAssign && (
@@ -227,7 +248,12 @@ export default function KeyDevQuestionsPage() {
         )}
       </div>
 
-      <KeyDevQuestionsSection keydev={keydev} users={users} currentUser={currentUser} />
+      <KeyDevQuestionsSection
+        keydev={keydev}
+        users={users}
+        currentUser={currentUser}
+        questionSearchTerm={questionSearchTerm}
+      />
     </div>
   )
 }

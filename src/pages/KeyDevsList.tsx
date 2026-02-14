@@ -193,7 +193,7 @@ const statusLabels: Record<string, string> = {
   MockupDone: 'Mockup Terminato',
   Rejected: 'Rifiutato',
   Approved: 'Approvato',
-  FrontValidated: 'Front Validato',
+  FrontValidated: 'Mese Stabilito',
   InProgress: 'In Corso',
   Done: 'Completato',
   Checked: 'Controllato'

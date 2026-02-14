@@ -76,7 +76,7 @@ function formatStatus(status: string): string {
     MockupDone: 'Mockup Terminato',
     Approved: 'Approvato',
     Rejected: 'Rifiutato',
-    FrontValidated: 'Front Validato',
+    FrontValidated: 'Mese Stabilito',
     InProgress: 'In Corso',
     Done: 'Completato',
     Checked: 'Controllato'
@@ -430,7 +430,7 @@ function PieChart({
   )
 }
 
-// Ordine del flusso: 1. Bozza, 2. Mockup terminato, 3. Rifiutato, 4. Approvato, 5. Front validato, 6. In corso, 7. Completato, 8. Controllato
+// Ordine del flusso: 1. Bozza, 2. Mockup terminato, 3. Rifiutato, 4. Approvato, 5. Mese stabilito, 6. In corso, 7. Completato, 8. Controllato
 const statusFlowOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
 
 // Componente per la legenda condivisa (mostra tutti gli stati possibili con conteggio e frecce)

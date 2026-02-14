@@ -291,12 +291,13 @@ export const getKeyDevQuestionAnswerContext = internalQuery({
         name: v.string(),
         email: v.optional(v.string())
       }),
-      primaryRecipient: v.optional(
+      primaryRecipient: v.union(
         v.object({
           _id: v.id('users'),
           name: v.string(),
           email: v.optional(v.string())
-        })
+        }),
+        v.null()
       ),
       mentionedUsers: v.array(
         v.object({
@@ -378,7 +379,7 @@ export const getKeyDevQuestionAnswerContext = internalQuery({
             name: primaryRecipient.name,
             email: primaryRecipient.email
           }
-        : undefined,
+        : null,
       mentionedUsers
     }
   }

@@ -45,17 +45,20 @@ interface KeyDevQuestionsSectionProps {
   keydev: KeyDevLite
   users: Array<UserLite> | undefined
   currentUser: { _id: Id<'users'>; roles?: Array<Role> } | null | undefined
+  questionSearchTerm?: string
 }
 
 const ANSWERS_PER_PAGE = 3
 
-export default function KeyDevQuestionsSection({ keydev, users, currentUser }: KeyDevQuestionsSectionProps) {
+export default function KeyDevQuestionsSection({ keydev, users, currentUser, questionSearchTerm }: KeyDevQuestionsSectionProps) {
   const questions = useQuery(api.keydevQuestions.listByKeyDev, { keyDevId: keydev._id })
   const createQuestion = useMutation(api.keydevQuestions.createQuestion)
   const createAnswer = useMutation(api.keydevQuestions.createAnswer)
   const validateAnswer = useMutation(api.keydevQuestions.validateAnswer)
 
   const [newQuestionText, setNewQuestionText] = useState('')
+  const [isCreateQuestionDialogOpen, setIsCreateQuestionDialogOpen] = useState(false)
+  const [activeQuestionsTab, setActiveQuestionsTab] = useState<'red' | 'validated'>('red')
   const [activeQuestionId, setActiveQuestionId] = useState<Id<'keyDevQuestions'> | null>(null)
   const [answerBody, setAnswerBody] = useState('')
   const [recipientRole, setRecipientRole] = useState<'owner' | 'requester'>('owner')
@@ -94,6 +97,29 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser }: K
   const isOwner = currentUser?._id === keydev.ownerId
   const ownerName = users?.find((u) => u._id === keydev.ownerId)?.name || 'Owner'
   const requesterName = users?.find((u) => u._id === keydev.requesterId)?.name || 'Requester'
+  const normalizedSearchTerm = questionSearchTerm?.trim().toLowerCase() || ''
+
+  const questionsFilteredByText = useMemo(() => {
+    if (!questions) return []
+    if (!normalizedSearchTerm) return questions
+    return questions.filter((question) => {
+      const textMatch = question.text.toLowerCase().includes(normalizedSearchTerm)
+      const sourceMatch = question.source.toLowerCase().includes(normalizedSearchTerm)
+      const validatedAnswerMatch =
+        question.validatedAnswer?.body.toLowerCase().includes(normalizedSearchTerm) || false
+      return textMatch || sourceMatch || validatedAnswerMatch
+    })
+  }, [questions, normalizedSearchTerm])
+
+  const redQuestions = useMemo(
+    () => questionsFilteredByText.filter((question) => question.validatedAnswerId === undefined),
+    [questionsFilteredByText]
+  )
+  const validatedQuestions = useMemo(
+    () => questionsFilteredByText.filter((question) => question.validatedAnswerId !== undefined),
+    [questionsFilteredByText]
+  )
+  const visibleQuestions = activeQuestionsTab === 'red' ? redQuestions : validatedQuestions
 
   const handleSelectMention = (userName: string) => {
     if (!mentionPosition) return
@@ -149,43 +175,59 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser }: K
     setMentionPosition(null)
   }
 
+  const handleCreateQuestion = async () => {
+    if (!newQuestionText.trim()) return
+    await createQuestion({ keyDevId: keydev._id, text: newQuestionText.trim() })
+    setNewQuestionText('')
+    setIsCreateQuestionDialogOpen(false)
+  }
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Questions</h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Tutti possono aggiungere domande e risposte. Solo l&apos;owner può validare una singola risposta per domanda.
-        </p>
+      <div className="mb-5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Questions</h2>
+          <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
+            <span className="font-semibold">Regole:</span>
+            <span>Tutti possono aggiungere Q/A, solo l&apos;owner può validare una risposta.</span>
+          </p>
+        </div>
+        <button
+          onClick={() => setIsCreateQuestionDialogOpen(true)}
+          className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 whitespace-nowrap"
+        >
+          + Nuova domanda
+        </button>
       </div>
 
-      <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Nuova domanda
-        </label>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="text"
-            value={newQuestionText}
-            onChange={(e) => setNewQuestionText(e.target.value)}
-            placeholder="Inserisci una nuova domanda..."
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
-          />
+      <div className="mb-5 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2">
           <button
-            onClick={async () => {
-              if (!newQuestionText.trim()) return
-              await createQuestion({ keyDevId: keydev._id, text: newQuestionText.trim() })
-              setNewQuestionText('')
-            }}
-            className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 whitespace-nowrap"
+            onClick={() => setActiveQuestionsTab('red')}
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeQuestionsTab === 'red'
+                ? 'border-red-500 text-red-700 dark:text-red-300'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+            }`}
           >
-            Aggiungi domanda
+            Rosse ({redQuestions.length})
+          </button>
+          <button
+            onClick={() => setActiveQuestionsTab('validated')}
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeQuestionsTab === 'validated'
+                ? 'border-green-500 text-green-700 dark:text-green-300'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+            }`}
+          >
+            Validate ({validatedQuestions.length})
           </button>
         </div>
       </div>
 
       <div className="space-y-3">
-        {questions && questions.length > 0 ? (
-          questions.map((question) => {
+        {visibleQuestions.length > 0 ? (
+          visibleQuestions.map((question) => {
             const isValidated = question.validatedAnswerId !== undefined
             return (
               <div
@@ -242,10 +284,74 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser }: K
           })
         ) : (
           <p className="text-sm text-gray-500 dark:text-gray-400 italic">
-            Nessuna domanda presente.
+            {normalizedSearchTerm
+              ? `Nessuna domanda trovata per "${questionSearchTerm}".`
+              : activeQuestionsTab === 'red'
+                ? 'Nessuna domanda rossa presente.'
+                : 'Nessuna domanda validata presente.'}
           </p>
         )}
       </div>
+
+      {isCreateQuestionDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsCreateQuestionDialogOpen(false)
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-xl rounded-lg bg-white dark:bg-gray-800 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Nuova domanda</h3>
+              <button
+                onClick={() => setIsCreateQuestionDialogOpen(false)}
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Testo domanda
+              </label>
+              <input
+                type="text"
+                value={newQuestionText}
+                onChange={(e) => setNewQuestionText(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    await handleCreateQuestion()
+                  }
+                }}
+                placeholder="Inserisci una nuova domanda..."
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                autoFocus
+              />
+            </div>
+            <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+              <button
+                onClick={() => setIsCreateQuestionDialogOpen(false)}
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleCreateQuestion}
+                disabled={!newQuestionText.trim()}
+                className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50"
+              >
+                Crea domanda
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeQuestionId && (
         <div
