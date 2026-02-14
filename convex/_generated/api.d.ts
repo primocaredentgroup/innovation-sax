@@ -20,6 +20,8 @@ import type * as departments from "../departments.js";
 import type * as emails from "../emails.js";
 import type * as emailsQueries from "../emailsQueries.js";
 import type * as http from "../http.js";
+import type * as keyDevQuestionTemplates from "../keyDevQuestionTemplates.js";
+import type * as keydevQuestions from "../keydevQuestions.js";
 import type * as keydevs from "../keydevs.js";
 import type * as labels from "../labels.js";
 import type * as months from "../months.js";
@@ -48,6 +50,8 @@ declare const fullApi: ApiFromModules<{
   emails: typeof emails;
   emailsQueries: typeof emailsQueries;
   http: typeof http;
+  keyDevQuestionTemplates: typeof keyDevQuestionTemplates;
+  keydevQuestions: typeof keydevQuestions;
   keydevs: typeof keydevs;
   labels: typeof labels;
   months: typeof months;

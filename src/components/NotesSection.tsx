@@ -548,7 +548,7 @@ export default function NotesSection({ keyDevId, coreAppId, currentUser, users, 
                 />
                 {/* Dropdown per selezionare utenti */}
                 {showMentionDropdown && filteredUsersForMention && filteredUsersForMention.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                  <div className="absolute z-50 left-0 right-0 bottom-full mb-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
                     {filteredUsersForMention.map((user) => (
                       <button
                         key={user._id}
@@ -605,7 +605,7 @@ export default function NotesSection({ keyDevId, coreAppId, currentUser, users, 
                     noteRefs.current.delete(note._id)
                   }
                 }}
-                className={`p-4 rounded-lg overflow-hidden transition-all ${
+                className={`p-4 rounded-lg overflow-visible transition-all ${
                   isHighlighted
                     ? 'bg-amber-100 dark:bg-amber-900/50 border-2 border-amber-400 dark:border-amber-500 shadow-lg shadow-amber-200/50 dark:shadow-amber-900/50'
                     : note.type === 'Mention' 
@@ -743,7 +743,7 @@ export default function NotesSection({ keyDevId, coreAppId, currentUser, users, 
                       />
                       {/* Dropdown per selezionare utenti durante la modifica */}
                       {showMentionDropdown && filteredUsersForMention && filteredUsersForMention.length > 0 && (
-                        <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                        <div className="absolute z-50 left-0 right-0 bottom-full mb-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
                           {filteredUsersForMention.map((user) => (
                             <button
                               key={user._id}

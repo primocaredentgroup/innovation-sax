@@ -74,7 +74,7 @@ const truncateUrl = (url: string, maxLength: number = 50): string => {
 // Descrizioni del flusso per ogni stato
 const statusDescriptions: Record<string, string> = {
   Draft: 'Aggiungi il mockupRepoUrl e poi dichiara "Mockup Terminato" quando sei pronto',
-  MockupDone: 'In attesa di approvazione da parte di un TechValidator',
+  MockupDone: 'Avvia Start Questions: finché almeno una domanda non è validata lo stato resta Rifiutato',
   Approved: 'In attesa di validazione frontend da parte del BusinessValidator del dipartimento',
   Rejected: 'Rifiutato dal TechValidator - vedere motivo',
   FrontValidated: 'In attesa che un TechValidator prenda in carico lo sviluppo',
@@ -105,12 +105,18 @@ export default function KeyDevDetailPage() {
   const takeOwnership = useMutation(api.keydevs.takeOwnership)
   const assignOwner = useMutation(api.keydevs.assignOwner)
   const assignRequester = useMutation(api.keydevs.assignRequester)
+  const assignTeam = useMutation(api.keydevs.assignTeam)
   const markAsDone = useMutation(api.keydevs.markAsDone)
   const linkMockupRepo = useMutation(api.keydevs.linkMockupRepo)
   const updateRepoUrl = useMutation(api.keydevs.updateRepoUrl)
   const updateMonth = useMutation(api.keydevs.updateMonth)
+  const startQuestions = useMutation(api.keydevQuestions.startQuestions)
   const penalties = useQuery(
     api.penalties.listByKeyDev,
+    isNew || !keydev ? 'skip' : { keyDevId: keydev._id }
+  )
+  const questionsStatus = useQuery(
+    api.keydevQuestions.getQuestionsStatus,
     isNew || !keydev ? 'skip' : { keyDevId: keydev._id }
   )
   const createPenalty = useMutation(api.penalties.create)
@@ -122,8 +128,6 @@ export default function KeyDevDetailPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   }, [])
 
-  const [rejectionReason, setRejectionReason] = useState('')
-  const [showRejectForm, setShowRejectForm] = useState(false)
   const [mockupRepoUrlInput, setMockupRepoUrlInput] = useState('')
   const [validationMonth, setValidationMonth] = useState(currentMonth)
   const [validationCommit, setValidationCommit] = useState('')
@@ -139,6 +143,7 @@ export default function KeyDevDetailPage() {
   const [penaltyWeight, setPenaltyWeight] = useState('')
   const [penaltyDescription, setPenaltyDescription] = useState('')
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>('')
+  const [selectedExistingTeamId, setSelectedExistingTeamId] = useState<string>('')
   const [isEditingRequester, setIsEditingRequester] = useState(false)
   const [editingRequesterId, setEditingRequesterId] = useState<string>('')
   const [editingMockupRepoUrl, setEditingMockupRepoUrl] = useState('')
@@ -161,6 +166,14 @@ export default function KeyDevDetailPage() {
       setSelectedOwnerId('')
     }
   }, [keydev?.ownerId])
+
+  useEffect(() => {
+    if (keydev?.teamId) {
+      setSelectedExistingTeamId(keydev.teamId)
+    } else {
+      setSelectedExistingTeamId('')
+    }
+  }, [keydev?.teamId])
 
   // Aggiorna editingRequesterId quando cambia il keydev
   useEffect(() => {
@@ -391,19 +404,6 @@ export default function KeyDevDetailPage() {
     setIsEditingRepoUrl(false)
   }
 
-
-  // Handler per rifiutare con motivo
-  const handleReject = async () => {
-    if (!keydev || !rejectionReason.trim()) return
-    await updateStatus({ 
-      id: keydev._id, 
-      status: 'Rejected', 
-      rejectionReason: rejectionReason.trim() 
-    })
-    setShowRejectForm(false)
-    setRejectionReason('')
-  }
-
   // Handler per prendere in carico
   const handleTakeOwnership = async () => {
     if (!keydev) return
@@ -441,102 +441,121 @@ export default function KeyDevDetailPage() {
   return (
     <div className="w-full max-w-full overflow-x-hidden">
       {/* Header responsive */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0">
-          <Link
-            to="/keydevs"
-            search={{ month: keydev?.monthRef || currentMonth }}
-            className="text-sm sm:text-base text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap"
-          >
-            ← Torna alla lista
-          </Link>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
+      <div className="mb-6 space-y-4">
+        {/* Prima riga: Link indietro e titolo */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Link
+              to="/keydevs"
+              search={{ month: keydev?.monthRef || currentMonth }}
+              className="text-sm sm:text-base text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap shrink-0"
+            >
+              ← Torna alla lista
+            </Link>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100 truncate min-w-0">
               {isNew ? 'Nuovo Sviluppo Chiave' : keydev?.title}
             </h1>
-            {!isNew && keydev && (
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  {keydev.readableId}
+          </div>
+          {/* Pulsante cestino per soft-delete - in alto a destra */}
+          {!isNew && keydev && (
+            <button
+              onClick={async () => {
+                if (!confirm('Sei sicuro di voler eliminare questo sviluppo chiave? L\'operazione non può essere annullata.')) return
+                try {
+                  await softDeleteKeyDev({ id: keydev._id })
+                  navigate({ to: '/keydevs', search: { month: keydev.monthRef || currentMonth } })
+                } catch (error) {
+                  alert(error instanceof Error ? error.message : 'Errore durante l\'eliminazione')
+                }
+              }}
+              className="self-start sm:self-auto px-3 py-1.5 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border border-red-300 dark:border-red-700 hover:border-red-400 dark:hover:border-red-600 shrink-0"
+              title="Elimina sviluppo chiave"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
+        </div>
+        
+        {/* Seconda riga: Controlli e azioni */}
+        {!isNew && keydev && (
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="px-3 py-1.5 rounded-md text-sm font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+              {keydev.readableId}
+            </span>
+            
+            {/* Link Note */}
+            <Link
+              to="/keydevs/$id/notes"
+              params={{ id }}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 hover:from-blue-700 hover:to-blue-800 dark:hover:from-blue-600 dark:hover:to-blue-700 shadow-md hover:shadow-lg text-white border border-blue-800 dark:border-blue-400"
+            >
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <span className="text-white">Note</span>
+              {keydev.notesCount !== undefined && keydev.notesCount > 0 && (
+                <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-white dark:bg-blue-800 text-blue-700 dark:text-white text-xs font-bold min-w-5 sm:min-w-6 flex items-center justify-center border border-blue-800 dark:border-blue-200">
+                  {keydev.notesCount}
                 </span>
-                {/* Link Note migliorato */}
-                <Link
-                  to="/keydevs/$id/notes"
-                  params={{ id }}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 hover:from-blue-700 hover:to-blue-800 dark:hover:from-blue-600 dark:hover:to-blue-700 shadow-md hover:shadow-lg text-white border border-blue-800 dark:border-blue-400"
-                >
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  <span className="text-white">Note</span>
-                  {keydev.notesCount !== undefined && keydev.notesCount > 0 && (
-                    <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-white dark:bg-blue-800 text-blue-700 dark:text-white text-xs font-bold min-w-5 sm:min-w-6 flex items-center justify-center border border-blue-800 dark:border-blue-200">
-                      {keydev.notesCount}
-                    </span>
-                  )}
-                </Link>
-                {/* PrioritySelector migliorato accanto al bottone Note */}
-                <div className="flex items-center">
-                  <PrioritySelector 
-                    keyDevId={keydev._id} 
-                    currentPriority={keydev.priority}
-                    compact={true}
-                  />
-                </div>
-                {/* Dropdown status sulla stessa riga */}
-                <select
-                  value={keydev.status}
-                  onChange={async (e) => {
-                    try {
-                      await updateStatus({ id: keydev._id, status: e.target.value as KeyDevStatus })
-                    } catch (error) {
-                      alert(error instanceof Error ? error.message : 'Errore nel cambio di stato')
-                    }
-                  }}
-                  className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm border-0 ${statusColors[keydev.status]} cursor-pointer`}
-                >
-                  {getPreviousStatuses(keydev.status).map((status) => (
-                    <option key={status} value={status} className="bg-white dark:bg-gray-800">
-                      {statusLabels[status]}
-                    </option>
-                  ))}
-                </select>
-                {/* Pulsante per riportare in Bozza quando rifiutato */}
-                {keydev.status === 'Rejected' && (isRequester || userIsAdmin) && (
-                  <button
-                    onClick={async () => {
-                      if (!confirm('Sei sicuro di voler riportare questo sviluppo in Bozza? Potrai modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato".')) return
-                      await updateStatus({ id: keydev._id, status: 'Draft' })
-                    }}
-                    className="px-3 sm:px-4 py-1 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-xs sm:text-sm font-medium whitespace-nowrap"
-                    title="Riporta in Bozza per modificare il mockup"
-                  >
-                    ↶ Riporta in Bozza
-                  </button>
-                )}
-              </div>
+              )}
+            </Link>
+            
+            {/* Link Questions */}
+            <Link
+              to="/keydevs/$id/questions"
+              params={{ id }}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-yellow-600 to-yellow-700 dark:from-yellow-500 dark:to-yellow-600 hover:from-yellow-700 hover:to-yellow-800 dark:hover:from-yellow-600 dark:hover:to-yellow-700 shadow-md hover:shadow-lg text-white border border-yellow-800 dark:border-yellow-300"
+            >
+              <span className="text-white">Questions</span>
+            </Link>
+            
+            {/* PrioritySelector */}
+            <div className="flex items-center">
+              <PrioritySelector 
+                keyDevId={keydev._id} 
+                currentPriority={keydev.priority}
+                compact={true}
+              />
+            </div>
+            
+            {/* Dropdown status */}
+            <select
+              value={keydev.status}
+              onChange={async (e) => {
+                try {
+                  await updateStatus({ id: keydev._id, status: e.target.value as KeyDevStatus })
+                } catch (error) {
+                  alert(error instanceof Error ? error.message : 'Errore nel cambio di stato')
+                }
+              }}
+              className={`px-3 py-1.5 rounded-full text-xs sm:text-sm border-0 ${statusColors[keydev.status]} cursor-pointer font-medium`}
+            >
+              {getPreviousStatuses(keydev.status).map((status) => (
+                <option key={status} value={status} className="bg-white dark:bg-gray-800">
+                  {statusLabels[status]}
+                </option>
+              ))}
+            </select>
+            
+            {/* Pulsante per riportare in Bozza quando rifiutato */}
+            {keydev.status === 'Rejected' && (isRequester || userIsAdmin) && (
+              <button
+                onClick={async () => {
+                  if (!confirm('Sei sicuro di voler riportare questo sviluppo in Bozza? Potrai modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato".')) return
+                  await updateStatus({ id: keydev._id, status: 'Draft' })
+                }}
+                className="px-3 sm:px-4 py-1.5 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-xs sm:text-sm font-medium whitespace-nowrap flex items-center gap-1.5"
+                title="Riporta in Bozza per modificare il mockup"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Riporta in Bozza</span>
+              </button>
             )}
           </div>
-        </div>
-        {/* Pulsante cestino per soft-delete - in alto a destra */}
-        {!isNew && keydev && (
-          <button
-            onClick={async () => {
-              if (!confirm('Sei sicuro di voler eliminare questo sviluppo chiave? L\'operazione non può essere annullata.')) return
-              try {
-                await softDeleteKeyDev({ id: keydev._id })
-                navigate({ to: '/keydevs', search: { month: keydev.monthRef || currentMonth } })
-              } catch (error) {
-                alert(error instanceof Error ? error.message : 'Errore durante l\'eliminazione')
-              }
-            }}
-            className="self-start sm:self-auto px-3 py-1.5 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border border-red-300 dark:border-red-700 hover:border-red-400 dark:hover:border-red-600"
-            title="Elimina sviluppo chiave"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
         )}
       </div>
 
@@ -565,8 +584,8 @@ export default function KeyDevDetailPage() {
                 <textarea
                   name="desc"
                   defaultValue={keydev?.desc || ''}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                  rows={8}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 resize-y min-h-[200px]"
                   required
                 />
               </div>
@@ -665,6 +684,20 @@ export default function KeyDevDetailPage() {
                     )}
                   </div>
                 )}
+                {keydev.status === 'Rejected' && questionsStatus && questionsStatus.total > 0 && questionsStatus.hasUnvalidated && (
+                  <div className="mt-3 p-3 bg-amber-100 dark:bg-amber-900/30 rounded border border-amber-200 dark:border-amber-800">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                      Restano <strong>{questionsStatus.total - questionsStatus.validated}</strong> domande da validare prima di procedere.
+                    </p>
+                    <Link
+                      to="/keydevs/$id/questions"
+                      params={{ id }}
+                      className="inline-flex mt-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold bg-amber-600 dark:bg-amber-700 text-white hover:bg-amber-700 dark:hover:bg-amber-600"
+                    >
+                      Vai alle Questions
+                    </Link>
+                  </div>
+                )}
               </div>
 
               {/* Azioni disponibili in base allo stato */}
@@ -720,93 +753,62 @@ export default function KeyDevDetailPage() {
                   </div>
                 )}
 
-                {/* MockupDone: TechValidator può approvare o rifiutare */}
+                {/* MockupDone: Start Questions (owner obbligatorio) */}
                 {keydev.status === 'MockupDone' && (userIsTechValidator || userIsAdmin) && (
                   <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                     <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-4">
-                      Come TechValidator, puoi approvare o rifiutare questo mockup dopo aver verificato la logica e il processo.
+                      Come TechValidator, avvia il flusso Questions dopo aver verificato la logica e il processo.
                     </p>
-                    
-                    {!showRejectForm ? (
-                      <div className="space-y-4">
-                        {/* Campo obbligatorio per il peso dello sviluppo */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Peso dello sviluppo per validazione tech <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            value={techWeight}
-                            onChange={(e) => setTechWeight(parseFloat(e.target.value) as 0 | 0.25 | 0.5 | 0.75 | 1)}
-                            className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 ${
-                              techWeight === undefined 
-                                ? 'border-red-300 dark:border-red-600' 
-                                : 'border-gray-300 dark:border-gray-600'
-                            }`}
-                            required
-                          >
-                            <option value={1}>1.00 - Sviluppo completo (100%)</option>
-                            <option value={0.75}>0.75 - Sviluppo significativo (75%)</option>
-                            <option value={0.5}>0.50 - Sviluppo medio (50%)</option>
-                            <option value={0.25}>0.25 - Sviluppo leggero (25%)</option>
-                            <option value={0}>0.00 - Nessuno sviluppo (0%)</option>
-                          </select>
-                          <p className={`mt-1 text-xs ${
-                            techWeight === undefined 
-                              ? 'text-red-500 dark:text-red-400' 
-                              : 'text-gray-500 dark:text-gray-400'
-                          }`}>
-                            {techWeight === undefined 
-                              ? 'Obbligatorio: seleziona il peso dello sviluppo per la validazione tech'
-                              : 'Seleziona quanto è "pesante" lo sviluppo per la validazione tech'}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Peso dello sviluppo per validazione tech <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={techWeight}
+                          onChange={(e) => setTechWeight(parseFloat(e.target.value) as 0 | 0.25 | 0.5 | 0.75 | 1)}
+                          className="w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        >
+                          <option value={1}>1.00 - Sviluppo completo (100%)</option>
+                          <option value={0.75}>0.75 - Sviluppo significativo (75%)</option>
+                          <option value={0.5}>0.50 - Sviluppo medio (50%)</option>
+                          <option value={0.25}>0.25 - Sviluppo leggero (25%)</option>
+                          <option value={0}>0.00 - Nessuno sviluppo (0%)</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Il peso sarà usato quando tutte le questions saranno validate e il KeyDev passerà automaticamente ad Approvato.
+                        </p>
+                      </div>
+
+                      {!keydev.ownerId && (
+                        <div className="p-3 rounded bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800">
+                          <p className="text-sm text-red-800 dark:text-red-300">
+                            Devi selezionare un Owner nella sidebar prima di avviare le Questions.
                           </p>
                         </div>
-                        
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <button
-                            onClick={() => updateStatus({ id: keydev._id, status: 'Approved', weight: techWeight })}
-                            disabled={techWeight === undefined}
-                            className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Approva Mockup
-                          </button>
-                          <button
-                            onClick={() => setShowRejectForm(true)}
-                            className="px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600"
-                          >
-                            Rifiuta
-                          </button>
-                        </div>
+                      )}
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          onClick={async () => {
+                            if (!keydev.ownerId) return
+                            await startQuestions({ keyDevId: keydev._id, weight: techWeight })
+                            navigate({ to: '/keydevs/$id/questions', params: { id } })
+                          }}
+                          disabled={!keydev.ownerId}
+                          className="px-4 py-2 bg-yellow-600 dark:bg-yellow-700 text-white rounded-md hover:bg-yellow-700 dark:hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Start Questions
+                        </button>
+                        <Link
+                          to="/keydevs/$id/questions"
+                          params={{ id }}
+                          className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 text-center"
+                        >
+                          Apri sottopagina Questions
+                        </Link>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <textarea
-                          value={rejectionReason}
-                          onChange={(e) => setRejectionReason(e.target.value)}
-                          placeholder="Inserisci il motivo del rifiuto (domande sulla logica, processo, ecc.)..."
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-gray-100"
-                          required
-                        />
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <button
-                            onClick={handleReject}
-                            disabled={!rejectionReason.trim()}
-                            className="px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600 disabled:opacity-50"
-                          >
-                            Conferma Rifiuto
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowRejectForm(false)
-                              setRejectionReason('')
-                            }}
-                            className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
-                          >
-                            Annulla
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 )}
 
@@ -1307,7 +1309,40 @@ export default function KeyDevDetailPage() {
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Team</dt>
                   <dd className="font-medium text-gray-900 dark:text-gray-100">
-                    {teams?.find((t) => t._id === keydev.teamId)?.name || 'N/A'}
+                    {(userIsAdmin || userIsTechValidator) ? (
+                      <select
+                        value={selectedExistingTeamId}
+                        onChange={async (e) => {
+                          const newTeamId = e.target.value
+                          if (!newTeamId || newTeamId === keydev.teamId) return
+                          setSelectedExistingTeamId(newTeamId)
+                          try {
+                            await assignTeam({
+                              id: keydev._id,
+                              teamId: newTeamId as Id<'teams'>
+                            })
+                          } catch (error) {
+                            setSelectedExistingTeamId(keydev.teamId)
+                            alert(error instanceof Error ? error.message : 'Errore nel cambio del team')
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+                      >
+                        {departments?.map((dept) => (
+                          <optgroup key={dept._id} label={dept.name}>
+                            {teams
+                              ?.filter((t) => dept.teamIds.includes(t._id))
+                              .map((team) => (
+                                <option key={team._id} value={team._id}>
+                                  {team.name}
+                                </option>
+                              ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    ) : (
+                      teams?.find((t) => t._id === keydev.teamId)?.name || 'N/A'
+                    )}
                   </dd>
                 </div>
                 <div>

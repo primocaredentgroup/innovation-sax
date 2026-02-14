@@ -10,6 +10,7 @@ import KeyDevsListPage from './pages/KeyDevsList'
 import KeyDevNewPage from './pages/KeyDevNew'
 import KeyDevDetailPage from './pages/KeyDevDetail'
 import KeyDevNotesPage from './pages/KeyDevNotes'
+import KeyDevQuestionsPage from './pages/KeyDevQuestions'
 import PlanningPage from './pages/Planning'
 import CoreAppsListPage from './pages/CoreAppsList'
 import CoreAppDetailPage from './pages/CoreAppDetail'
@@ -71,6 +72,12 @@ const keydevNotesRoute = createRoute({
   validateSearch: z.object({
     highlightedNote: z.string().optional()
   })
+})
+
+const keydevQuestionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/keydevs/$id/questions',
+  component: KeyDevQuestionsPage
 })
 
 const planningRoute = createRoute({
@@ -159,6 +166,7 @@ const routeTree = rootRoute.addChildren([
   keydevNewRoute,
   keydevDetailRoute,
   keydevNotesRoute,
+  keydevQuestionsRoute,
   planningRoute,
   coreAppsRoute,
   coreAppNewRoute,

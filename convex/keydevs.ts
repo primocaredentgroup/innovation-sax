@@ -1112,6 +1112,72 @@ export const assignRequester = mutation({
 })
 
 /**
+ * Assegna/aggiorna il team di riferimento di un KeyDev.
+ * Solo Admin o TechValidator possono modificare il team.
+ * Il dipartimento viene aggiornato automaticamente in base al team scelto.
+ */
+export const assignTeam = mutation({
+  args: {
+    id: v.id('keydevs'),
+    teamId: v.id('teams')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const keydev = await ctx.db.get(args.id)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
+    }
+
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+
+    if (!user) {
+      throw new Error('Utente non trovato')
+    }
+
+    const userRoles = user.roles as Role[] | undefined
+    const userIsAdmin = isAdmin(userRoles)
+    if (!userIsAdmin && !hasRole(userRoles, 'TechValidator')) {
+      throw new Error('Solo Admin o TechValidator possono modificare il team')
+    }
+
+    const team = await ctx.db.get(args.teamId)
+    if (!team) {
+      throw new Error('Team non trovato')
+    }
+
+    // Manteniamo coerenza con il ciclo di vita: dopo FrontValidated il team è bloccato.
+    const allowedStatuses = ['Draft', 'MockupDone', 'Approved']
+    if (!allowedStatuses.includes(keydev.status)) {
+      throw new Error(`Non è possibile modificare il team di un KeyDev in stato "${keydev.status}"`)
+    }
+
+    const departments = await ctx.db.query('departments').collect()
+    const matchedDepartment = departments.find((d) => d.teamIds.includes(args.teamId))
+    if (!matchedDepartment) {
+      throw new Error('Nessun dipartimento associato al team selezionato')
+    }
+
+    await ctx.db.patch(args.id, {
+      teamId: args.teamId,
+      deptId: matchedDepartment._id
+    })
+
+    return null
+  }
+})
+
+/**
  * Aggiorna la priorità di un KeyDev.
  * Chiunque può modificare la priorità.
  */

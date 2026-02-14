@@ -38,6 +38,16 @@ export const noteTypeValidator = v.union(
   v.literal('Mention')
 )
 
+export const keyDevQuestionSourceValidator = v.union(
+  v.literal('Template'),
+  v.literal('Manual')
+)
+
+export const keyDevQuestionAnswerRecipientRoleValidator = v.union(
+  v.literal('owner'),
+  v.literal('requester')
+)
+
 // Weight validator per keydevs (peso dello sviluppo per validazione tech)
 export const keydevWeightValidator = v.union(
   v.literal(0),
@@ -182,6 +192,42 @@ export default defineSchema({
     .index('by_keydev', ['keyDevId'])
     .index('by_coreApp', ['coreAppId'])
     .index('by_author', ['authorId']),
+
+  // Template domande obbligatorie per KeyDev Questions (gestite da Admin)
+  keyDevQuestionTemplates: defineTable({
+    text: v.string(),
+    active: v.boolean(),
+    order: v.number(),
+    createdById: v.id('users'),
+    updatedAt: v.number()
+  })
+    .index('by_order', ['order'])
+    .index('by_active_and_order', ['active', 'order']),
+
+  // Domande istanziate su un KeyDev specifico
+  keyDevQuestions: defineTable({
+    keyDevId: v.id('keydevs'),
+    text: v.string(),
+    createdById: v.id('users'),
+    createdAt: v.number(),
+    order: v.number(),
+    source: keyDevQuestionSourceValidator,
+    validatedAnswerId: v.optional(v.id('keyDevQuestionAnswers'))
+  })
+    .index('by_keyDev', ['keyDevId'])
+    .index('by_keyDev_and_order', ['keyDevId', 'order']),
+
+  // Risposte alle domande del KeyDev
+  keyDevQuestionAnswers: defineTable({
+    questionId: v.id('keyDevQuestions'),
+    body: v.string(),
+    senderId: v.id('users'),
+    recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+    mentionedUserIds: v.optional(v.array(v.id('users'))),
+    ts: v.number()
+  })
+    .index('by_question_and_ts', ['questionId', 'ts'])
+    .index('by_sender', ['senderId']),
 
   // Budget allocation per Dept/Team/Month
   budgetKeyDev: defineTable({
