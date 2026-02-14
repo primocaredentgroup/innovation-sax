@@ -1,4 +1,4 @@
-import { Link, useParams } from '@tanstack/react-router'
+import { Link, useParams, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
@@ -32,6 +32,11 @@ function UserAvatar({ name, pictureUrl }: { name: string; pictureUrl?: string | 
 
 export default function KeyDevQuestionsPage() {
   const { id } = useParams({ strict: false }) as { id: string }
+  const search = useSearch({ strict: false }) as {
+    questionId?: string
+    highlightedAnswer?: string
+    answersPage?: string | number
+  }
   const isReadableId = /^KD-\d+$/.test(id)
 
   const keydev = useQuery(
@@ -250,9 +255,13 @@ export default function KeyDevQuestionsPage() {
 
       <KeyDevQuestionsSection
         keydev={keydev}
+        keyDevRouteId={id}
         users={users}
         currentUser={currentUser}
         questionSearchTerm={questionSearchTerm}
+        questionIdFromSearch={search.questionId}
+        highlightedAnswerFromSearch={search.highlightedAnswer}
+        answersPageFromSearch={search.answersPage}
       />
     </div>
   )

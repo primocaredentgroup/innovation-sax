@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
@@ -43,14 +44,33 @@ function resolveMentionedUserIds(text: string, users: Array<UserLite> | undefine
 
 interface KeyDevQuestionsSectionProps {
   keydev: KeyDevLite
+  keyDevRouteId: string
   users: Array<UserLite> | undefined
   currentUser: { _id: Id<'users'>; roles?: Array<Role> } | null | undefined
   questionSearchTerm?: string
+  questionIdFromSearch?: string
+  highlightedAnswerFromSearch?: string
+  answersPageFromSearch?: string | number
 }
 
 const ANSWERS_PER_PAGE = 3
 
-export default function KeyDevQuestionsSection({ keydev, users, currentUser, questionSearchTerm }: KeyDevQuestionsSectionProps) {
+export default function KeyDevQuestionsSection({
+  keydev,
+  keyDevRouteId,
+  users,
+  currentUser,
+  questionSearchTerm,
+  questionIdFromSearch,
+  highlightedAnswerFromSearch,
+  answersPageFromSearch
+}: KeyDevQuestionsSectionProps) {
+  const navigate = useNavigate()
+  const routeSearch = useSearch({ strict: false }) as {
+    questionId?: string
+    highlightedAnswer?: string
+    answersPage?: string | number
+  }
   const questions = useQuery(api.keydevQuestions.listByKeyDev, { keyDevId: keydev._id })
   const createQuestion = useMutation(api.keydevQuestions.createQuestion)
   const createAnswer = useMutation(api.keydevQuestions.createAnswer)
@@ -59,13 +79,20 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser, que
   const [newQuestionText, setNewQuestionText] = useState('')
   const [isCreateQuestionDialogOpen, setIsCreateQuestionDialogOpen] = useState(false)
   const [activeQuestionsTab, setActiveQuestionsTab] = useState<'red' | 'validated'>('red')
-  const [activeQuestionId, setActiveQuestionId] = useState<Id<'keyDevQuestions'> | null>(null)
   const [answerBody, setAnswerBody] = useState('')
   const [recipientRole, setRecipientRole] = useState<'owner' | 'requester'>('owner')
   const [mentionQuery, setMentionQuery] = useState('')
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionPosition, setMentionPosition] = useState<{ start: number; end: number } | null>(null)
-  const [answersPage, setAnswersPage] = useState(1)
+  const [showCopyToast, setShowCopyToast] = useState(false)
+  const [copyToastError, setCopyToastError] = useState(false)
+  const lastAppliedHighlightRef = useRef<string | null>(null)
+  const copyToastTimeoutRef = useRef<number | null>(null)
+
+  const activeQuestionId = (questionIdFromSearch || null) as Id<'keyDevQuestions'> | null
+  const highlightedAnswerId = highlightedAnswerFromSearch || null
+  const parsedAnswersPage = Number.parseInt(String(answersPageFromSearch ?? '1'), 10)
+  const answersPage = Number.isFinite(parsedAnswersPage) && parsedAnswersPage > 0 ? parsedAnswersPage : 1
 
   const answers = useQuery(
     api.keydevQuestions.listAnswersByQuestion,
@@ -120,6 +147,92 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser, que
     [questionsFilteredByText]
   )
   const visibleQuestions = activeQuestionsTab === 'red' ? redQuestions : validatedQuestions
+
+  const updateDialogSearch = useCallback((updates: {
+    questionId?: string
+    highlightedAnswer?: string
+    answersPage?: string
+  }) => {
+    navigate({
+      to: '/keydevs/$id/questions',
+      params: { id: keyDevRouteId },
+      search: {
+        ...routeSearch,
+        questionId: updates.questionId,
+        highlightedAnswer: updates.highlightedAnswer,
+        answersPage: updates.answersPage
+      }
+    })
+  }, [navigate, keyDevRouteId, routeSearch])
+
+  const resetAnswerComposer = () => {
+    setAnswerBody('')
+    setRecipientRole('owner')
+    setMentionQuery('')
+    setMentionPosition(null)
+    setShowMentionDropdown(false)
+  }
+
+  const closeAnswersDialog = () => {
+    resetAnswerComposer()
+    updateDialogSearch({
+      questionId: undefined,
+      highlightedAnswer: undefined,
+      answersPage: undefined
+    })
+  }
+
+  const triggerCopyToast = (isError: boolean) => {
+    if (copyToastTimeoutRef.current !== null) {
+      window.clearTimeout(copyToastTimeoutRef.current)
+    }
+    setCopyToastError(isError)
+    setShowCopyToast(true)
+    copyToastTimeoutRef.current = window.setTimeout(() => {
+      setShowCopyToast(false)
+      copyToastTimeoutRef.current = null
+    }, 3000)
+  }
+
+  useEffect(() => {
+    if (!activeQuestionId || !highlightedAnswerId) {
+      lastAppliedHighlightRef.current = null
+      return
+    }
+  }, [activeQuestionId, highlightedAnswerId])
+
+  useEffect(() => {
+    return () => {
+      if (copyToastTimeoutRef.current !== null) {
+        window.clearTimeout(copyToastTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!activeQuestionId || !highlightedAnswerId || !answers || answers.length === 0) {
+      return
+    }
+
+    const highlightKey = `${activeQuestionId}:${highlightedAnswerId}`
+    if (lastAppliedHighlightRef.current === highlightKey) return
+
+    const answerIndex = answers.findIndex((answer) => answer._id === highlightedAnswerId)
+    if (answerIndex === -1) return
+
+    const targetPage = Math.floor(answerIndex / ANSWERS_PER_PAGE) + 1
+    if (targetPage === answersPage) {
+      lastAppliedHighlightRef.current = highlightKey
+      return
+    }
+
+    lastAppliedHighlightRef.current = highlightKey
+    updateDialogSearch({
+      questionId: activeQuestionId,
+      highlightedAnswer: highlightedAnswerId,
+      answersPage: String(targetPage)
+    })
+  }, [answers, activeQuestionId, highlightedAnswerId, answersPage, updateDialogSearch])
 
   const handleSelectMention = (userName: string) => {
     if (!mentionPosition) return
@@ -266,13 +379,12 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser, que
                   </div>
                   <button
                     onClick={() => {
-                      setActiveQuestionId(question._id)
-                      setAnswersPage(1)
-                      setAnswerBody('')
-                      setRecipientRole('owner')
-                      setMentionQuery('')
-                      setMentionPosition(null)
-                      setShowMentionDropdown(false)
+                      resetAnswerComposer()
+                      updateDialogSearch({
+                        questionId: question._id,
+                        highlightedAnswer: undefined,
+                        answersPage: '1'
+                      })
                     }}
                     className="px-3 py-1.5 bg-gray-900 dark:bg-gray-700 text-white text-sm rounded-md hover:bg-gray-800 dark:hover:bg-gray-600 whitespace-nowrap"
                   >
@@ -358,7 +470,7 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser, que
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setActiveQuestionId(null)
+              closeAnswersDialog()
             }
           }}
         >
@@ -376,7 +488,7 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser, que
                 </p>
               </div>
               <button
-                onClick={() => setActiveQuestionId(null)}
+                onClick={closeAnswersDialog}
                 className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
               >
                 ✕
@@ -388,30 +500,70 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser, que
                 paginatedAnswers.map((answer) => {
                   const senderName = users?.find((u) => u._id === answer.senderId)?.name || 'Utente'
                   const isThisValidated = activeQuestion?.validatedAnswerId === answer._id
+                  const isHighlighted = highlightedAnswerId === answer._id
                   return (
                     <div
                       key={answer._id}
                       className={`p-3 rounded border ${
-                        isThisValidated
+                        isHighlighted
+                          ? 'border-blue-400 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                          : isThisValidated
                           ? 'border-green-400 dark:border-green-600 bg-green-50 dark:bg-green-900/20'
                           : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40'
                       }`}
                     >
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                          {formatUserName(senderName)}
-                        </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          → {answer.recipientRole === 'owner' ? ownerName : requesterName}
-                        </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          {new Date(answer.ts).toLocaleString('it-IT')}
-                        </span>
-                        {isThisValidated && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200">
-                            VALIDATA
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                            {formatUserName(senderName)}
                           </span>
-                        )}
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            → {answer.recipientRole === 'owner' ? ownerName : requesterName}
+                          </span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                            {new Date(answer.ts).toLocaleString('it-IT')}
+                          </span>
+                          {isThisValidated && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200">
+                              VALIDATA
+                            </span>
+                          )}
+                          {isHighlighted && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200">
+                              LINK
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const answerParams = new URLSearchParams({
+                              questionId: String(activeQuestionId),
+                              highlightedAnswer: String(answer._id),
+                              answersPage: String(currentAnswersPage)
+                            })
+                            const answerUrl = `${window.location.origin}/keydevs/${keyDevRouteId}/questions?${answerParams.toString()}`
+                            updateDialogSearch({
+                              questionId: activeQuestionId,
+                              highlightedAnswer: answer._id,
+                              answersPage: String(currentAnswersPage)
+                            })
+                            try {
+                              await navigator.clipboard.writeText(answerUrl)
+                              triggerCopyToast(false)
+                            } catch (error) {
+                              console.error('Errore nel copiare il link risposta:', error)
+                              triggerCopyToast(true)
+                            }
+                          }}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/70 dark:hover:bg-gray-700/70"
+                          title="Copia link a questa risposta"
+                          aria-label="Copia link a questa risposta"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14a5 5 0 007.07 0l1.41-1.41a5 5 0 00-7.07-7.07L10 6m4 4a5 5 0 00-7.07 0L5.52 11.41a5 5 0 107.07 7.07L14 18" />
+                          </svg>
+                        </button>
                       </div>
                       <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words">
                         {answer.body}
@@ -453,14 +605,28 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser, que
                   </p>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setAnswersPage((prev) => Math.max(1, prev - 1))}
+                      onClick={() => {
+                        const nextPage = Math.max(1, currentAnswersPage - 1)
+                        updateDialogSearch({
+                          questionId: activeQuestionId,
+                          highlightedAnswer: highlightedAnswerId || undefined,
+                          answersPage: String(nextPage)
+                        })
+                      }}
                       disabled={currentAnswersPage === 1}
                       className="px-3 py-1.5 text-xs rounded bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
                     >
                       ← Precedente
                     </button>
                     <button
-                      onClick={() => setAnswersPage((prev) => Math.min(totalAnswerPages, prev + 1))}
+                      onClick={() => {
+                        const nextPage = Math.min(totalAnswerPages, currentAnswersPage + 1)
+                        updateDialogSearch({
+                          questionId: activeQuestionId,
+                          highlightedAnswer: highlightedAnswerId || undefined,
+                          answersPage: String(nextPage)
+                        })
+                      }}
                       disabled={currentAnswersPage === totalAnswerPages}
                       className="px-3 py-1.5 text-xs rounded bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
                     >
@@ -529,7 +695,7 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser, que
               </div>
               <div className="mt-3 flex justify-end gap-2">
                 <button
-                  onClick={() => setActiveQuestionId(null)}
+                  onClick={closeAnswersDialog}
                   className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
                 >
                   Chiudi
@@ -556,6 +722,44 @@ export default function KeyDevQuestionsSection({ keydev, users, currentUser, que
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {showCopyToast && (
+        <div className="fixed bottom-4 right-4 z-[70] animate-in slide-in-from-bottom-2 fade-in">
+          <div
+            className={`px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[280px] ${
+              copyToastError
+                ? 'bg-red-600 dark:bg-red-700 text-white'
+                : 'bg-green-600 dark:bg-green-700 text-white'
+            }`}
+          >
+            {copyToastError ? (
+              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            <div className="flex-1">
+              <p className="font-medium">{copyToastError ? 'Copia non riuscita' : 'Link copiato!'}</p>
+              <p className={`text-sm ${copyToastError ? 'text-red-100' : 'text-green-100'}`}>
+                {copyToastError
+                  ? 'Non sono riuscito ad accedere agli appunti.'
+                  : 'Puoi incollarlo per aprire direttamente questa risposta.'}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowCopyToast(false)}
+              className={copyToastError ? 'text-red-100 hover:text-white' : 'text-green-100 hover:text-white'}
+              aria-label="Chiudi"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
       )}
