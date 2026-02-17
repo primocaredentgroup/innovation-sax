@@ -199,8 +199,15 @@ const statusLabels: Record<string, string> = {
   Checked: 'Controllato'
 }
 
-const getStatusLabel = (status: string, showWarning: boolean): string => {
+const getStatusLabel = (
+  status: string,
+  showWarning: boolean,
+  rejectedDetails?: { total: number; validated: number; missing: number }
+): string => {
   const label = statusLabels[status] ?? status
+  if (status === 'Rejected' && rejectedDetails && rejectedDetails.total > 0) {
+    return `${label} (Da validare: ${rejectedDetails.missing}/${rejectedDetails.total})`
+  }
   if (status === 'MockupDone' && showWarning) {
     return `${label} ⚠`
   }
@@ -370,6 +377,15 @@ export default function KeyDevsListPage() {
       return priorityA - priorityB
     })
   }, [isSearchMode, searchResults, showAllMonths, allKeydevs, keydevsByMonth])
+
+  const keydevIdsForQuestions = useMemo(
+    () => (keydevs || []).map((kd) => kd._id),
+    [keydevs]
+  )
+  const questionsStatusByKeyDev = useQuery(
+    api.keydevQuestions.getStatusByKeyDevIds,
+    keydevIdsForQuestions.length > 0 ? { keyDevIds: keydevIdsForQuestions } : 'skip'
+  )
   
   // Calcola i contatori basandosi sui keydevs filtrati (dept/team/owner)
   // Questo assicura che i contatori corrispondano ai keydevs visibili nella lista
@@ -1287,7 +1303,11 @@ export default function KeyDevsListPage() {
                         >
                           {getPreviousStatuses(kd.status).map((status) => (
                             <option key={status} value={status} className="bg-white dark:bg-gray-800">
-                              {getStatusLabel(status, hasMockupDone)}
+                              {getStatusLabel(
+                                status,
+                                hasMockupDone,
+                                status === 'Rejected' ? questionsStatusByKeyDev?.[String(kd._id)] : undefined
+                              )}
                             </option>
                           ))}
                         </select>
@@ -1440,7 +1460,11 @@ export default function KeyDevsListPage() {
                     >
                       {getPreviousStatuses(kd.status).map((status) => (
                         <option key={status} value={status} className="bg-white dark:bg-gray-800">
-                          {getStatusLabel(status, hasMockupDone)}
+                          {getStatusLabel(
+                            status,
+                            hasMockupDone,
+                            status === 'Rejected' ? questionsStatusByKeyDev?.[String(kd._id)] : undefined
+                          )}
                         </option>
                       ))}
                     </select>

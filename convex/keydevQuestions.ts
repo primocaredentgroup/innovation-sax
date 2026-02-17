@@ -319,6 +319,46 @@ export const createAnswer = mutation({
 })
 
 /**
+ * Aggiorna una risposta esistente.
+ * La risposta validata non può essere modificata.
+ */
+export const updateAnswer = mutation({
+  args: {
+    answerId: v.id('keyDevQuestionAnswers'),
+    body: v.string(),
+    recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+    mentionedUserIds: v.optional(v.array(v.id('users')))
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await getCurrentUserOrThrow(ctx)
+    const answer = await ctx.db.get(args.answerId)
+    if (!answer) throw new Error('Risposta non trovata')
+
+    const question = await ctx.db.get(answer.questionId)
+    if (!question) throw new Error('Domanda non trovata')
+
+    if (question.validatedAnswerId === answer._id) {
+      throw new Error('La risposta validata non può essere modificata')
+    }
+
+    const userRoles = user.roles as Role[] | undefined
+    const canEdit = answer.senderId === user._id || isAdmin(userRoles)
+    if (!canEdit) {
+      throw new Error('Puoi modificare solo le tue risposte')
+    }
+
+    await ctx.db.patch(answer._id, {
+      body: args.body.trim(),
+      recipientRole: args.recipientRole,
+      mentionedUserIds: args.mentionedUserIds
+    })
+
+    return null
+  }
+})
+
+/**
  * Owner seleziona la risposta valida per una domanda.
  */
 export const validateAnswer = mutation({
@@ -398,5 +438,38 @@ export const getQuestionsStatus = query({
       allValidated: total > 0 && !hasUnvalidated,
       keyDevStatus: keydev.status
     }
+  }
+})
+
+/**
+ * Ottiene stato sintetico domande per più KeyDev.
+ */
+export const getStatusByKeyDevIds = query({
+  args: { keyDevIds: v.array(v.id('keydevs')) },
+  returns: v.record(
+    v.string(),
+    v.object({
+      total: v.number(),
+      validated: v.number(),
+      missing: v.number()
+    })
+  ),
+  handler: async (ctx, args) => {
+    const result: Record<string, { total: number; validated: number; missing: number }> = {}
+    for (const keyDevId of args.keyDevIds) {
+      const questions = await ctx.db
+        .query('keyDevQuestions')
+        .withIndex('by_keyDev', (q) => q.eq('keyDevId', keyDevId))
+        .collect()
+
+      const total = questions.length
+      const validated = questions.filter((question) => question.validatedAnswerId !== undefined).length
+      result[keyDevId] = {
+        total,
+        validated,
+        missing: Math.max(0, total - validated)
+      }
+    }
+    return result
   }
 })
