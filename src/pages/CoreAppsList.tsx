@@ -245,6 +245,11 @@ export default function CoreAppsListPage() {
   const users = useQuery(api.users.listUsers)
   const updateCoreApp = useMutation(api.coreApps.update)
   const setPriority = useMutation(api.coreApps.setPriority)
+  const coreAppIdsForQuestions = useMemo(() => (coreApps || []).map((app) => app._id), [coreApps])
+  const questionsStatusByCoreApp = useQuery(
+    api.coreAppQuestions.getStatusByCoreAppIds,
+    coreAppIdsForQuestions.length > 0 ? { coreAppIds: coreAppIdsForQuestions } : 'skip'
+  )
 
   // Stato per la categoria selezionata (null = tutte)
   const [selectedCategoryId, setSelectedCategoryId] = useState<Id<'coreAppsCategories'> | null>(null)
@@ -982,6 +987,21 @@ export default function CoreAppsListPage() {
                             <span className="text-xs font-semibold">{app.notesCount || 0}</span>
                           )}
                         </a>
+                        {(() => {
+                          const qStatus = questionsStatusByCoreApp?.[String(app._id)]
+                          if (!qStatus || qStatus.total === 0) return null
+                          return (
+                            <Link
+                              to="/core-apps/$slug/questions"
+                              params={{ slug: app.slug }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
+                              title={`Questions validate ${qStatus.validated}/${qStatus.total}`}
+                            >
+                              <span className="text-xs font-semibold">{qStatus.validated}/{qStatus.total}</span>
+                            </Link>
+                          )
+                        })()}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -1160,6 +1180,21 @@ export default function CoreAppsListPage() {
                         <span className="text-xs font-semibold">{app.notesCount || 0}</span>
                       )}
                     </a>
+                    {(() => {
+                      const qStatus = questionsStatusByCoreApp?.[String(app._id)]
+                      if (!qStatus || qStatus.total === 0) return null
+                      return (
+                        <Link
+                          to="/core-apps/$slug/questions"
+                          params={{ slug: app.slug }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
+                          title={`Questions validate ${qStatus.validated}/${qStatus.total}`}
+                        >
+                          <span className="text-xs font-semibold">{qStatus.validated}/{qStatus.total}</span>
+                        </Link>
+                      )
+                    })()}
                   </div>
                   <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${statusColors[app.status]}`}>
                     {statusLabels[app.status]}

@@ -417,6 +417,10 @@ export default function CoreAppDetailPage() {
       monthRef: selectedMonth || undefined
     } : 'skip'
   )
+  const questionsStatus = useQuery(
+    api.coreAppQuestions.getQuestionsStatus,
+    coreApp ? { coreAppId: coreApp._id } : 'skip'
+  )
 
   const updateUpdate = useMutation(api.coreAppUpdates.update)
   const deleteUpdate = useMutation(api.coreAppUpdates.remove)
@@ -781,6 +785,23 @@ export default function CoreAppDetailPage() {
               {coreApp.notesCount !== undefined && coreApp.notesCount > 0 && (
                 <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-white dark:bg-blue-800 text-blue-700 dark:text-white text-xs font-bold min-w-5 sm:min-w-6 flex items-center justify-center border border-blue-800 dark:border-blue-200">
                   {coreApp.notesCount}
+                </span>
+              )}
+            </Link>
+            <Link
+              to="/core-apps/$slug/questions"
+              params={{ slug }}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-yellow-600 to-yellow-700 dark:from-yellow-500 dark:to-yellow-600 hover:from-yellow-700 hover:to-yellow-800 dark:hover:from-yellow-600 dark:hover:to-yellow-700 shadow-md hover:shadow-lg text-white border border-yellow-800 dark:border-yellow-300"
+            >
+              <span className="text-white">Questions</span>
+              {questionsStatus && questionsStatus.total > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-[10px] sm:text-xs font-bold">
+                    {questionsStatus.validated}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 text-[10px] sm:text-xs font-bold">
+                    {Math.max(0, questionsStatus.total - questionsStatus.validated)}
+                  </span>
                 </span>
               )}
             </Link>

@@ -48,6 +48,11 @@ export const keyDevQuestionAnswerRecipientRoleValidator = v.union(
   v.literal('requester')
 )
 
+export const questionDomainValidator = v.union(
+  v.literal('keydev'),
+  v.literal('coreapp')
+)
+
 // Weight validator per keydevs (peso dello sviluppo per validazione tech)
 export const keydevWeightValidator = v.union(
   v.literal(0),
@@ -229,6 +234,29 @@ export default defineSchema({
     .index('by_question_and_ts', ['questionId', 'ts'])
     .index('by_sender', ['senderId']),
 
+  // Labels globali per le domande (KeyDev/CoreApp)
+  questionLabels: defineTable({
+    value: v.string(), // Valore tecnico normalizzato (slug)
+    label: v.string(), // Etichetta visualizzata
+    createdById: v.id('users'),
+    createdAt: v.number()
+  })
+    .index('by_value', ['value'])
+    .index('by_label', ['label']),
+
+  // Join table labels <-> questions con supporto multi-dominio
+  questionToLabels: defineTable({
+    questionDomain: questionDomainValidator,
+    keyDevQuestionId: v.optional(v.id('keyDevQuestions')),
+    coreAppQuestionId: v.optional(v.id('coreAppQuestions')),
+    labelId: v.id('questionLabels'),
+    createdById: v.id('users'),
+    createdAt: v.number()
+  })
+    .index('by_keyDevQuestion', ['keyDevQuestionId'])
+    .index('by_coreAppQuestion', ['coreAppQuestionId'])
+    .index('by_label', ['labelId']),
+
   // Budget allocation per Dept/Team/Month
   budgetKeyDev: defineTable({
     monthRef: v.string(),
@@ -287,6 +315,42 @@ export default defineSchema({
     .index('by_week', ['weekRef'])
     .index('by_month', ['monthRef'])
     .index('by_coreApp_and_month', ['coreAppId', 'monthRef']),
+
+  // Template domande obbligatorie per CoreApp Questions (gestite da Admin)
+  coreAppQuestionTemplates: defineTable({
+    text: v.string(),
+    active: v.boolean(),
+    order: v.number(),
+    createdById: v.id('users'),
+    updatedAt: v.number()
+  })
+    .index('by_order', ['order'])
+    .index('by_active_and_order', ['active', 'order']),
+
+  // Domande istanziate su una CoreApp specifica
+  coreAppQuestions: defineTable({
+    coreAppId: v.id('coreApps'),
+    text: v.string(),
+    createdById: v.id('users'),
+    createdAt: v.number(),
+    order: v.number(),
+    source: keyDevQuestionSourceValidator,
+    validatedAnswerId: v.optional(v.id('coreAppQuestionAnswers'))
+  })
+    .index('by_coreApp', ['coreAppId'])
+    .index('by_coreApp_and_order', ['coreAppId', 'order']),
+
+  // Risposte alle domande della CoreApp
+  coreAppQuestionAnswers: defineTable({
+    questionId: v.id('coreAppQuestions'),
+    body: v.string(),
+    senderId: v.id('users'),
+    recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+    mentionedUserIds: v.optional(v.array(v.id('users'))),
+    ts: v.number()
+  })
+    .index('by_question_and_ts', ['questionId', 'ts'])
+    .index('by_sender', ['senderId']),
 
   // Agent Apps
   agentApps: defineTable({

@@ -354,6 +354,10 @@ export const updateAnswer = mutation({
       mentionedUserIds: args.mentionedUserIds
     })
 
+    await ctx.scheduler.runAfter(0, internal.emails.sendKeyDevQuestionAnswerNotification, {
+      answerId: answer._id
+    })
+
     return null
   }
 })

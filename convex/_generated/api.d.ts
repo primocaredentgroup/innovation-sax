@@ -11,6 +11,8 @@
 import type * as agentApps from "../agentApps.js";
 import type * as agents from "../agents.js";
 import type * as budget from "../budget.js";
+import type * as coreAppQuestionTemplates from "../coreAppQuestionTemplates.js";
+import type * as coreAppQuestions from "../coreAppQuestions.js";
 import type * as coreAppUpdates from "../coreAppUpdates.js";
 import type * as coreApps from "../coreApps.js";
 import type * as coreAppsCategories from "../coreAppsCategories.js";
@@ -27,6 +29,7 @@ import type * as labels from "../labels.js";
 import type * as months from "../months.js";
 import type * as notes from "../notes.js";
 import type * as penalties from "../penalties.js";
+import type * as questionLabels from "../questionLabels.js";
 import type * as skills from "../skills.js";
 import type * as teams from "../teams.js";
 import type * as users from "../users.js";
@@ -41,6 +44,8 @@ declare const fullApi: ApiFromModules<{
   agentApps: typeof agentApps;
   agents: typeof agents;
   budget: typeof budget;
+  coreAppQuestionTemplates: typeof coreAppQuestionTemplates;
+  coreAppQuestions: typeof coreAppQuestions;
   coreAppUpdates: typeof coreAppUpdates;
   coreApps: typeof coreApps;
   coreAppsCategories: typeof coreAppsCategories;
@@ -57,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   months: typeof months;
   notes: typeof notes;
   penalties: typeof penalties;
+  questionLabels: typeof questionLabels;
   skills: typeof skills;
   teams: typeof teams;
   users: typeof users;

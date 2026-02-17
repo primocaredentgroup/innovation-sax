@@ -21,10 +21,14 @@ export default function AdminPage() {
   const updateCategory = useMutation(api.coreAppsCategories.update)
   const removeCategory = useMutation(api.coreAppsCategories.remove)
   const updateCoreApp = useMutation(api.coreApps.update)
-  const questionTemplates = useQuery(api.keyDevQuestionTemplates.list)
-  const createQuestionTemplate = useMutation(api.keyDevQuestionTemplates.create)
-  const updateQuestionTemplate = useMutation(api.keyDevQuestionTemplates.update)
-  const removeQuestionTemplate = useMutation(api.keyDevQuestionTemplates.remove)
+  const keyDevQuestionTemplates = useQuery(api.keyDevQuestionTemplates.list)
+  const createKeyDevQuestionTemplate = useMutation(api.keyDevQuestionTemplates.create)
+  const updateKeyDevQuestionTemplate = useMutation(api.keyDevQuestionTemplates.update)
+  const removeKeyDevQuestionTemplate = useMutation(api.keyDevQuestionTemplates.remove)
+  const coreAppQuestionTemplates = useQuery(api.coreAppQuestionTemplates.list)
+  const createCoreAppQuestionTemplate = useMutation(api.coreAppQuestionTemplates.create)
+  const updateCoreAppQuestionTemplate = useMutation(api.coreAppQuestionTemplates.update)
+  const removeCoreAppQuestionTemplate = useMutation(api.coreAppQuestionTemplates.remove)
 
   const [activeTab, setActiveTab] = useState<Tab>('teams')
   const [editingTeam, setEditingTeam] = useState<Id<'teams'> | null>(null)
@@ -48,6 +52,11 @@ export default function AdminPage() {
   const [editingQuestionTemplate, setEditingQuestionTemplate] = useState<Id<'keyDevQuestionTemplates'> | null>(null)
   const [editQuestionTemplateText, setEditQuestionTemplateText] = useState('')
   const [editQuestionTemplateActive, setEditQuestionTemplateActive] = useState(true)
+  const [newCoreAppQuestionTemplateText, setNewCoreAppQuestionTemplateText] = useState('')
+  const [newCoreAppQuestionTemplateActive, setNewCoreAppQuestionTemplateActive] = useState(true)
+  const [editingCoreAppQuestionTemplate, setEditingCoreAppQuestionTemplate] = useState<Id<'coreAppQuestionTemplates'> | null>(null)
+  const [editCoreAppQuestionTemplateText, setEditCoreAppQuestionTemplateText] = useState('')
+  const [editCoreAppQuestionTemplateActive, setEditCoreAppQuestionTemplateActive] = useState(true)
 
   // Solo Admin può accedere
   if (!currentUser?.roles?.includes('Admin')) {
@@ -200,11 +209,11 @@ export default function AdminPage() {
     }
   }
 
-  // Gestione Questions Templates
+  // Gestione Questions Templates KeyDev
   const handleCreateQuestionTemplate = async () => {
     if (!newQuestionTemplateText.trim()) return
     try {
-      await createQuestionTemplate({
+      await createKeyDevQuestionTemplate({
         text: newQuestionTemplateText.trim(),
         active: newQuestionTemplateActive
       })
@@ -234,7 +243,7 @@ export default function AdminPage() {
   const handleUpdateQuestionTemplate = async (id: Id<'keyDevQuestionTemplates'>) => {
     if (!editQuestionTemplateText.trim()) return
     try {
-      await updateQuestionTemplate({
+      await updateKeyDevQuestionTemplate({
         id,
         text: editQuestionTemplateText.trim(),
         active: editQuestionTemplateActive
@@ -248,9 +257,63 @@ export default function AdminPage() {
   const handleRemoveQuestionTemplate = async (id: Id<'keyDevQuestionTemplates'>) => {
     if (!confirm('Sei sicuro di voler eliminare questo template question?')) return
     try {
-      await removeQuestionTemplate({ id })
+      await removeKeyDevQuestionTemplate({ id })
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Errore nell\'eliminazione del template question')
+    }
+  }
+
+  // Gestione Questions Templates CoreApp
+  const handleCreateCoreAppQuestionTemplate = async () => {
+    if (!newCoreAppQuestionTemplateText.trim()) return
+    try {
+      await createCoreAppQuestionTemplate({
+        text: newCoreAppQuestionTemplateText.trim(),
+        active: newCoreAppQuestionTemplateActive
+      })
+      setNewCoreAppQuestionTemplateText('')
+      setNewCoreAppQuestionTemplateActive(true)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nella creazione del template question CoreApp')
+    }
+  }
+
+  const handleStartEditCoreAppQuestionTemplate = (
+    id: Id<'coreAppQuestionTemplates'>,
+    text: string,
+    active: boolean
+  ) => {
+    setEditingCoreAppQuestionTemplate(id)
+    setEditCoreAppQuestionTemplateText(text)
+    setEditCoreAppQuestionTemplateActive(active)
+  }
+
+  const handleCancelEditCoreAppQuestionTemplate = () => {
+    setEditingCoreAppQuestionTemplate(null)
+    setEditCoreAppQuestionTemplateText('')
+    setEditCoreAppQuestionTemplateActive(true)
+  }
+
+  const handleUpdateCoreAppQuestionTemplate = async (id: Id<'coreAppQuestionTemplates'>) => {
+    if (!editCoreAppQuestionTemplateText.trim()) return
+    try {
+      await updateCoreAppQuestionTemplate({
+        id,
+        text: editCoreAppQuestionTemplateText.trim(),
+        active: editCoreAppQuestionTemplateActive
+      })
+      handleCancelEditCoreAppQuestionTemplate()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nell\'aggiornamento del template question CoreApp')
+    }
+  }
+
+  const handleRemoveCoreAppQuestionTemplate = async (id: Id<'coreAppQuestionTemplates'>) => {
+    if (!confirm('Sei sicuro di voler eliminare questo template question CoreApp?')) return
+    try {
+      await removeCoreAppQuestionTemplate({ id })
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nell\'eliminazione del template question CoreApp')
     }
   }
 
@@ -759,7 +822,9 @@ export default function AdminPage() {
         <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Questions Templates</h2>
         </div>
-        <div className="p-4 lg:p-6">
+        <div className="p-4 lg:p-6 space-y-8">
+          <section>
+            <h3 className="text-sm lg:text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Questions KeyDevs</h3>
           <p className="text-xs lg:text-sm text-gray-600 dark:text-gray-400 mb-4">
             Queste domande vengono inserite automaticamente quando si clicca “Start Questions” su un KeyDev.
           </p>
@@ -803,7 +868,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {questionTemplates?.map((template) => {
+                  {keyDevQuestionTemplates?.map((template) => {
                     const isEditing = editingQuestionTemplate === template._id
                     return (
                       <tr key={template._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -882,12 +947,145 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-            {questionTemplates?.length === 0 && (
+            {keyDevQuestionTemplates?.length === 0 && (
               <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">
                 Nessun template Questions presente
               </div>
             )}
           </div>
+          </section>
+
+          <section className="pt-6 border-t border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm lg:text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Questions CoreApps</h3>
+            <p className="text-xs lg:text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Queste domande vengono inserite automaticamente quando si clicca “Start Questions” su una CoreApp.
+            </p>
+
+            <div className="mb-4 space-y-2">
+              <textarea
+                value={newCoreAppQuestionTemplateText}
+                onChange={(e) => setNewCoreAppQuestionTemplateText(e.target.value)}
+                placeholder="Testo della domanda template CoreApp..."
+                rows={2}
+                className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={newCoreAppQuestionTemplateActive}
+                  onChange={(e) => setNewCoreAppQuestionTemplateActive(e.target.checked)}
+                  className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                />
+                Attiva
+              </label>
+              <div>
+                <button
+                  onClick={handleCreateCoreAppQuestionTemplate}
+                  className="px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                >
+                  Aggiungi Template Question CoreApp
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto -mx-4 lg:mx-0">
+              <div className="inline-block min-w-full align-middle">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Ordine</th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Domanda</th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Attiva</th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-center text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {coreAppQuestionTemplates?.map((template) => {
+                      const isEditing = editingCoreAppQuestionTemplate === template._id
+                      return (
+                        <tr key={template._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">
+                            {template.order}
+                          </td>
+                          <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">
+                            {isEditing ? (
+                              <textarea
+                                value={editCoreAppQuestionTemplateText}
+                                onChange={(e) => setEditCoreAppQuestionTemplateText(e.target.value)}
+                                rows={2}
+                                className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                              />
+                            ) : (
+                              template.text
+                            )}
+                          </td>
+                          <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">
+                            {isEditing ? (
+                              <label className="inline-flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={editCoreAppQuestionTemplateActive}
+                                  onChange={(e) => setEditCoreAppQuestionTemplateActive(e.target.checked)}
+                                  className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span>{editCoreAppQuestionTemplateActive ? 'Sì' : 'No'}</span>
+                              </label>
+                            ) : (
+                              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                                template.active
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                              }`}>
+                                {template.active ? 'Attiva' : 'Disattiva'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 lg:px-4 py-2 lg:py-3 text-center">
+                            {isEditing ? (
+                              <div className="flex gap-1 lg:gap-2 justify-center flex-wrap">
+                                <button
+                                  onClick={() => handleUpdateCoreAppQuestionTemplate(template._id)}
+                                  className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                                >
+                                  Salva
+                                </button>
+                                <button
+                                  onClick={handleCancelEditCoreAppQuestionTemplate}
+                                  className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                                >
+                                  Annulla
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1 lg:gap-2 justify-center flex-wrap">
+                                <button
+                                  onClick={() => handleStartEditCoreAppQuestionTemplate(template._id, template.text, template.active)}
+                                  className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                                >
+                                  Modifica
+                                </button>
+                                <button
+                                  onClick={() => handleRemoveCoreAppQuestionTemplate(template._id)}
+                                  className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600"
+                                >
+                                  Elimina
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {coreAppQuestionTemplates?.length === 0 && (
+                <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">
+                  Nessun template Questions CoreApp presente
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       </div>
       )}

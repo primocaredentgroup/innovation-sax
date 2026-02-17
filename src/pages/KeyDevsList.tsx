@@ -201,13 +201,9 @@ const statusLabels: Record<string, string> = {
 
 const getStatusLabel = (
   status: string,
-  showWarning: boolean,
-  rejectedDetails?: { total: number; validated: number; missing: number }
+  showWarning: boolean
 ): string => {
   const label = statusLabels[status] ?? status
-  if (status === 'Rejected' && rejectedDetails && rejectedDetails.total > 0) {
-    return `${label} (Da validare: ${rejectedDetails.missing}/${rejectedDetails.total})`
-  }
   if (status === 'MockupDone' && showWarning) {
     return `${label} ⚠`
   }
@@ -1288,6 +1284,22 @@ export default function KeyDevsListPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-gray-500 dark:text-gray-400 font-mono text-xs">{kd.readableId}</span>
+                      {(() => {
+                        const qStatus = questionsStatusByKeyDev?.[String(kd._id)]
+                        if (!qStatus || qStatus.total === 0) return null
+                        const missingQuestions = qStatus.missing ?? Math.max(0, qStatus.total - qStatus.validated)
+                        return (
+                          <Link
+                            to="/keydevs/$id/questions"
+                            params={{ id: kd.readableId }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
+                            title={`Questions mancanti ${missingQuestions}/${qStatus.total}`}
+                          >
+                            <span className="text-xs font-semibold">{missingQuestions}/{qStatus.total}</span>
+                          </Link>
+                        )
+                      })()}
                       <div onClick={(e) => e.stopPropagation()}>
                         <select
                           value={kd.status}
@@ -1303,11 +1315,7 @@ export default function KeyDevsListPage() {
                         >
                           {getPreviousStatuses(kd.status).map((status) => (
                             <option key={status} value={status} className="bg-white dark:bg-gray-800">
-                              {getStatusLabel(
-                                status,
-                                hasMockupDone,
-                                status === 'Rejected' ? questionsStatusByKeyDev?.[String(kd._id)] : undefined
-                              )}
+                              {getStatusLabel(status, hasMockupDone)}
                             </option>
                           ))}
                         </select>
@@ -1443,6 +1451,22 @@ export default function KeyDevsListPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500 dark:text-gray-400 font-mono text-xs">{kd.readableId}</span>
                       <span>{kd.title}</span>
+                      {(() => {
+                        const qStatus = questionsStatusByKeyDev?.[String(kd._id)]
+                        if (!qStatus || qStatus.total === 0) return null
+                        const missingQuestions = qStatus.missing ?? Math.max(0, qStatus.total - qStatus.validated)
+                        return (
+                          <Link
+                            to="/keydevs/$id/questions"
+                            params={{ id: kd.readableId }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
+                            title={`Questions mancanti ${missingQuestions}/${qStatus.total}`}
+                          >
+                            <span className="text-xs font-semibold">{missingQuestions}/{qStatus.total}</span>
+                          </Link>
+                        )
+                      })()}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
@@ -1460,11 +1484,7 @@ export default function KeyDevsListPage() {
                     >
                       {getPreviousStatuses(kd.status).map((status) => (
                         <option key={status} value={status} className="bg-white dark:bg-gray-800">
-                          {getStatusLabel(
-                            status,
-                            hasMockupDone,
-                            status === 'Rejected' ? questionsStatusByKeyDev?.[String(kd._id)] : undefined
-                          )}
+                          {getStatusLabel(status, hasMockupDone)}
                         </option>
                       ))}
                     </select>

@@ -17,6 +17,7 @@ import CoreAppDetailPage from './pages/CoreAppDetail'
 import CoreAppNotesPage from './pages/CoreAppNotes'
 import CoreAppNewPage from './pages/CoreAppNew'
 import CoreAppUpdateNewPage from './pages/CoreAppUpdateNew'
+import CoreAppQuestionsPage from './pages/CoreAppQuestions'
 import ProfilePage from './pages/Profile'
 import UsersManagementPage from './pages/UsersManagement'
 import AdminPage from './pages/Admin'
@@ -116,6 +117,17 @@ const coreAppNotesRoute = createRoute({
   })
 })
 
+const coreAppQuestionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/core-apps/$slug/questions',
+  component: CoreAppQuestionsPage,
+  validateSearch: z.object({
+    questionId: z.string().optional(),
+    highlightedAnswer: z.string().optional(),
+    answersPage: z.union([z.string(), z.number()]).optional()
+  })
+})
+
 const coreAppUpdateNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/core-apps/$slug/updates/new',
@@ -177,6 +189,7 @@ const routeTree = rootRoute.addChildren([
   coreAppNewRoute,
   coreAppDetailRoute,
   coreAppNotesRoute,
+  coreAppQuestionsRoute,
   coreAppUpdateNewRoute,
   profileRoute,
   usersManagementRoute,

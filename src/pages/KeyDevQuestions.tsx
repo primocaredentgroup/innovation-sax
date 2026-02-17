@@ -73,7 +73,7 @@ export default function KeyDevQuestionsPage() {
 
   return (
     <div className="w-full max-w-full overflow-x-hidden">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0">
           <Link
             to="/keydevs/$id"
@@ -103,7 +103,7 @@ export default function KeyDevQuestionsPage() {
       </div>
 
       {questionsStatus?.total === 0 && keydev.status === 'MockupDone' && canStartQuestions && (
-        <div className="mb-6 p-4 border rounded-lg border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20">
+        <div className="mb-4 p-3 border rounded-lg border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20">
           <p className="text-sm text-yellow-900 dark:text-yellow-200 mb-3">
             Avvia il flusso Questions per popolare automaticamente le domande obbligatorie del template.
           </p>
@@ -124,7 +124,7 @@ export default function KeyDevQuestionsPage() {
         </div>
       )}
 
-      <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+      <div className="mb-4 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <button
             disabled={!canQuickAssign}
@@ -179,7 +179,7 @@ export default function KeyDevQuestionsPage() {
             </div>
           </button>
 
-          <div className="w-full sm:w-80 sm:ml-auto">
+          <div className="w-full sm:w-72 sm:ml-auto">
             <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
               Filtro domande
             </label>

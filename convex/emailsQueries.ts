@@ -384,3 +384,132 @@ export const getKeyDevQuestionAnswerContext = internalQuery({
     }
   }
 })
+
+/**
+ * Query interna per recuperare il contesto completo di una answer su CoreApp questions.
+ */
+export const getCoreAppQuestionAnswerContext = internalQuery({
+  args: {
+    answerId: v.id('coreAppQuestionAnswers')
+  },
+  returns: v.union(
+    v.object({
+      answer: v.object({
+        _id: v.id('coreAppQuestionAnswers'),
+        _creationTime: v.number(),
+        questionId: v.id('coreAppQuestions'),
+        body: v.string(),
+        senderId: v.id('users'),
+        recipientRole: v.union(v.literal('owner'), v.literal('requester')),
+        mentionedUserIds: v.optional(v.array(v.id('users'))),
+        ts: v.number()
+      }),
+      question: v.object({
+        _id: v.id('coreAppQuestions'),
+        text: v.string()
+      }),
+      coreApp: v.object({
+        _id: v.id('coreApps'),
+        slug: v.string(),
+        name: v.string(),
+        ownerId: v.optional(v.id('users'))
+      }),
+      sender: v.object({
+        _id: v.id('users'),
+        name: v.string(),
+        email: v.optional(v.string())
+      }),
+      primaryRecipient: v.union(
+        v.object({
+          _id: v.id('users'),
+          name: v.string(),
+          email: v.optional(v.string())
+        }),
+        v.null()
+      ),
+      mentionedUsers: v.array(
+        v.object({
+          _id: v.id('users'),
+          name: v.string(),
+          email: v.optional(v.string())
+        })
+      )
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const answer = await ctx.db.get(args.answerId)
+    if (!answer) return null
+
+    const question = await ctx.db.get(answer.questionId)
+    if (!question) return null
+
+    const coreApp = await ctx.db.get(question.coreAppId)
+    if (!coreApp) return null
+
+    const sender = await ctx.db.get(answer.senderId)
+    if (!sender) return null
+
+    const primaryRecipientId =
+      answer.recipientRole === 'owner'
+        ? coreApp.ownerId
+        : (coreApp.ownerId ?? undefined)
+    const primaryRecipient = primaryRecipientId
+      ? await ctx.db.get(primaryRecipientId)
+      : null
+
+    const mentionedUsers: Array<{
+      _id: Id<'users'>
+      name: string
+      email?: string
+    }> = []
+
+    const mentionedIds = answer.mentionedUserIds || []
+    for (const userId of mentionedIds) {
+      const user = await ctx.db.get(userId)
+      if (user) {
+        mentionedUsers.push({
+          _id: user._id,
+          name: user.name,
+          email: user.email
+        })
+      }
+    }
+
+    return {
+      answer: {
+        _id: answer._id,
+        _creationTime: answer._creationTime,
+        questionId: answer.questionId,
+        body: answer.body,
+        senderId: answer.senderId,
+        recipientRole: answer.recipientRole,
+        mentionedUserIds: answer.mentionedUserIds,
+        ts: answer.ts
+      },
+      question: {
+        _id: question._id,
+        text: question.text
+      },
+      coreApp: {
+        _id: coreApp._id,
+        slug: coreApp.slug,
+        name: coreApp.name,
+        ownerId: coreApp.ownerId
+      },
+      sender: {
+        _id: sender._id,
+        name: sender.name,
+        email: sender.email
+      },
+      primaryRecipient: primaryRecipient
+        ? {
+            _id: primaryRecipient._id,
+            name: primaryRecipient.name,
+            email: primaryRecipient.email
+          }
+        : null,
+      mentionedUsers
+    }
+  }
+})

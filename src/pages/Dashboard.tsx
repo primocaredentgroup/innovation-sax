@@ -804,7 +804,7 @@ export default function DashboardPage() {
         <div className="mb-6 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 dark:border-yellow-700 dark:bg-yellow-900/20">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium text-yellow-900 dark:text-yellow-200">
-              ⚠ Ci sono {mockupDoneCount} {mockupDoneCount > 1 ? 'Sviluppi Chiave' : 'Sviluppo Chiave'} in stato "Mockup Terminato": e richiesta un'azione.
+              ⚠ Ci sono {mockupDoneCount} {mockupDoneCount > 1 ? 'Sviluppi Chiave' : 'Sviluppo Chiave'} in stato "Mockup Terminato": gli owner devono essere definiti, fare l'analisi e far partire le domande.
             </p>
             <button
               type="button"
