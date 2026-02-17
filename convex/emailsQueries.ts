@@ -453,7 +453,9 @@ export const getCoreAppQuestionAnswerContext = internalQuery({
     const primaryRecipientId =
       answer.recipientRole === 'owner'
         ? coreApp.ownerId
-        : (coreApp.ownerId ?? undefined)
+        : question.source === 'Manual'
+          ? question.createdById
+          : undefined
     const primaryRecipient = primaryRecipientId
       ? await ctx.db.get(primaryRecipientId)
       : null

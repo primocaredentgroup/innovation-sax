@@ -21,7 +21,7 @@ function OwnerAvatar({
   if (!owner) {
     return (
       <div
-        className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 ${onClick ? 'cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-500' : ''}`}
+        className={`${size === 'sm' ? 'w-8 h-8 text-xs sm:w-8 sm:h-8' : 'w-10 h-10 text-sm sm:w-12 sm:h-12'} rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 ${onClick ? 'cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-500 active:scale-95' : ''}`}
         title="Nessun owner"
         onClick={onClick}
       >
@@ -47,7 +47,7 @@ function OwnerAvatar({
   return (
     <div className="relative">
       <div
-        className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full overflow-hidden ${bgColor} flex items-center justify-center text-white font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+        className={`${size === 'sm' ? 'w-8 h-8 text-xs sm:w-8 sm:h-8' : 'w-10 h-10 text-sm sm:w-12 sm:h-12'} rounded-full overflow-hidden ${bgColor} flex items-center justify-center text-white font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity active:scale-95' : ''}`}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         onClick={onClick}
@@ -449,15 +449,15 @@ function SharedLegend({
   const navigate = useNavigate()
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-3 sm:gap-x-4 sm:gap-y-4">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:gap-x-4 sm:gap-y-4">
       {statusFlowOrder.map((status, index) => {
         const color = isDark ? statusColors[status]?.dark : statusColors[status]?.light || '#6b7280'
         const count = statusCounts[status] ?? 0
 
         return (
-          <div key={status} className="flex items-center gap-x-2 sm:gap-x-3">
+          <div key={status} className="flex items-center gap-x-1.5 sm:gap-x-3">
             {index > 0 && (
-              <span className="text-gray-400 dark:text-gray-500 shrink-0 text-sm sm:text-base" aria-hidden="true">
+              <span className="text-gray-400 dark:text-gray-500 shrink-0 text-xs sm:text-base hidden sm:inline" aria-hidden="true">
                 →
               </span>
             )}
@@ -473,15 +473,17 @@ function SharedLegend({
                   }
                 })
               }}
-              className="flex items-center gap-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded px-2.5 py-1.5 sm:px-3 sm:py-2 transition-colors cursor-pointer shrink-0"
+              className="flex items-center gap-1.5 sm:gap-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded px-2 py-1.5 sm:px-3 sm:py-2 transition-colors cursor-pointer shrink-0 touch-manipulation active:scale-95 min-h-[36px] sm:min-h-0"
               title={`Clicca per vedere i KeyDev in stato "${formatStatus(status)}"${showAllMonths ? ' (tutti i mesi)' : ''}`}
             >
               <div 
                 className="w-3 h-3 sm:w-4 sm:h-4 rounded-full shrink-0"
                 style={{ backgroundColor: color }}
               />
-              <span className="text-sm sm:text-base font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                {formatStatus(status)}{status === 'MockupDone' && count > 0 ? ' ⚠' : ''} ({count})
+              <span className="text-xs sm:text-base font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                <span className="hidden sm:inline">{formatStatus(status)}</span>
+                <span className="sm:hidden">{formatStatus(status).split(' ')[0]}</span>
+                {status === 'MockupDone' && count > 0 ? ' ⚠' : ''} <span className="font-semibold">({count})</span>
               </span>
             </button>
           </div>
@@ -502,7 +504,8 @@ export default function DashboardPage() {
 
   const [selectedMonth, setSelectedMonth] = useState<string | 'all'>('all')
   const [selectedOwner, setSelectedOwner] = useState<Id<'users'> | '__no_owner__' | undefined>(undefined)
-  const [activeTab, setActiveTab] = useState<'okr' | 'weeklyLoom' | 'pastKeyDevs'>('okr')
+  const [activeTab, setActiveTab] = useState<'okr' | 'weeklyLoom' | 'pastKeyDevs' | 'pendingQuestions'>('okr')
+  const [pendingQuestionsTab, setPendingQuestionsTab] = useState<'keyDevs' | 'coreApps'>('keyDevs')
   const [openLoomDialog, setOpenLoomDialog] = useState<{ url: string; title?: string } | null>(null)
   const { width: windowWidth } = useWindowSize()
 
@@ -521,6 +524,24 @@ export default function DashboardPage() {
   const keydevs = useMemo(
     () => (showAllMonths ? (allKeydevs ?? []) : (keydevsByMonth ?? [])),
     [showAllMonths, allKeydevs, keydevsByMonth]
+  )
+  const keydevIdsForQuestions = useMemo(
+    () => (keydevs ?? []).map((kd) => kd._id),
+    [keydevs]
+  )
+  const questionsStatusByKeyDev = useQuery(
+    api.keydevQuestions.getStatusByKeyDevIds,
+    keydevIdsForQuestions.length > 0 ? { keyDevIds: keydevIdsForQuestions } : 'skip'
+  )
+
+  const coreApps = useQuery(api.coreApps.list)
+  const coreAppIdsForQuestions = useMemo(
+    () => (coreApps ?? []).map((app) => app._id),
+    [coreApps]
+  )
+  const questionsStatusByCoreApp = useQuery(
+    api.coreAppQuestions.getStatusByCoreAppIds,
+    coreAppIdsForQuestions.length > 0 ? { coreAppIds: coreAppIdsForQuestions } : 'skip'
   )
 
   // Mappa userId -> user per avatar (come KeyDevsList)
@@ -598,6 +619,44 @@ export default function DashboardPage() {
   // Counter per KeyDev passati
   const pastKeyDevsCount = pastKeyDevs?.length || 0
 
+  const pendingKeyDevQuestions = useMemo(() => {
+    if (!keydevs || !questionsStatusByKeyDev) return []
+    return keydevs
+      .map((kd) => {
+        const qStatus = questionsStatusByKeyDev[String(kd._id)]
+        if (!qStatus || qStatus.total === 0) return null
+        const missing = qStatus.missing ?? Math.max(0, qStatus.total - qStatus.validated)
+        if (missing <= 0) return null
+        return { keyDev: kd, qStatus, missing }
+      })
+      .filter((item): item is { keyDev: (typeof keydevs)[number]; qStatus: { total: number; validated: number; missing: number }; missing: number } => item !== null)
+      .sort((a, b) => b.missing - a.missing || a.keyDev.readableId.localeCompare(b.keyDev.readableId))
+  }, [keydevs, questionsStatusByKeyDev])
+
+  const pendingCoreAppQuestions = useMemo(() => {
+    if (!coreApps || !questionsStatusByCoreApp) return []
+    return coreApps
+      .map((app) => {
+        const qStatus = questionsStatusByCoreApp[String(app._id)]
+        if (!qStatus || qStatus.total === 0) return null
+        const missing = qStatus.missing ?? Math.max(0, qStatus.total - qStatus.validated)
+        if (missing <= 0) return null
+        return { coreApp: app, qStatus, missing }
+      })
+      .filter((item): item is { coreApp: (typeof coreApps)[number]; qStatus: { total: number; validated: number; missing: number }; missing: number } => item !== null)
+      .sort((a, b) => b.missing - a.missing || a.coreApp.name.localeCompare(b.coreApp.name))
+  }, [coreApps, questionsStatusByCoreApp])
+
+  const pendingKeyDevQuestionsCount = useMemo(
+    () => pendingKeyDevQuestions.reduce((total, item) => total + item.missing, 0),
+    [pendingKeyDevQuestions]
+  )
+  const pendingCoreAppQuestionsCount = useMemo(
+    () => pendingCoreAppQuestions.reduce((total, item) => total + item.missing, 0),
+    [pendingCoreAppQuestions]
+  )
+  const pendingQuestionsCount = pendingKeyDevQuestionsCount + pendingCoreAppQuestionsCount
+
   // Genera le opzioni per il dropdown dei mesi (6 mesi passati + mese corrente + mesi futuri dal DB)
   const monthOptions = useMemo(() => {
     const now = new Date()
@@ -666,17 +725,17 @@ export default function DashboardPage() {
   }, [updatesByWeek])
 
   return (
-    <div className="w-full max-w-full overflow-x-hidden min-w-0">
+    <div className="w-full max-w-full min-w-0">
       {/* Tabs per OKR, Weekly Loom e KeyDev Scaduti - più prominenti */}
-      <div className="mb-6 sm:mb-8">
-        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
-          <div className="flex flex-wrap gap-2 sm:gap-4">
+      <div className="mb-4 sm:mb-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex flex-nowrap gap-2 sm:gap-4 overflow-x-auto pb-1 -mx-2 px-2 sm:mx-0 sm:px-0 sm:overflow-x-visible scrollbar-hide">
             <button
               onClick={() => setActiveTab('okr')}
-              className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 ${
+              className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 min-h-[44px] touch-manipulation whitespace-nowrap ${
                 activeTab === 'okr'
                   ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
-                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95'
               }`}
             >
               <span className="hidden sm:inline">Sviluppi Chiave del Mese</span>
@@ -684,45 +743,59 @@ export default function DashboardPage() {
             </button>
             <button
               onClick={() => setActiveTab('weeklyLoom')}
-              className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 ${
+              className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 min-h-[44px] touch-manipulation flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                 activeTab === 'weeklyLoom'
                   ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
-                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95'
               }`}
             >
               <span className="hidden sm:inline">Aggiornamenti sul Core</span>
               <span className="sm:hidden">Core</span>
-              <span className="ml-1.5 sm:ml-2 px-1.5 sm:px-2 py-0.5 bg-blue-600 dark:bg-blue-500 text-white rounded-full text-[10px] sm:text-xs font-bold">
+              <span className="px-1 sm:px-2 py-0.5 bg-blue-600 dark:bg-blue-500 text-white rounded-full text-[10px] sm:text-xs font-bold shrink-0">
                 {weeklyLoomCount}
               </span>
             </button>
             <button
               onClick={() => setActiveTab('pastKeyDevs')}
-              className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 ${
+              className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 min-h-[44px] touch-manipulation flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                 activeTab === 'pastKeyDevs'
                   ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
-                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95'
               }`}
             >
               <span className="hidden sm:inline">Sviluppi Chiave Scaduti</span>
               <span className="sm:hidden">Scaduti</span>
-              <span className="ml-1.5 sm:ml-2 px-1.5 sm:px-2 py-0.5 bg-red-600 dark:bg-red-500 text-white rounded-full text-[10px] sm:text-xs font-bold">
+              <span className="px-1 sm:px-2 py-0.5 bg-red-600 dark:bg-red-500 text-white rounded-full text-[10px] sm:text-xs font-bold shrink-0">
                 {pastKeyDevsCount}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('pendingQuestions')}
+              className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 min-h-[44px] touch-manipulation flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
+                activeTab === 'pendingQuestions'
+                  ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95'
+              }`}
+            >
+              <span className="hidden sm:inline">Domande in attesa</span>
+              <span className="sm:hidden">Domande</span>
+              <span className="px-1 sm:px-2 py-0.5 bg-yellow-600 dark:bg-yellow-500 text-white rounded-full text-[10px] sm:text-xs font-bold shrink-0">
+                {pendingQuestionsCount}
               </span>
             </button>
           </div>
           
           {/* Selettore mese e Filtro owner - per le tab OKR e Aggiornamenti sul Core */}
           {(activeTab === 'okr' || activeTab === 'weeklyLoom') && (
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap hidden sm:inline">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 shrink-0 w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 w-full sm:w-auto">
+                <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                   Mese:
                 </label>
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value === 'all' ? 'all' : e.target.value)}
-                  className="flex-1 sm:flex-none px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 sm:min-w-[160px]"
+                  className="w-full sm:w-auto px-3 sm:px-4 py-2.5 sm:py-2 text-sm sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] touch-manipulation"
                 >
                   <option value="all">Tutti i mesi</option>
                   {monthOptions.map((monthRef) => (
@@ -732,13 +805,13 @@ export default function DashboardPage() {
                   ))}
                 </select>
               </div>
-              {/* Filtra per Owner - come ultimo elemento (come KeyDevsList) */}
+              {/* Filtra per Owner - migliorato per mobile con scroll orizzontale */}
               {Object.keys(ownerCounts).filter(id => ownerCounts[id] > 0).length > 0 && (
-              <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-600">
-                <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  Filtra per Owner:
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 sm:pl-2 sm:border-l sm:border-gray-200 dark:sm:border-gray-600 w-full sm:w-auto">
+                <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap shrink-0">
+                  Owner:
                 </label>
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 -mx-2 px-2 sm:mx-0 sm:px-0">
                   {Object.entries(ownerCounts)
                     .filter(([, count]) => count > 0)
                     .sort(([, a], [, b]) => b - a)
@@ -757,12 +830,12 @@ export default function DashboardPage() {
                             }
                             setSelectedOwner(ownerId as Id<'users'> | '__no_owner__')
                           }}
-                          className={`rounded-full p-0.5 transition-all ${
-                            isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
+                          className={`rounded-full p-1 transition-all shrink-0 touch-manipulation min-w-[40px] min-h-[40px] flex items-center justify-center ${
+                            isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800 bg-blue-50 dark:bg-blue-900/30' : 'hover:opacity-80 active:scale-95'
                           }`}
                           title={owner ? `${owner.name} (${count})` : `Senza owner (${count})`}
                         >
-                          <OwnerAvatar owner={owner} size="sm" />
+                          <OwnerAvatar owner={owner} size="md" />
                           <span className="sr-only">{owner ? owner.name : 'Senza owner'} - {count}</span>
                         </button>
                       )
@@ -770,30 +843,40 @@ export default function DashboardPage() {
                 </div>
               </div>
               )}
-              {!showAllMonths && (
-                <div className="flex items-center gap-2 ml-2 pl-3 border-l border-gray-200 dark:border-gray-600">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Filtro mese attivo: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatMonth(selectedMonth)}</span>
-                  </span>
-                  <button
-                    onClick={() => setSelectedMonth('all')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                    title="Rimuovi filtro mese"
-                  >
-                    <X size={16} />
-                    Rimuovi
-                  </button>
+              {/* Filtri attivi - migliorati per mobile */}
+              {(!showAllMonths || selectedOwner) && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {!showAllMonths && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Mese: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatMonth(selectedMonth)}</span>
+                      </span>
+                      <button
+                        onClick={() => setSelectedMonth('all')}
+                        className="flex items-center justify-center w-6 h-6 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors touch-manipulation"
+                        title="Rimuovi filtro mese"
+                        aria-label="Rimuovi filtro mese"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                  {selectedOwner && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Owner: <span className="font-semibold text-gray-900 dark:text-gray-100">{selectedOwnerName}</span>
+                      </span>
+                      <button
+                        onClick={() => setSelectedOwner(undefined)}
+                        className="flex items-center justify-center w-6 h-6 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors touch-manipulation"
+                        title="Rimuovi filtro owner"
+                        aria-label="Rimuovi filtro owner"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-              {selectedOwner && (
-                <button
-                  onClick={() => setSelectedOwner(undefined)}
-                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                  title="Rimuovi filtro owner"
-                >
-                  <X size={14} />
-                  Rimuovi filtro owner
-                </button>
               )}
             </div>
           )}
@@ -801,9 +884,9 @@ export default function DashboardPage() {
       </div>
 
       {mockupDoneCount > 0 && (
-        <div className="mb-6 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 dark:border-yellow-700 dark:bg-yellow-900/20">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-medium text-yellow-900 dark:text-yellow-200">
+        <div className="mb-4 sm:mb-6 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 dark:border-yellow-700 dark:bg-yellow-900/20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm sm:text-base font-medium text-yellow-900 dark:text-yellow-200 leading-relaxed">
               ⚠ Ci sono {mockupDoneCount} {mockupDoneCount > 1 ? 'Sviluppi Chiave' : 'Sviluppo Chiave'} in stato "Mockup Terminato": gli owner devono essere definiti, fare l'analisi e far partire le domande.
             </p>
             <button
@@ -818,7 +901,7 @@ export default function DashboardPage() {
                   }
                 })
               }
-              className="self-start rounded-md border border-yellow-500 px-3 py-1.5 text-xs font-semibold text-yellow-800 transition-colors hover:bg-yellow-100 dark:border-yellow-500 dark:text-yellow-300 dark:hover:bg-yellow-900/40 sm:self-auto"
+              className="self-stretch sm:self-auto rounded-md border border-yellow-500 px-4 py-2.5 sm:px-3 sm:py-1.5 text-sm sm:text-xs font-semibold text-yellow-800 transition-colors hover:bg-yellow-100 dark:border-yellow-500 dark:text-yellow-300 dark:hover:bg-yellow-900/40 active:scale-95 touch-manipulation min-h-[44px] sm:min-h-0"
             >
               Apri i Mockup Terminati
             </button>
@@ -838,71 +921,71 @@ export default function DashboardPage() {
                 ...(selectedOwner && { owner: selectedOwner })
               }
             })}
-            className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0 cursor-pointer hover:shadow-lg transition-shadow"
+            className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-4 sm:mb-6 min-w-0 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98] touch-manipulation"
           >
-            <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 break-words">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 sm:mb-4 break-words">
               {selectedOwnerName
                 ? `Sviluppi Chiave - ${showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)} - ${selectedOwnerName}`
                 : `Sviluppi Chiave - ${showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)}`}
             </h2>
             {selectedOwnerName && (
-              <div className="mb-4 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+              <div className="mb-3 sm:mb-4 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                 Filtro owner attivo: {selectedOwnerName}
               </div>
             )}
             {okrData ? (
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 min-w-0">
                 <div className="text-center sm:text-left shrink-0">
-                  <div className="text-3xl sm:text-4xl font-bold text-blue-600 dark:text-blue-400">
+                  <div className="text-4xl sm:text-5xl font-bold text-blue-600 dark:text-blue-400">
                     {okrData.score.toFixed(0)}%
                   </div>
-                  <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Completamento</div>
+                  <div className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">Completamento</div>
                 </div>
                 <div className="flex-1 min-w-0 w-full sm:w-auto">
-                  <div className="flex flex-wrap sm:flex-nowrap justify-between text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1 gap-2">
-                    <span className="whitespace-nowrap shrink-0">Controllati: {okrData.checkedCount}</span>
-                    <span className="whitespace-nowrap shrink-0">Totale: {okrData.totalCount}</span>
+                  <div className="flex flex-wrap sm:flex-nowrap justify-between text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-2 gap-2">
+                    <span className="whitespace-nowrap shrink-0 font-medium">Controllati: {okrData.checkedCount}</span>
+                    <span className="whitespace-nowrap shrink-0 font-medium">Totale: {okrData.totalCount}</span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 sm:h-4 min-w-0">
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 sm:h-5 min-w-0">
                     <div
-                      className="bg-blue-600 dark:bg-blue-500 h-3 sm:h-4 rounded-full transition-all"
+                      className="bg-blue-600 dark:bg-blue-500 h-4 sm:h-5 rounded-full transition-all"
                       style={{ width: `${Math.min(okrData.score, 100)}%` }}
                     />
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="text-gray-500 dark:text-gray-400">Caricamento dati OKR...</div>
+              <div className="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Caricamento dati OKR...</div>
             )}
           </div>
 
           {/* Grafico KeyDev per Stato con divisione per team */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 min-w-0">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-4 sm:mb-6 min-w-0">
             <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 sm:mb-6 break-words">
               Sviluppi Chiave per Stato - {showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)}
             </h2>
               {keyDevsByTeam ? (
                 <>
                   {/* Griglia con i grafici affiancati - mostra sempre tutti i team */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
                     {keyDevsByTeam.byTeam.map((team) => {
                       const teamTotal = team.byStatus.reduce((sum, item) => sum + item.count, 0)
                       
                       return (
                         <div key={team.teamId} className="flex flex-col items-center">
-                          <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm sm:text-base mb-2 text-center break-words px-2">
+                          <h3 className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-base mb-2 sm:mb-3 text-center break-words px-1">
                             {team.teamName}
                           </h3>
-                        <div className="w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] flex items-center justify-center">
+                        <div className="w-[120px] h-[120px] sm:w-[160px] sm:h-[160px] flex items-center justify-center">
                           <PieChart
                             data={team.byStatus}
-                            size={windowWidth < 640 ? 140 : 160}
+                            size={windowWidth < 640 ? 120 : 160}
                             teamId={team.teamId}
                             monthRef={showAllMonths ? undefined : selectedMonth}
                             owner={selectedOwner}
                           />
                         </div>
-                          <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">
+                          <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2 font-medium">
                             Totale: {teamTotal}
                           </span>
                         </div>
@@ -912,7 +995,7 @@ export default function DashboardPage() {
                   
                   {/* Legenda unica condivisa */}
                   <div className="border-t border-gray-200 dark:border-gray-700 pt-4 sm:pt-6">
-                    <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 sm:mb-5">
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-700 dark:text-gray-300 mb-3 sm:mb-5">
                       Legenda Stati (clicca per filtrare)
                     </h3>
                     <SharedLegend
@@ -924,7 +1007,7 @@ export default function DashboardPage() {
                   </div>
                 </>
               ) : (
-                <div className="text-gray-500 dark:text-gray-400">Caricamento dati...</div>
+                <div className="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Caricamento dati...</div>
               )}
           </div>
 
@@ -948,7 +1031,7 @@ export default function DashboardPage() {
                   },
                 })
               }
-              className="self-start rounded-lg border border-blue-600 px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/30"
+              className="self-stretch sm:self-auto rounded-lg border border-blue-600 px-4 py-2.5 sm:px-3 sm:py-1.5 text-sm sm:text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/30 active:scale-95 touch-manipulation min-h-[44px] sm:min-h-0"
             >
               Apri lista Core Apps filtrata
             </button>
@@ -996,7 +1079,7 @@ export default function DashboardPage() {
                             {update.loomUrl && (
                               <button
                                 onClick={() => setOpenLoomDialog({ url: update.loomUrl!, title: update.title })}
-                                className="shrink-0 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 text-xs sm:text-sm font-medium transition-colors"
+                                className="shrink-0 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 text-sm sm:text-sm font-medium transition-colors active:scale-95 touch-manipulation min-h-[44px] sm:min-h-0"
                               >
                                 ▶ Guarda Video Loom
                               </button>
@@ -1074,13 +1157,13 @@ export default function DashboardPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-start sm:self-auto">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 shrink-0 w-full sm:w-auto">
                       <Link
                         to="/keydevs/$id/notes"
                         params={{ id: kd.readableId }}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg text-sm sm:text-sm font-medium transition-colors whitespace-nowrap active:scale-95 touch-manipulation min-h-[44px] sm:min-h-0"
                         title="Vedi note"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1096,7 +1179,7 @@ export default function DashboardPage() {
                       <Link
                         to="/keydevs/$id"
                         params={{ id: kd._id }}
-                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs sm:text-sm whitespace-nowrap"
+                        className="flex items-center justify-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm sm:text-sm whitespace-nowrap px-3 py-2 sm:py-1.5 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors active:scale-95 touch-manipulation min-h-[44px] sm:min-h-0"
                       >
                         Dettagli →
                       </Link>
@@ -1108,6 +1191,126 @@ export default function DashboardPage() {
           ) : (
             <div className="text-gray-500 dark:text-gray-400 text-center py-4 text-sm">
               Nessuno Sviluppo Chiave scaduto da controllare
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Contenuto Tab Domande in attesa */}
+      {activeTab === 'pendingQuestions' && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 min-w-0">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 break-words">
+              Domande in attesa
+            </h2>
+            <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-1 bg-gray-50 dark:bg-gray-900/30 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setPendingQuestionsTab('keyDevs')}
+                className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 text-sm sm:text-sm font-medium rounded-md transition-colors touch-manipulation active:scale-95 min-h-[44px] sm:min-h-0 ${
+                  pendingQuestionsTab === 'keyDevs'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-gray-700/70'
+                }`}
+              >
+                KeyDevs ({pendingKeyDevQuestionsCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingQuestionsTab('coreApps')}
+                className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 text-sm sm:text-sm font-medium rounded-md transition-colors touch-manipulation active:scale-95 min-h-[44px] sm:min-h-0 ${
+                  pendingQuestionsTab === 'coreApps'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-gray-700/70'
+                }`}
+              >
+                CoreApps ({pendingCoreAppQuestionsCount})
+              </button>
+            </div>
+          </div>
+
+          {pendingQuestionsTab === 'keyDevs' && (
+            <div>
+              {pendingKeyDevQuestions.length > 0 ? (
+                <div className="space-y-3">
+                  {pendingKeyDevQuestions.map(({ keyDev, qStatus, missing }) => (
+                    <div
+                      key={keyDev._id}
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-700/40 border border-gray-200 dark:border-gray-700 rounded-lg"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100 break-words">
+                          {keyDev.readableId}: {keyDev.title}
+                        </p>
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                          Mese: {keyDev.monthRef ? formatMonth(keyDev.monthRef) : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                        <Link
+                          to="/keydevs/$id/questions"
+                          params={{ id: keyDev.readableId }}
+                          className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-md bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors touch-manipulation active:scale-95 min-h-[44px] sm:min-h-0"
+                          title={`Questions mancanti ${missing}/${qStatus.total}`}
+                        >
+                          <span className="text-sm font-semibold">{missing}/{qStatus.total}</span>
+                        </Link>
+                        <Link
+                          to="/keydevs/$id"
+                          params={{ id: keyDev.readableId }}
+                          className="flex items-center justify-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 px-3 py-2 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors touch-manipulation active:scale-95 min-h-[44px] sm:min-h-0"
+                        >
+                          Dettagli →
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-gray-500 dark:text-gray-400 text-center py-4 text-sm">
+                  Nessuna domanda in attesa sui KeyDevs
+                </div>
+              )}
+            </div>
+          )}
+
+          {pendingQuestionsTab === 'coreApps' && (
+            <div>
+              {pendingCoreAppQuestions.length > 0 ? (
+                <div className="space-y-3">
+                  {pendingCoreAppQuestions.map(({ coreApp, qStatus }) => (
+                    <div
+                      key={coreApp._id}
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-700/40 border border-gray-200 dark:border-gray-700 rounded-lg"
+                    >
+                      <p className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100 break-words min-w-0">
+                        {coreApp.name}
+                      </p>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                        <Link
+                          to="/core-apps/$slug/questions"
+                          params={{ slug: coreApp.slug }}
+                          className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-md bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors touch-manipulation active:scale-95 min-h-[44px] sm:min-h-0"
+                          title={`Questions validate ${qStatus.validated}/${qStatus.total}`}
+                        >
+                          <span className="text-sm font-semibold">{qStatus.validated}/{qStatus.total}</span>
+                        </Link>
+                        <Link
+                          to="/core-apps/$slug"
+                          params={{ slug: coreApp.slug }}
+                          className="flex items-center justify-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 px-3 py-2 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors touch-manipulation active:scale-95 min-h-[44px] sm:min-h-0"
+                        >
+                          Dettagli →
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-gray-500 dark:text-gray-400 text-center py-4 text-sm">
+                  Nessuna domanda in attesa sulle CoreApps
+                </div>
+              )}
             </div>
           )}
         </div>

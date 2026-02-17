@@ -37,6 +37,22 @@ export default function RootLayout() {
     }
   }, [isAuthenticated, isLoading, isLoginPage, getOrCreateUser, navigate])
 
+  // Blocca lo scroll del body quando la sidebar è aperta su mobile
+  useEffect(() => {
+    if (sidebarOpen) {
+      // Su mobile, blocca lo scroll del body quando la sidebar è aperta
+      const isMobile = window.innerWidth < 1024 // lg breakpoint
+      if (isMobile) {
+        document.body.style.overflow = 'hidden'
+      }
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [sidebarOpen])
+
   // Se siamo sulla pagina di login, mostra solo il contenuto senza sidebar
   if (isLoginPage) {
     return (
@@ -73,7 +89,7 @@ export default function RootLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 z-50 ${
+        className={`fixed left-0 top-0 h-screen bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 z-50 ${
           sidebarCollapsed ? 'w-16' : 'w-64'
         } ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
@@ -81,7 +97,7 @@ export default function RootLayout() {
       >
         <div className="flex flex-col h-full p-4">
           {/* Header con toggle */}
-          <div className="mb-8 flex items-center justify-between">
+          <div className="mb-4 sm:mb-8 flex items-center justify-between shrink-0">
             {!sidebarCollapsed && (
               <div>
                 <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Innovation Sax</h1>
@@ -110,7 +126,7 @@ export default function RootLayout() {
           </div>
 
           {/* Navigation */}
-          <nav className="space-y-1 flex-1 overflow-y-auto">
+          <nav className="space-y-1 flex-1 overflow-y-auto min-h-0">
             <Link
               to="/"
               onClick={() => setSidebarOpen(false)}
@@ -196,7 +212,7 @@ export default function RootLayout() {
           </nav>
 
           {/* Footer */}
-          <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
             <div className="mb-4 flex justify-center">
               <DarkModeToggle />
             </div>

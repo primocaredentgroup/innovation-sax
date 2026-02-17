@@ -34,6 +34,7 @@ export function useQuestionsDomainAdapter({ domain, entityId }: UseQuestionsDoma
     _id: String(question._id),
     text: question.text,
     source: question.source,
+    requesterId: 'requesterId' in question ? question.requesterId : undefined,
     validatedAnswerId: question.validatedAnswerId ? String(question.validatedAnswerId) : undefined,
     validatedAnswer: question.validatedAnswer
       ? {

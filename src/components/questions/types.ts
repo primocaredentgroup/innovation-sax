@@ -19,6 +19,7 @@ export type QuestionLite = {
   _id: string
   text: string
   source: 'Template' | 'Manual'
+  requesterId?: Id<'users'>
   validatedAnswerId?: string
   validatedAnswer?: {
     _id: string

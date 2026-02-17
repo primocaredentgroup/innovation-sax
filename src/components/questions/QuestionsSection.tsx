@@ -136,7 +136,16 @@ export default function QuestionsSection({
   const isOwner = !!participants.ownerId && currentUser?._id === participants.ownerId
   const isCurrentUserAdmin = (currentUser?.roles || []).includes('Admin')
   const ownerName = users?.find((u) => u._id === participants.ownerId)?.name || 'Owner'
-  const requesterName = users?.find((u) => u._id === participants.requesterId)?.name || ownerName
+  const activeRequesterId = activeQuestion?.requesterId ?? participants.requesterId
+  const hasRequesterRecipient = domain === 'keydev' || !!activeRequesterId
+  const requesterName = users?.find((u) => u._id === activeRequesterId)?.name || 'Requester'
+  const selectedRecipientRole = hasRequesterRecipient ? recipientRole : 'owner'
+  const selectedEditingRecipientRole = hasRequesterRecipient ? editingAnswerRecipientRole : 'owner'
+  const getRecipientLabel = (role: 'owner' | 'requester') => {
+    if (role === 'owner') return ownerName
+    if (hasRequesterRecipient) return requesterName
+    return 'Requester'
+  }
   const normalizedSearchTerm = questionSearchTerm?.trim().toLowerCase() || ''
 
   const questionsFilteredByText = useMemo(() => {
@@ -513,7 +522,7 @@ export default function QuestionsSection({
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{formatUserName(senderName)}</span>
                           <span className="text-xs text-gray-500 dark:text-gray-400">
-                            → {answer.recipientRole === 'owner' ? ownerName : requesterName}
+                            → {getRecipientLabel(answer.recipientRole)}
                           </span>
                           <span className="text-xs text-gray-400 dark:text-gray-500">{new Date(answer.ts).toLocaleString('it-IT')}</span>
                         </div>
@@ -550,12 +559,14 @@ export default function QuestionsSection({
                       {isEditingThisAnswer ? (
                         <div className="space-y-2">
                           <select
-                            value={editingAnswerRecipientRole}
+                            value={selectedEditingRecipientRole}
                             onChange={(e) => setEditingAnswerRecipientRole(e.target.value as 'owner' | 'requester')}
                             className="w-full sm:w-72 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100 text-sm"
                           >
                             <option value="owner">Owner ({ownerName})</option>
-                            <option value="requester">Requester ({requesterName})</option>
+                            {hasRequesterRecipient && (
+                              <option value="requester">Requester ({requesterName})</option>
+                            )}
                           </select>
                           <textarea
                             value={editingAnswerBody}
@@ -573,7 +584,7 @@ export default function QuestionsSection({
                                 await updateAnswer({
                                   answerId: editingAnswerId,
                                   body: editingAnswerBody.trim(),
-                                  recipientRole: editingAnswerRecipientRole,
+                                  recipientRole: selectedEditingRecipientRole,
                                   mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
                                 })
                                 setEditingAnswerId(null)
@@ -636,12 +647,14 @@ export default function QuestionsSection({
               <div className="mb-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Destinatario</label>
                 <select
-                  value={recipientRole}
+                  value={selectedRecipientRole}
                   onChange={(e) => setRecipientRole(e.target.value as 'owner' | 'requester')}
                   className="w-full sm:w-72 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
                 >
                   <option value="owner">Owner ({ownerName})</option>
-                  <option value="requester">Requester ({requesterName})</option>
+                  {hasRequesterRecipient && (
+                    <option value="requester">Requester ({requesterName})</option>
+                  )}
                 </select>
               </div>
               <div className="relative mention-dropdown-container">
@@ -672,7 +685,7 @@ export default function QuestionsSection({
                     await createAnswer({
                       questionId: activeQuestionId,
                       body: answerBody.trim(),
-                      recipientRole,
+                      recipientRole: selectedRecipientRole,
                       mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
                     })
                     setAnswerBody('')

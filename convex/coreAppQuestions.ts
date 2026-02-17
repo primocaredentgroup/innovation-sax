@@ -16,6 +16,7 @@ const coreAppQuestionValidator = v.object({
   coreAppId: v.id('coreApps'),
   text: v.string(),
   createdById: v.id('users'),
+  requesterId: v.optional(v.id('users')),
   createdAt: v.number(),
   order: v.number(),
   source: keyDevQuestionSourceValidator,
@@ -130,6 +131,7 @@ export const listByCoreApp = query({
       coreAppId: Id<'coreApps'>
       text: string
       createdById: Id<'users'>
+      requesterId?: Id<'users'>
       createdAt: number
       order: number
       source: 'Template' | 'Manual'
@@ -153,6 +155,7 @@ export const listByCoreApp = query({
       }
       result.push({
         ...question,
+        requesterId: question.source === 'Manual' ? question.createdById : undefined,
         validatedAnswer: validatedAnswer || undefined
       })
     }

@@ -84,7 +84,7 @@ export default function CoreAppQuestionsPage() {
         routeTo="/core-apps/$slug/questions"
         routeParamKey="slug"
         routeParamValue={slug}
-        participants={{ ownerId: coreApp.ownerId, requesterId: coreApp.ownerId }}
+        participants={{ ownerId: coreApp.ownerId }}
         users={users}
         currentUser={currentUser}
         questionSearchTerm={questionSearchTerm}
