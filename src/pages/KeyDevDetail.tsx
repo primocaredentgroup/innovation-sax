@@ -741,25 +741,19 @@ export default function KeyDevDetailPage() {
                     </div>
                     
                     {/* Pulsante separato per dichiarare Mockup Terminato */}
-                    {keydev.mockupRepoUrl && (
-                      <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                        <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-3">
-                          Il repository mockup è stato salvato. Quando sei pronto, puoi dichiarare il mockup come terminato.
-                        </p>
-                        <button
-                          onClick={async () => {
-                            if (!keydev.mockupRepoUrl) {
-                              alert('Devi prima salvare l\'URL del repository mockup')
-                              return
-                            }
-                            await updateStatus({ id: keydev._id, status: 'MockupDone' })
-                          }}
-                          className="px-4 py-2 bg-yellow-600 dark:bg-yellow-700 text-white rounded-md hover:bg-yellow-700 dark:hover:bg-yellow-600 whitespace-nowrap"
-                        >
-                          Dichiara Mockup Terminato
-                        </button>
-                      </div>
-                    )}
+                    <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-3">
+                        Quando sei pronto, puoi dichiarare il mockup come terminato anche senza aver ancora salvato il repository.
+                      </p>
+                      <button
+                        onClick={async () => {
+                          await updateStatus({ id: keydev._id, status: 'MockupDone' })
+                        }}
+                        className="px-4 py-2 bg-yellow-600 dark:bg-yellow-700 text-white rounded-md hover:bg-yellow-700 dark:hover:bg-yellow-600 whitespace-nowrap"
+                      >
+                        Dichiara Mockup Terminato
+                      </button>
+                    </div>
                   </div>
                 )}
 
