@@ -11,6 +11,7 @@
 import type * as agentApps from "../agentApps.js";
 import type * as agents from "../agents.js";
 import type * as budget from "../budget.js";
+import type * as coreAppMilestones from "../coreAppMilestones.js";
 import type * as coreAppQuestionTemplates from "../coreAppQuestionTemplates.js";
 import type * as coreAppQuestions from "../coreAppQuestions.js";
 import type * as coreAppUpdates from "../coreAppUpdates.js";
@@ -22,6 +23,7 @@ import type * as departments from "../departments.js";
 import type * as emails from "../emails.js";
 import type * as emailsQueries from "../emailsQueries.js";
 import type * as http from "../http.js";
+import type * as inbox from "../inbox.js";
 import type * as keyDevQuestionTemplates from "../keyDevQuestionTemplates.js";
 import type * as keydevQuestions from "../keydevQuestions.js";
 import type * as keydevs from "../keydevs.js";
@@ -44,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   agentApps: typeof agentApps;
   agents: typeof agents;
   budget: typeof budget;
+  coreAppMilestones: typeof coreAppMilestones;
   coreAppQuestionTemplates: typeof coreAppQuestionTemplates;
   coreAppQuestions: typeof coreAppQuestions;
   coreAppUpdates: typeof coreAppUpdates;
@@ -55,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   emails: typeof emails;
   emailsQueries: typeof emailsQueries;
   http: typeof http;
+  inbox: typeof inbox;
   keyDevQuestionTemplates: typeof keyDevQuestionTemplates;
   keydevQuestions: typeof keydevQuestions;
   keydevs: typeof keydevs;

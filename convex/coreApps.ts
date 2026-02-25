@@ -335,7 +335,7 @@ export const remove = mutation({
   args: { id: v.id('coreApps') },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // Elimina anche tutti gli aggiornamenti associati
+    // Elimina anche tutti gli aggiornamenti e le milestone associate
     const updates = await ctx.db
       .query('coreAppUpdates')
       .withIndex('by_coreApp', (q) => q.eq('coreAppId', args.id))
@@ -343,6 +343,15 @@ export const remove = mutation({
 
     for (const update of updates) {
       await ctx.db.delete(update._id)
+    }
+
+    const milestones = await ctx.db
+      .query('coreAppMilestones')
+      .withIndex('by_coreApp', (q) => q.eq('coreAppId', args.id))
+      .collect()
+
+    for (const milestone of milestones) {
+      await ctx.db.delete(milestone._id)
     }
 
     await ctx.db.delete(args.id)

@@ -23,6 +23,7 @@ import UsersManagementPage from './pages/UsersManagement'
 import AdminPage from './pages/Admin'
 import AgentsPage from './pages/Agents'
 import AgentSkillDetailPage from './pages/AgentSkillDetail'
+import InboxPage from './pages/Inbox.tsx'
 import LoginPage from './pages/Login'
 
 // Define routes
@@ -147,6 +148,19 @@ const coreAppNewRoute = createRoute({
   component: CoreAppNewPage
 })
 
+const inboxRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/inbox',
+  component: InboxPage,
+  validateSearch: z.object({
+    query: z.string().optional(),
+    direction: z.enum(['sent', 'received']).optional(),
+    itemType: z.enum(['note', 'keydev_answer', 'coreapp_answer']).optional(),
+    since: z.string().optional(),
+    cursor: z.string().optional() // beforeTs come stringa per URL
+  })
+})
+
 const profileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/profile',
@@ -186,6 +200,7 @@ const loginRoute = createRoute({
 // Create route tree
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  inboxRoute,
   keydevsRoute,
   keydevNewRoute,
   keydevDetailRoute,

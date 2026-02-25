@@ -238,7 +238,8 @@ export default defineSchema({
     ts: v.number()
   })
     .index('by_question_and_ts', ['questionId', 'ts'])
-    .index('by_sender', ['senderId']),
+    .index('by_sender', ['senderId'])
+    .index('by_recipientUser', ['recipientUserId']),
 
   // Labels globali per le domande (KeyDev/CoreApp)
   questionLabels: defineTable({
@@ -307,6 +308,18 @@ export default defineSchema({
     .index('by_category', ['categoryId'])
     .index('by_category_and_priority', ['categoryId', 'priority']),
 
+  // Core App Milestones (pesi, completamento on/off, date obiettivo)
+  coreAppMilestones: defineTable({
+    coreAppId: v.id('coreApps'),
+    description: v.string(),
+    valuePercent: v.number(), // Peso/valore della milestone (0-100, somma ideale = 100)
+    completed: v.boolean(), // Completata sì/no (on/off, non parziale)
+    targetDate: v.optional(v.number()), // Timestamp, opzionale
+    order: v.number() // Ordinamento
+  })
+    .index('by_coreApp', ['coreAppId'])
+    .index('by_coreApp_and_order', ['coreAppId', 'order']),
+
   // Core App Weekly Updates (Loom videos)
   coreAppUpdates: defineTable({
     coreAppId: v.id('coreApps'),
@@ -358,7 +371,8 @@ export default defineSchema({
     ts: v.number()
   })
     .index('by_question_and_ts', ['questionId', 'ts'])
-    .index('by_sender', ['senderId']),
+    .index('by_sender', ['senderId'])
+    .index('by_recipientUser', ['recipientUserId']),
 
   // Agent Apps
   agentApps: defineTable({
