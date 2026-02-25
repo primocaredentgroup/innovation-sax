@@ -415,6 +415,168 @@ export const sendCoreAppQuestionAnswerNotification = internalAction({
 });
 
 /**
+ * Genera il template HTML per notifica nuova domanda KeyDev (owner).
+ */
+function generateKeyDevNewQuestionTemplate(
+  ownerName: string,
+  authorName: string,
+  keyDevTitle: string,
+  questionText: string,
+  questionsUrl: string
+): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuova domanda alle Questions</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h1 style="color: #1f2937; margin-top: 0; font-size: 24px;">Ciao ${ownerName},</h1>
+    <p style="color: #4b5563; font-size: 16px; margin-bottom: 20px;">
+      <strong>${authorName}</strong> ha aggiunto una nuova domanda nella sezione Questions di <strong>${keyDevTitle}</strong>.
+    </p>
+    <div style="background-color: #f3f4f6; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+      <p style="margin: 0; color: #374151;">"${questionText}"</p>
+    </div>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${questionsUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+        Apri Questions
+      </a>
+    </div>
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+    <p style="color: #6b7280; font-size: 14px; margin: 0;">
+      Ricevi questa email perché sei l'owner del KeyDev.
+    </p>
+  </div>
+  <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
+    <p>Questa è una notifica automatica. Non rispondere a questa email.</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * Invia una notifica email all'owner quando un altro utente crea una domanda KeyDev.
+ */
+export const sendKeyDevNewQuestionNotification = internalAction({
+  args: {
+    questionId: v.id('keyDevQuestions')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const data = await ctx.runQuery(internal.emailsQueries.getKeyDevNewQuestionContext, {
+      questionId: args.questionId
+    })
+    if (!data || !data.owner.email) {
+      return null
+    }
+
+    const baseUrl = process.env.APP_BASE_URL || 'http://localhost:5173'
+    const questionsUrl = `${baseUrl}/keydevs/${data.keyDev.readableId}/questions`
+    const html = generateKeyDevNewQuestionTemplate(
+      data.owner.name,
+      data.author.name,
+      data.keyDev.title,
+      data.question.text,
+      questionsUrl
+    )
+
+    await resend.sendEmail(ctx, {
+      from: getFromEmail(),
+      to: data.owner.email,
+      subject: `${data.author.name} ha aggiunto una domanda su ${data.keyDev.title}`,
+      html
+    })
+    return null
+  }
+});
+
+/**
+ * Genera il template HTML per notifica nuova domanda CoreApp (owner).
+ */
+function generateCoreAppNewQuestionTemplate(
+  ownerName: string,
+  authorName: string,
+  coreAppName: string,
+  questionText: string,
+  questionsUrl: string
+): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuova domanda alle Questions</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h1 style="color: #1f2937; margin-top: 0; font-size: 24px;">Ciao ${ownerName},</h1>
+    <p style="color: #4b5563; font-size: 16px; margin-bottom: 20px;">
+      <strong>${authorName}</strong> ha aggiunto una nuova domanda nella sezione Questions di <strong>${coreAppName}</strong>.
+    </p>
+    <div style="background-color: #f3f4f6; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+      <p style="margin: 0; color: #374151;">"${questionText}"</p>
+    </div>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${questionsUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+        Apri Questions
+      </a>
+    </div>
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+    <p style="color: #6b7280; font-size: 14px; margin: 0;">
+      Ricevi questa email perché sei l'owner della CoreApp.
+    </p>
+  </div>
+  <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
+    <p>Questa è una notifica automatica. Non rispondere a questa email.</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * Invia una notifica email all'owner quando un altro utente crea una domanda CoreApp.
+ */
+export const sendCoreAppNewQuestionNotification = internalAction({
+  args: {
+    questionId: v.id('coreAppQuestions')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const data = await ctx.runQuery(internal.emailsQueries.getCoreAppNewQuestionContext, {
+      questionId: args.questionId
+    })
+    if (!data || !data.owner.email) {
+      return null
+    }
+
+    const baseUrl = process.env.APP_BASE_URL || 'http://localhost:5173'
+    const questionsUrl = `${baseUrl}/core-apps/${data.coreApp.slug}/questions`
+    const html = generateCoreAppNewQuestionTemplate(
+      data.owner.name,
+      data.author.name,
+      data.coreApp.name,
+      data.question.text,
+      questionsUrl
+    )
+
+    await resend.sendEmail(ctx, {
+      from: getFromEmail(),
+      to: data.owner.email,
+      subject: `${data.author.name} ha aggiunto una domanda su ${data.coreApp.name}`,
+      html
+    })
+    return null
+  }
+});
+
+/**
  * Genera il template HTML per l'email reminder settimanale agli owner
  */
 function generateWeeklyReminderTemplate(

@@ -2,7 +2,7 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useState, useMemo } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
-import { Pencil } from 'lucide-react'
+import { Pencil, Copy } from 'lucide-react'
 
 export default function PlanningPage() {
   const currentUser = useQuery(api.users.getCurrentUser)
@@ -16,16 +16,21 @@ export default function PlanningPage() {
   const [selectedMonth, setSelectedMonth] = useState(nextMonth)
   const [editingCell, setEditingCell] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
-  const [editingBudget, setEditingBudget] = useState(false)
+  const [editingBudgetTeamId, setEditingBudgetTeamId] = useState<Id<'teams'> | null>(null)
   const [editBudgetValue, setEditBudgetValue] = useState('')
+  const [showCopyDropdown, setShowCopyDropdown] = useState(false)
+  const [copySourceMonth, setCopySourceMonth] = useState('')
+  const [isCopying, setIsCopying] = useState(false)
 
   const departments = useQuery(api.departments.list)
   const teams = useQuery(api.teams.list)
   const budgetAllocations = useQuery(api.budget.getByMonth, { monthRef: selectedMonth })
-  const monthData = useQuery(api.months.getByRef, { monthRef: selectedMonth })
+  const teamMonthLimits = useQuery(api.months.listByMonth, { monthRef: selectedMonth })
 
   const updateBudget = useMutation(api.budget.upsert)
   const upsertMonth = useMutation(api.months.upsert)
+  const copyBudgetFromMonth = useMutation(api.budget.copyFromMonth)
+  const copyMonthLimitsFromMonth = useMutation(api.months.copyFromMonth)
 
   const monthOptions = useMemo(() => {
     const options = []
@@ -63,7 +68,47 @@ export default function PlanningPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [budgetAllocations, departments, teams])
   
-  const totalBudget = monthData?.totalKeyDev ?? 0
+  const teamBudgetMap = useMemo(() => {
+    const map = new Map<Id<'teams'>, number>()
+    if (!teamMonthLimits) return map
+    for (const row of teamMonthLimits) {
+      map.set(row.teamId, row.totalKeyDev)
+    }
+    return map
+  }, [teamMonthLimits])
+
+  const totalBudget = useMemo(() => {
+    if (!teams) return 0
+    return teams.reduce((sum, team) => sum + (teamBudgetMap.get(team._id) ?? 0), 0)
+  }, [teamBudgetMap, teams])
+
+  const missingTeamLimits = useMemo(() => {
+    if (!teams) return []
+    return teams.filter((team) => !teamBudgetMap.has(team._id))
+  }, [teamBudgetMap, teams])
+
+  const copySourceMonthOptions = useMemo(() => {
+    return monthOptions.filter((opt) => opt.value !== selectedMonth)
+  }, [monthOptions, selectedMonth])
+
+  const handleCopyFromMonth = async () => {
+    if (!copySourceMonth || copySourceMonth === selectedMonth) return
+    setIsCopying(true)
+    try {
+      await copyBudgetFromMonth({
+        sourceMonthRef: copySourceMonth,
+        targetMonthRef: selectedMonth
+      })
+      await copyMonthLimitsFromMonth({
+        sourceMonthRef: copySourceMonth,
+        targetMonthRef: selectedMonth
+      })
+      setShowCopyDropdown(false)
+      setCopySourceMonth('')
+    } finally {
+      setIsCopying(false)
+    }
+  }
 
   // Solo Admin può accedere
   if (!currentUser?.roles?.includes('Admin')) {
@@ -91,22 +136,22 @@ export default function PlanningPage() {
     setEditingCell(null)
   }
 
-  const handleStartEditBudget = () => {
-    setEditingBudget(true)
-    setEditBudgetValue(String(totalBudget))
+  const handleStartEditBudget = (teamId: Id<'teams'>) => {
+    setEditingBudgetTeamId(teamId)
+    setEditBudgetValue(String(teamBudgetMap.get(teamId) ?? 0))
   }
 
-  const handleSaveBudget = async () => {
+  const handleSaveBudget = async (teamId: Id<'teams'>) => {
     const value = parseInt(editBudgetValue) || 0
     if (value >= 0) {
-      await upsertMonth({ monthRef: selectedMonth, totalKeyDev: value })
-      setEditingBudget(false)
+      await upsertMonth({ monthRef: selectedMonth, teamId, totalKeyDev: value })
+      setEditingBudgetTeamId(null)
       setEditBudgetValue('')
     }
   }
 
   const handleCancelEditBudget = () => {
-    setEditingBudget(false)
+    setEditingBudgetTeamId(null)
     setEditBudgetValue('')
   }
 
@@ -128,54 +173,75 @@ export default function PlanningPage() {
               </option>
             ))}
           </select>
+          {isAdmin && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowCopyDropdown((v) => !v)}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md border border-gray-300 dark:border-gray-600"
+                title="Copia struttura da un altro mese"
+              >
+                <Copy size={18} />
+                Copia da mese
+              </button>
+              {showCopyDropdown && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    aria-hidden="true"
+                    onClick={() => setShowCopyDropdown(false)}
+                  />
+                  <div className="absolute left-0 top-full mt-1 z-20 w-64 p-3 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      Copia allocazioni e limiti da:
+                    </p>
+                    <select
+                      value={copySourceMonth}
+                      onChange={(e) => setCopySourceMonth(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100 mb-2"
+                    >
+                      <option value="">Seleziona mese</option>
+                      {copySourceMonthOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    {copySourceMonthOptions.length === 0 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        Nessun altro mese disponibile
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyFromMonth}
+                        disabled={!copySourceMonth || isCopying}
+                        className="flex-1 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded"
+                      >
+                        {isCopying ? 'Copia in corso...' : 'Copia'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowCopyDropdown(false)}
+                        className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-500"
+                      >
+                        Annulla
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </h1>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">Numero sviluppatori:</span>
-            {editingBudget && isAdmin ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min="0"
-                  value={editBudgetValue}
-                  onChange={(e) => setEditBudgetValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveBudget()
-                    if (e.key === 'Escape') handleCancelEditBudget()
-                  }}
-                  className="w-20 px-2 py-1 text-sm border border-blue-500 dark:border-blue-400 rounded focus:outline-none dark:bg-gray-700 dark:text-gray-100"
-                  autoFocus
-                />
-                <button
-                  onClick={handleSaveBudget}
-                  className="px-2 py-1 text-xs bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600"
-                >
-                  Salva
-                </button>
-                <button
-                  onClick={handleCancelEditBudget}
-                  className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-500"
-                >
-                  Annulla
-                </button>
-              </div>
-            ) : (
-              <>
-                <span className="ml-2 font-semibold">{totalBudget}</span>
-                {isAdmin && (
-                  <button
-                    onClick={handleStartEditBudget}
-                    className="ml-1 p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                    title="Modifica numero sviluppatori"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                )}
-              </>
-            )}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Numero sviluppatori totale:</span>
+            <span className="ml-2 font-semibold">{totalBudget}</span>
           </div>
           <div>
             <span className="text-sm text-gray-500 dark:text-gray-400">Slot allocati:</span>
@@ -211,10 +277,71 @@ export default function PlanningPage() {
               : `${totalBudget - totalAllocated} slot rimarranno inutilizzati dai dipartimenti`}
           </div>
         )}
+        {missingTeamLimits.length > 0 && (
+          <div className="mt-2 text-sm text-red-600 dark:text-red-400">
+            Limite non configurato per: {missingTeamLimits.map((team) => team.name).join(', ')}. Per questi team il limite effettivo è 0.
+          </div>
+        )}
       </div>
 
       {/* Vista mobile: schede */}
       <div className="md:hidden space-y-4">
+        {/* Limiti sviluppatori per team (mobile) */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Sviluppatori disponibili per team</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {teams?.map((team) => {
+              const isEditing = editingBudgetTeamId === team._id
+              const teamLimit = teamBudgetMap.get(team._id) ?? 0
+              return (
+                <div key={team._id} className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{team.name}</span>
+                  {isEditing && isAdmin ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        value={editBudgetValue}
+                        onChange={(e) => setEditBudgetValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveBudget(team._id)
+                          if (e.key === 'Escape') handleCancelEditBudget()
+                        }}
+                        className="w-14 px-2 py-1 text-sm text-center border border-blue-500 dark:border-blue-400 rounded focus:outline-none dark:bg-gray-600 dark:text-gray-100"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleSaveBudget(team._id)}
+                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded"
+                      >
+                        Salva
+                      </button>
+                      <button
+                        onClick={handleCancelEditBudget}
+                        className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded"
+                      >
+                        Annulla
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      <span className="font-semibold">{teamLimit}</span>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleStartEditBudget(team._id)}
+                          className="p-0.5 text-gray-400 hover:text-blue-600"
+                          title={`Modifica per ${team.name}`}
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      )}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
         {departments?.map((dept) => {
           const deptTotal = teams?.reduce(
             (sum, team) => sum + getAllocation(dept._id, team._id),
@@ -313,6 +440,63 @@ export default function PlanningPage() {
                 ))}
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-700">
                   Totale
+                </th>
+              </tr>
+              <tr className="bg-gray-100 dark:bg-gray-700/80 border-b">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Sviluppatori disponibili
+                </th>
+                {teams?.map((team) => {
+                  const isEditing = editingBudgetTeamId === team._id
+                  const teamLimit = teamBudgetMap.get(team._id) ?? 0
+                  return (
+                    <th key={team._id} className="px-4 py-2 text-center">
+                      {isEditing && isAdmin ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            value={editBudgetValue}
+                            onChange={(e) => setEditBudgetValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveBudget(team._id)
+                              if (e.key === 'Escape') handleCancelEditBudget()
+                            }}
+                            className="w-14 px-2 py-1 text-sm text-center border border-blue-500 dark:border-blue-400 rounded focus:outline-none dark:bg-gray-700 dark:text-gray-100"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSaveBudget(team._id)}
+                            className="px-1.5 py-0.5 text-xs bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600"
+                          >
+                            Salva
+                          </button>
+                          <button
+                            onClick={handleCancelEditBudget}
+                            className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-500"
+                          >
+                            Annulla
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="font-semibold">{teamLimit}</span>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleStartEditBudget(team._id)}
+                              className="p-0.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                              title={`Modifica numero sviluppatori per ${team.name}`}
+                            >
+                              <Pencil size={12} />
+                            </button>
+                          )}
+                        </span>
+                      )}
+                    </th>
+                  )
+                })}
+                <th className="px-4 py-2 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600">
+                  {totalBudget}
                 </th>
               </tr>
             </thead>

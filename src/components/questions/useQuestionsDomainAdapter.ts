@@ -34,6 +34,7 @@ export function useQuestionsDomainAdapter({ domain, entityId }: UseQuestionsDoma
     _id: String(question._id),
     text: question.text,
     source: question.source,
+    createdById: question.createdById,
     requesterId: 'requesterId' in question ? question.requesterId : undefined,
     validatedAnswerId: question.validatedAnswerId ? String(question.validatedAnswerId) : undefined,
     validatedAnswer: question.validatedAnswer
@@ -63,12 +64,16 @@ export function useQuestionsDomainAdapter({ domain, entityId }: UseQuestionsDoma
 
   const createQuestionKeyDev = useMutation(api.keydevQuestions.createQuestion)
   const createQuestionCoreApp = useMutation(api.coreAppQuestions.createQuestion)
+  const updateQuestionKeyDev = useMutation(api.keydevQuestions.updateQuestion)
+  const updateQuestionCoreApp = useMutation(api.coreAppQuestions.updateQuestion)
   const createAnswerKeyDev = useMutation(api.keydevQuestions.createAnswer)
   const createAnswerCoreApp = useMutation(api.coreAppQuestions.createAnswer)
   const updateAnswerKeyDev = useMutation(api.keydevQuestions.updateAnswer)
   const updateAnswerCoreApp = useMutation(api.coreAppQuestions.updateAnswer)
   const validateAnswerKeyDev = useMutation(api.keydevQuestions.validateAnswer)
   const validateAnswerCoreApp = useMutation(api.coreAppQuestions.validateAnswer)
+  const deleteQuestionKeyDev = useMutation(api.keydevQuestions.deleteQuestion)
+  const deleteQuestionCoreApp = useMutation(api.coreAppQuestions.deleteQuestion)
   const startQuestionsKeyDev = useMutation(api.keydevQuestions.startQuestions)
   const startQuestionsCoreApp = useMutation(api.coreAppQuestions.startQuestions)
 
@@ -94,10 +99,18 @@ export function useQuestionsDomainAdapter({ domain, entityId }: UseQuestionsDoma
       }
       return String(await createQuestionCoreApp({ coreAppId: entityId as Id<'coreApps'>, text }))
     },
+    async updateQuestion(questionId: string, text: string) {
+      if (isKeyDev) {
+        await updateQuestionKeyDev({ questionId: questionId as Id<'keyDevQuestions'>, text })
+        return
+      }
+      await updateQuestionCoreApp({ questionId: questionId as Id<'coreAppQuestions'>, text })
+    },
     async createAnswer(args: {
       questionId: string
       body: string
       recipientRole: RecipientRole
+      recipientUserId?: Id<'users'>
       mentionedUserIds?: Array<Id<'users'>>
     }) {
       if (isKeyDev) {
@@ -106,6 +119,7 @@ export function useQuestionsDomainAdapter({ domain, entityId }: UseQuestionsDoma
             questionId: args.questionId as Id<'keyDevQuestions'>,
             body: args.body,
             recipientRole: args.recipientRole,
+            recipientUserId: args.recipientUserId,
             mentionedUserIds: args.mentionedUserIds
           })
         )
@@ -115,6 +129,7 @@ export function useQuestionsDomainAdapter({ domain, entityId }: UseQuestionsDoma
           questionId: args.questionId as Id<'coreAppQuestions'>,
           body: args.body,
           recipientRole: args.recipientRole,
+          recipientUserId: args.recipientUserId,
           mentionedUserIds: args.mentionedUserIds
         })
       )
@@ -123,6 +138,7 @@ export function useQuestionsDomainAdapter({ domain, entityId }: UseQuestionsDoma
       answerId: string
       body: string
       recipientRole: RecipientRole
+      recipientUserId?: Id<'users'>
       mentionedUserIds?: Array<Id<'users'>>
     }) {
       if (isKeyDev) {
@@ -130,6 +146,7 @@ export function useQuestionsDomainAdapter({ domain, entityId }: UseQuestionsDoma
           answerId: args.answerId as Id<'keyDevQuestionAnswers'>,
           body: args.body,
           recipientRole: args.recipientRole,
+          recipientUserId: args.recipientUserId,
           mentionedUserIds: args.mentionedUserIds
         })
         return
@@ -138,6 +155,7 @@ export function useQuestionsDomainAdapter({ domain, entityId }: UseQuestionsDoma
         answerId: args.answerId as Id<'coreAppQuestionAnswers'>,
         body: args.body,
         recipientRole: args.recipientRole,
+        recipientUserId: args.recipientUserId,
         mentionedUserIds: args.mentionedUserIds
       })
     },
@@ -153,6 +171,13 @@ export function useQuestionsDomainAdapter({ domain, entityId }: UseQuestionsDoma
         questionId: questionId as Id<'coreAppQuestions'>,
         answerId: answerId as Id<'coreAppQuestionAnswers'>
       })
+    },
+    async deleteQuestion(questionId: string) {
+      if (isKeyDev) {
+        await deleteQuestionKeyDev({ questionId: questionId as Id<'keyDevQuestions'> })
+        return
+      }
+      await deleteQuestionCoreApp({ questionId: questionId as Id<'coreAppQuestions'> })
     },
     async addLabel(questionId: string, labelText: string) {
       const createdLabel = await createQuestionLabel({ label: labelText })

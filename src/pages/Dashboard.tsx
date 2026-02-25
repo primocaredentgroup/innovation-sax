@@ -1,7 +1,7 @@
 import { useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { oembed } from '@loomhq/loom-embed'
 import { X } from 'lucide-react'
 import type { Id } from '../../convex/_generated/dataModel'
@@ -13,15 +13,17 @@ function OwnerAvatar({
   onClick
 }: {
   owner: { _id: string; name: string; picture?: string; pictureUrl?: string } | null | undefined
-  size?: 'sm' | 'md'
+  size?: 'xs' | 'sm' | 'md'
   onClick?: () => void
 }) {
   const [showTooltip, setShowTooltip] = useState(false)
 
+  const sizeClass = size === 'xs' ? 'w-6 h-6 text-[10px]' : size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm sm:w-12 sm:h-12'
+
   if (!owner) {
     return (
       <div
-        className={`${size === 'sm' ? 'w-8 h-8 text-xs sm:w-8 sm:h-8' : 'w-10 h-10 text-sm sm:w-12 sm:h-12'} rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 ${onClick ? 'cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-500 active:scale-95' : ''}`}
+        className={`${sizeClass} rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 ${onClick ? 'cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-500 active:scale-95' : ''}`}
         title="Nessun owner"
         onClick={onClick}
       >
@@ -47,7 +49,7 @@ function OwnerAvatar({
   return (
     <div className="relative">
       <div
-        className={`${size === 'sm' ? 'w-8 h-8 text-xs sm:w-8 sm:h-8' : 'w-10 h-10 text-sm sm:w-12 sm:h-12'} rounded-full overflow-hidden ${bgColor} flex items-center justify-center text-white font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity active:scale-95' : ''}`}
+        className={`${sizeClass} rounded-full overflow-hidden ${bgColor} flex items-center justify-center text-white font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity active:scale-95' : ''}`}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         onClick={onClick}
@@ -93,6 +95,27 @@ function formatMonth(monthRef: string): string {
     'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
   ]
   return `${monthNames[monthNum - 1]} ${year}`
+}
+
+// Funzione helper per formattare weekRef (es. "2025-W02") in range di date italiano
+function formatWeekRef(weekRef: string): string {
+  const match = weekRef.match(/^(\d{4})-W(\d{2})$/)
+  if (!match) return weekRef
+  const [, yearStr, weekStr] = match
+  const year = parseInt(yearStr!, 10)
+  const week = parseInt(weekStr!, 10)
+  // Calcola il lunedì della settimana ISO
+  const jan4 = new Date(year, 0, 4)
+  const monday = new Date(jan4)
+  monday.setDate(jan4.getDate() - jan4.getDay() + 1 + (week - 1) * 7)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  const monthNames = [
+    'Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu',
+    'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'
+  ]
+  const fmt = (d: Date) => `${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`
+  return `${fmt(monday)} – ${fmt(sunday)}`
 }
 
 // Componente per l'embed Loom
@@ -494,24 +517,42 @@ function SharedLegend({
 }
 
 
+type TabType = 'okr' | 'weeklyLoom' | 'pastKeyDevs' | 'pendingQuestions'
+type SubtabType = 'keyDevs' | 'coreApps'
+
+function updateDashboardSearch(
+  navigate: ReturnType<typeof useNavigate>,
+  updates: { tab?: TabType; subtab?: SubtabType; owner?: string; team?: string }
+) {
+  navigate({
+    to: '/',
+    search: (prev) => ({ ...prev, ...updates })
+  })
+}
+
 export default function DashboardPage() {
   const isDark = useDarkMode()
   const navigate = useNavigate()
+  const search = useSearch({ from: '/' })
   const currentMonth = useMemo(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   }, [])
 
   const [selectedMonth, setSelectedMonth] = useState<string | 'all'>('all')
-  const [selectedOwner, setSelectedOwner] = useState<Id<'users'> | '__no_owner__' | undefined>(undefined)
-  const [activeTab, setActiveTab] = useState<'okr' | 'weeklyLoom' | 'pastKeyDevs' | 'pendingQuestions'>('okr')
-  const [pendingQuestionsTab, setPendingQuestionsTab] = useState<'keyDevs' | 'coreApps'>('keyDevs')
   const [openLoomDialog, setOpenLoomDialog] = useState<{ url: string; title?: string } | null>(null)
   const { width: windowWidth } = useWindowSize()
+
+  // Valori da URL (fonte di verità per tab, filtri condivisibili)
+  const activeTab = (search.tab as TabType | undefined) ?? 'okr'
+  const pendingQuestionsTab = (search.subtab as SubtabType | undefined) ?? 'keyDevs'
+  const selectedTeam = search.team ? (search.team as Id<'teams'>) : undefined
+  const selectedOwner = search.owner ? (search.owner as Id<'users'> | '__no_owner__') : undefined
 
   // Query per i mesi disponibili
   const months = useQuery(api.months.list)
   const users = useQuery(api.users.listUsers)
+  const teams = useQuery(api.teams.list)
 
   const showAllMonths = selectedMonth === 'all'
 
@@ -576,7 +617,10 @@ export default function DashboardPage() {
   )
   const okrData = showAllMonths ? okrDataAllMonths : okrDataSingleMonth
   
-  const pastKeyDevs = useQuery(api.dashboard.getPastKeyDevs, { currentMonth })
+  const pastKeyDevs = useQuery(api.dashboard.getPastKeyDevs, {
+    currentMonth,
+    ...(selectedTeam && { teamId: selectedTeam })
+  })
   
   // Query KeyDevs by Team - chiama sempre entrambe le query e scegli quale usare
   const keyDevsByTeamAllMonths = useQuery(
@@ -619,7 +663,7 @@ export default function DashboardPage() {
   // Counter per KeyDev passati
   const pastKeyDevsCount = pastKeyDevs?.length || 0
 
-  const pendingKeyDevQuestions = useMemo(() => {
+  const pendingKeyDevQuestionsRaw = useMemo(() => {
     if (!keydevs || !questionsStatusByKeyDev) return []
     return keydevs
       .map((kd) => {
@@ -633,7 +677,7 @@ export default function DashboardPage() {
       .sort((a, b) => b.missing - a.missing || a.keyDev.readableId.localeCompare(b.keyDev.readableId))
   }, [keydevs, questionsStatusByKeyDev])
 
-  const pendingCoreAppQuestions = useMemo(() => {
+  const pendingCoreAppQuestionsRaw = useMemo(() => {
     if (!coreApps || !questionsStatusByCoreApp) return []
     return coreApps
       .map((app) => {
@@ -647,15 +691,50 @@ export default function DashboardPage() {
       .sort((a, b) => b.missing - a.missing || a.coreApp.name.localeCompare(b.coreApp.name))
   }, [coreApps, questionsStatusByCoreApp])
 
+  // Filtra per owner quando siamo in tab Domande in attesa
+  const pendingKeyDevQuestions = useMemo(() => {
+    if (activeTab !== 'pendingQuestions' || !selectedOwner) return pendingKeyDevQuestionsRaw
+    return pendingKeyDevQuestionsRaw.filter((item) => {
+      const ownerId = item.keyDev.ownerId ?? '__no_owner__'
+      return ownerId === selectedOwner
+    })
+  }, [pendingKeyDevQuestionsRaw, activeTab, selectedOwner])
+
+  const pendingCoreAppQuestions = useMemo(() => {
+    if (activeTab !== 'pendingQuestions' || !selectedOwner) return pendingCoreAppQuestionsRaw
+    return pendingCoreAppQuestionsRaw.filter((item) => {
+      const ownerId = item.coreApp.ownerId ?? '__no_owner__'
+      return ownerId === selectedOwner
+    })
+  }, [pendingCoreAppQuestionsRaw, activeTab, selectedOwner])
+
+  // Counter domande non risposte per ogni owner (per filtro nella tab Domande in attesa)
+  const pendingQuestionsOwnerCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const item of pendingKeyDevQuestionsRaw) {
+      const id = item.keyDev.ownerId ?? '__no_owner__'
+      counts[id] = (counts[id] ?? 0) + item.missing
+    }
+    for (const item of pendingCoreAppQuestionsRaw) {
+      const id = item.coreApp.ownerId ?? '__no_owner__'
+      counts[id] = (counts[id] ?? 0) + item.missing
+    }
+    return counts
+  }, [pendingKeyDevQuestionsRaw, pendingCoreAppQuestionsRaw])
+
   const pendingKeyDevQuestionsCount = useMemo(
-    () => pendingKeyDevQuestions.reduce((total, item) => total + item.missing, 0),
-    [pendingKeyDevQuestions]
+    () => pendingKeyDevQuestionsRaw.reduce((total, item) => total + item.missing, 0),
+    [pendingKeyDevQuestionsRaw]
   )
   const pendingCoreAppQuestionsCount = useMemo(
-    () => pendingCoreAppQuestions.reduce((total, item) => total + item.missing, 0),
-    [pendingCoreAppQuestions]
+    () => pendingCoreAppQuestionsRaw.reduce((total, item) => total + item.missing, 0),
+    [pendingCoreAppQuestionsRaw]
   )
   const pendingQuestionsCount = pendingKeyDevQuestionsCount + pendingCoreAppQuestionsCount
+
+  // Count filtrati per la lista (quando c'è filtro owner)
+  const pendingKeyDevQuestionsFilteredCount = pendingKeyDevQuestions.reduce((t, i) => t + i.missing, 0)
+  const pendingCoreAppQuestionsFilteredCount = pendingCoreAppQuestions.reduce((t, i) => t + i.missing, 0)
 
   // Genera le opzioni per il dropdown dei mesi (6 mesi passati + mese corrente + mesi futuri dal DB)
   const monthOptions = useMemo(() => {
@@ -692,37 +771,7 @@ export default function DashboardPage() {
     return uniqueMonths
   }, [months])
 
-  // Trova tutti gli update raggruppati per Core App (senza filtro settimanale)
-  // Prendi gli update da tutte le settimane disponibili
-  const updatesByCoreApp = useMemo(() => {
-    if (!updatesByWeek) return []
-    
-    // Raccogli tutti gli update da tutte le settimane
-    const allUpdates: Array<typeof updatesByWeek[0]['updates'][0]> = []
-    for (const weekData of updatesByWeek) {
-      allUpdates.push(...weekData.updates)
-    }
-    
-    // Raggruppa per Core App
-    const grouped: Record<string, typeof allUpdates> = {}
-    for (const update of allUpdates) {
-      if (!grouped[update.coreAppId]) {
-        grouped[update.coreAppId] = []
-      }
-      grouped[update.coreAppId].push(update)
-    }
-    
-    // Limita a 10 elementi e ordina per percentComplete decrescente
-    return Object.entries(grouped)
-      .map(([coreAppId, updates]) => ({
-        coreAppId: coreAppId as Id<'coreApps'>,
-        coreAppName: updates[0].coreAppName,
-        percentComplete: updates[0].percentComplete,
-        updates
-      }))
-      .sort((a, b) => b.percentComplete - a.percentComplete)
-      .slice(0, 10)
-  }, [updatesByWeek])
+  // Raggruppa gli update per settimana (updatesByWeek è già in questo formato dal backend)
 
   return (
     <div className="w-full max-w-full min-w-0">
@@ -731,7 +780,7 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex flex-nowrap gap-2 sm:gap-4 overflow-x-auto pb-1 -mx-2 px-2 sm:mx-0 sm:px-0 sm:overflow-x-visible scrollbar-hide">
             <button
-              onClick={() => setActiveTab('okr')}
+              onClick={() => updateDashboardSearch(navigate, { tab: 'okr' })}
               className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 min-h-[44px] touch-manipulation whitespace-nowrap ${
                 activeTab === 'okr'
                   ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
@@ -742,7 +791,7 @@ export default function DashboardPage() {
               <span className="sm:hidden">OKR</span>
             </button>
             <button
-              onClick={() => setActiveTab('weeklyLoom')}
+              onClick={() => updateDashboardSearch(navigate, { tab: 'weeklyLoom' })}
               className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 min-h-[44px] touch-manipulation flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                 activeTab === 'weeklyLoom'
                   ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
@@ -756,7 +805,7 @@ export default function DashboardPage() {
               </span>
             </button>
             <button
-              onClick={() => setActiveTab('pastKeyDevs')}
+              onClick={() => updateDashboardSearch(navigate, { tab: 'pastKeyDevs' })}
               className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 min-h-[44px] touch-manipulation flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                 activeTab === 'pastKeyDevs'
                   ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
@@ -770,7 +819,7 @@ export default function DashboardPage() {
               </span>
             </button>
             <button
-              onClick={() => setActiveTab('pendingQuestions')}
+              onClick={() => updateDashboardSearch(navigate, { tab: 'pendingQuestions' })}
               className={`px-2.5 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-base border-2 rounded-lg transition-all shrink-0 min-h-[44px] touch-manipulation flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                 activeTab === 'pendingQuestions'
                   ? 'border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-md'
@@ -784,102 +833,6 @@ export default function DashboardPage() {
               </span>
             </button>
           </div>
-          
-          {/* Selettore mese e Filtro owner - per le tab OKR e Aggiornamenti sul Core */}
-          {(activeTab === 'okr' || activeTab === 'weeklyLoom') && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 shrink-0 w-full sm:w-auto">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 w-full sm:w-auto">
-                <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  Mese:
-                </label>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value === 'all' ? 'all' : e.target.value)}
-                  className="w-full sm:w-auto px-3 sm:px-4 py-2.5 sm:py-2 text-sm sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] touch-manipulation"
-                >
-                  <option value="all">Tutti i mesi</option>
-                  {monthOptions.map((monthRef) => (
-                    <option key={monthRef} value={monthRef}>
-                      {formatMonth(monthRef)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {/* Filtra per Owner - migliorato per mobile con scroll orizzontale */}
-              {Object.keys(ownerCounts).filter(id => ownerCounts[id] > 0).length > 0 && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 sm:pl-2 sm:border-l sm:border-gray-200 dark:sm:border-gray-600 w-full sm:w-auto">
-                <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap shrink-0">
-                  Owner:
-                </label>
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 -mx-2 px-2 sm:mx-0 sm:px-0">
-                  {Object.entries(ownerCounts)
-                    .filter(([, count]) => count > 0)
-                    .sort(([, a], [, b]) => b - a)
-                    .map(([ownerId]) => {
-                      const owner = ownerId === '__no_owner__' ? null : (usersMap.get(ownerId as Id<'users'>) ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture } : null)
-                      const isSelected = selectedOwner === ownerId
-                      const count = ownerCounts[ownerId] ?? 0
-                      return (
-                        <button
-                          key={ownerId}
-                          type="button"
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedOwner(undefined)
-                              return
-                            }
-                            setSelectedOwner(ownerId as Id<'users'> | '__no_owner__')
-                          }}
-                          className={`rounded-full p-1 transition-all shrink-0 touch-manipulation min-w-[40px] min-h-[40px] flex items-center justify-center ${
-                            isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800 bg-blue-50 dark:bg-blue-900/30' : 'hover:opacity-80 active:scale-95'
-                          }`}
-                          title={owner ? `${owner.name} (${count})` : `Senza owner (${count})`}
-                        >
-                          <OwnerAvatar owner={owner} size="md" />
-                          <span className="sr-only">{owner ? owner.name : 'Senza owner'} - {count}</span>
-                        </button>
-                      )
-                    })}
-                </div>
-              </div>
-              )}
-              {/* Filtri attivi - migliorati per mobile */}
-              {(!showAllMonths || selectedOwner) && (
-                <div className="flex flex-wrap items-center gap-2">
-                  {!showAllMonths && (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Mese: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatMonth(selectedMonth)}</span>
-                      </span>
-                      <button
-                        onClick={() => setSelectedMonth('all')}
-                        className="flex items-center justify-center w-6 h-6 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors touch-manipulation"
-                        title="Rimuovi filtro mese"
-                        aria-label="Rimuovi filtro mese"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  )}
-                  {selectedOwner && (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Owner: <span className="font-semibold text-gray-900 dark:text-gray-100">{selectedOwnerName}</span>
-                      </span>
-                      <button
-                        onClick={() => setSelectedOwner(undefined)}
-                        className="flex items-center justify-center w-6 h-6 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors touch-manipulation"
-                        title="Rimuovi filtro owner"
-                        aria-label="Rimuovi filtro owner"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
@@ -914,25 +867,70 @@ export default function DashboardPage() {
         <>
           {/* OKR Score Card - cliccabile per navigare a KeyDevsList */}
           <div
-            onClick={() => navigate({
-              to: '/keydevs',
-              search: {
-                month: showAllMonths ? 'all' : selectedMonth,
-                ...(selectedOwner && { owner: selectedOwner })
-              }
-            })}
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest('[data-filter-area]')) return
+              navigate({
+                to: '/keydevs',
+                search: {
+                  month: showAllMonths ? 'all' : selectedMonth,
+                  ...(selectedOwner && { owner: selectedOwner })
+                }
+              })
+            }}
             className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-4 sm:mb-6 min-w-0 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98] touch-manipulation"
           >
-            <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 sm:mb-4 break-words">
-              {selectedOwnerName
-                ? `Sviluppi Chiave - ${showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)} - ${selectedOwnerName}`
-                : `Sviluppi Chiave - ${showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)}`}
-            </h2>
-            {selectedOwnerName && (
-              <div className="mb-3 sm:mb-4 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                Filtro owner attivo: {selectedOwnerName}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4" data-filter-area>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 break-words">
+                Sviluppi Chiave - {showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)}
+                {selectedOwnerName && ` - ${selectedOwnerName}`}
+              </h2>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Mese:</label>
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value === 'all' ? 'all' : e.target.value)}
+                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 min-h-[40px] touch-manipulation"
+                  >
+                    <option value="all">Tutti i mesi</option>
+                    {monthOptions.map((monthRef) => (
+                      <option key={monthRef} value={monthRef}>{formatMonth(monthRef)}</option>
+                    ))}
+                  </select>
+                </div>
+                {Object.keys(ownerCounts).filter((id) => ownerCounts[id] > 0).length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Owner:</label>
+                    <div className="flex items-center gap-1.5 overflow-x-auto">
+                      {Object.entries(ownerCounts)
+                        .filter(([, count]) => count > 0)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([ownerId]) => {
+                          const owner = ownerId === '__no_owner__' ? null : (usersMap.get(ownerId as Id<'users'>) ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture } : null)
+                          const isSelected = selectedOwner === ownerId
+                          const count = ownerCounts[ownerId] ?? 0
+                          return (
+                            <button
+                              key={ownerId}
+                              type="button"
+                              onClick={() => updateDashboardSearch(navigate, { owner: isSelected ? undefined : ownerId })}
+                              className={`rounded-full p-0.5 transition-all shrink-0 ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'}`}
+                              title={owner ? `${owner.name} (${count})` : `Senza owner (${count})`}
+                            >
+                              <OwnerAvatar owner={owner} size="sm" />
+                            </button>
+                          )
+                        })}
+                    </div>
+                    {selectedOwner && (
+                      <button onClick={() => updateDashboardSearch(navigate, { owner: undefined })} className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md shrink-0" title="Rimuovi filtro owner">
+                        <X size={14} /> Rimuovi
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
             {okrData ? (
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 min-w-0">
                 <div className="text-center sm:text-left shrink-0">
@@ -1019,54 +1017,101 @@ export default function DashboardPage() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 min-w-0">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 break-words">
-              Aggiornamenti sul Core - {showAllMonths ? 'Tutti i mesi' : formatMonth(selectedMonth)}
+              Aggiornamenti sul Core
             </h2>
-            <button
-              type="button"
-              onClick={() =>
-                navigate({
-                  to: '/core-apps',
-                  search: {
-                    ...(selectedOwner && { owner: selectedOwner }),
-                  },
-                })
-              }
-              className="self-stretch sm:self-auto rounded-lg border border-blue-600 px-4 py-2.5 sm:px-3 sm:py-1.5 text-sm sm:text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/30 active:scale-95 touch-manipulation min-h-[44px] sm:min-h-0"
-            >
-              Apri lista Core Apps filtrata
-            </button>
-          </div>
-          {selectedOwnerName && (
-            <div className="mb-4 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-              Filtro owner attivo: {selectedOwnerName}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+              <div className="flex items-center gap-2">
+                <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Mese:</label>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value === 'all' ? 'all' : e.target.value)}
+                  className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 min-h-[40px] touch-manipulation"
+                >
+                  <option value="all">Tutti i mesi</option>
+                  {monthOptions.map((monthRef) => (
+                    <option key={monthRef} value={monthRef}>{formatMonth(monthRef)}</option>
+                  ))}
+                </select>
+              </div>
+              {Object.keys(ownerCounts).filter((id) => ownerCounts[id] > 0).length > 0 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Owner:</label>
+                  <div className="flex items-center gap-1.5 overflow-x-auto">
+                    {Object.entries(ownerCounts)
+                      .filter(([, count]) => count > 0)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([ownerId]) => {
+                        const owner = ownerId === '__no_owner__' ? null : (usersMap.get(ownerId as Id<'users'>) ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture } : null)
+                        const isSelected = selectedOwner === ownerId
+                        const count = ownerCounts[ownerId] ?? 0
+                        return (
+                          <button
+                            key={ownerId}
+                            type="button"
+                            onClick={() => updateDashboardSearch(navigate, { owner: isSelected ? undefined : ownerId })}
+                            className={`rounded-full p-0.5 transition-all shrink-0 ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'}`}
+                            title={owner ? `${owner.name} (${count})` : `Senza owner (${count})`}
+                          >
+                            <OwnerAvatar owner={owner} size="sm" />
+                          </button>
+                        )
+                      })}
+                  </div>
+                  {selectedOwner && (
+                    <button onClick={() => updateDashboardSearch(navigate, { owner: undefined })} className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md shrink-0" title="Rimuovi filtro owner">
+                      <X size={14} /> Rimuovi
+                    </button>
+                  )}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() =>
+                  navigate({
+                    to: '/core-apps',
+                    search: { ...(selectedOwner && { owner: selectedOwner }) },
+                  })
+                }
+                className="self-stretch sm:self-auto rounded-lg border border-blue-600 px-4 py-2.5 sm:px-3 sm:py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/30 active:scale-95 touch-manipulation min-h-[40px] sm:min-h-0 shrink-0"
+              >
+                Apri lista Core Apps filtrata
+              </button>
             </div>
-          )}
+          </div>
           {updatesByWeek ? (
             <div>
-              {updatesByCoreApp.length > 0 ? (
-                <div className="space-y-4 sm:space-y-6">
-                  {updatesByCoreApp.map((group) => (
+              {updatesByWeek.length > 0 ? (
+                <div className="space-y-6 sm:space-y-8">
+                  {updatesByWeek.map((weekData) => (
                     <div
-                      key={group.coreAppId}
-                      className="p-3 sm:p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg min-w-0"
+                      key={weekData.weekRef}
+                      className="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden min-w-0"
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3 sm:mb-4 min-w-0">
-                        <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 break-words min-w-0 flex-1">
-                          {group.coreAppName}
+                      <div className="px-4 py-3 bg-gray-100 dark:bg-gray-700/70 border-b border-gray-200 dark:border-gray-600">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                          {formatWeekRef(weekData.weekRef)}
                         </h3>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">Completamento:</span>
-                          <span className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
-                            {group.percentComplete}%
-                          </span>
-                        </div>
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                          {weekData.updates.length} {weekData.updates.length === 1 ? 'aggiornamento' : 'aggiornamenti'}
+                        </p>
                       </div>
-                      <div className="space-y-3 sm:space-y-4">
-                        {group.updates.map((update) => (
-                          <div key={update._id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="divide-y divide-gray-200 dark:divide-gray-600">
+                        {weekData.updates.map((update) => (
+                          <div
+                            key={update._id}
+                            className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors"
+                          >
                             <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400">
+                                  {update.coreAppName}
+                                </span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {update.percentComplete}%
+                                </span>
+                              </div>
                               {update.title && (
-                                <h4 className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 break-words">
+                                <h4 className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 break-words">
                                   {update.title}
                                 </h4>
                               )}
@@ -1079,7 +1124,7 @@ export default function DashboardPage() {
                             {update.loomUrl && (
                               <button
                                 onClick={() => setOpenLoomDialog({ url: update.loomUrl!, title: update.title })}
-                                className="shrink-0 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 text-sm sm:text-sm font-medium transition-colors active:scale-95 touch-manipulation min-h-[44px] sm:min-h-0"
+                                className="shrink-0 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 text-sm font-medium transition-colors active:scale-95 touch-manipulation min-h-[44px] sm:min-h-0"
                               >
                                 ▶ Guarda Video Loom
                               </button>
@@ -1105,9 +1150,40 @@ export default function DashboardPage() {
       {/* Contenuto Tab KeyDev Scaduti */}
       {activeTab === 'pastKeyDevs' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 min-w-0">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 sm:mb-4 break-words">
-            Sviluppi Chiave Scaduti
-          </h2>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 break-words">
+              Sviluppi Chiave Scaduti
+            </h2>
+            {teams && teams.length > 0 && (
+              <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] shrink-0 min-w-0">
+                <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-1 bg-gray-50 dark:bg-gray-900/30">
+                  <button
+                    onClick={() => updateDashboardSearch(navigate, { team: undefined })}
+                    className={`px-3 sm:px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                      !selectedTeam
+                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-gray-700/70'
+                    }`}
+                  >
+                    Tutti i team
+                  </button>
+                  {teams.map((team) => (
+                    <button
+                      key={team._id}
+                      onClick={() => updateDashboardSearch(navigate, { team: team._id })}
+                      className={`px-3 sm:px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                        selectedTeam === team._id
+                          ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                          : 'text-gray-600 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-gray-700/70'
+                      }`}
+                    >
+                      {team.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           <div className="mb-4 p-3 sm:p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
             <div className="flex items-start gap-2">
               <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
@@ -1199,32 +1275,78 @@ export default function DashboardPage() {
       {/* Contenuto Tab Domande in attesa */}
       {activeTab === 'pendingQuestions' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 min-w-0">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 break-words">
+          <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 break-words shrink-0">
               Domande in attesa
             </h2>
-            <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-1 bg-gray-50 dark:bg-gray-900/30 w-full sm:w-auto">
+            {Object.keys(pendingQuestionsOwnerCounts).filter((id) => pendingQuestionsOwnerCounts[id] > 0).length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                  {Object.entries(pendingQuestionsOwnerCounts)
+                    .filter(([, count]) => count > 0)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([ownerId]) => {
+                      const owner = ownerId === '__no_owner__' ? null : (usersMap.get(ownerId as Id<'users'>) ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture } : null)
+                      const isSelected = selectedOwner === ownerId
+                      const count = pendingQuestionsOwnerCounts[ownerId] ?? 0
+                      return (
+                        <button
+                          key={ownerId}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              updateDashboardSearch(navigate, { owner: undefined })
+                              return
+                            }
+                            updateDashboardSearch(navigate, { owner: ownerId })
+                          }}
+                          className={`rounded-full p-0.5 transition-all shrink-0 touch-manipulation flex items-center justify-center relative ${
+                            isSelected ? 'ring-2 ring-yellow-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80 active:scale-95'
+                          }`}
+                          title={owner ? `${owner.name}: ${count} domande` : `Senza owner: ${count} domande`}
+                        >
+                          <OwnerAvatar owner={owner} size="xs" />
+                          <span className="absolute -top-0.5 -right-0.5 px-1 py-0.5 bg-yellow-600 dark:bg-yellow-500 text-white rounded-full text-[9px] font-bold min-w-[14px] text-center leading-none">
+                            {count}
+                          </span>
+                          <span className="sr-only">{owner ? owner.name : 'Senza owner'} - {count} domande</span>
+                        </button>
+                      )
+                    })}
+                  {selectedOwner && (
+                    <button
+                      onClick={() => updateDashboardSearch(navigate, { owner: undefined })}
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors shrink-0"
+                      title="Rimuovi filtro owner"
+                      aria-label="Rimuovi filtro owner"
+                    >
+                      <X size={14} />
+                      Rimuovi
+                    </button>
+                  )}
+                </div>
+              )}
+            <div className="flex flex-wrap items-center gap-1 shrink-0">
               <button
                 type="button"
-                onClick={() => setPendingQuestionsTab('keyDevs')}
-                className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 text-sm sm:text-sm font-medium rounded-md transition-colors touch-manipulation active:scale-95 min-h-[44px] sm:min-h-0 ${
+                onClick={() => updateDashboardSearch(navigate, { subtab: 'keyDevs' })}
+                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors touch-manipulation ${
                   pendingQuestionsTab === 'keyDevs'
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-gray-700/70'
+                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
               >
-                KeyDevs ({pendingKeyDevQuestionsCount})
+                KeyDevs ({selectedOwner ? pendingKeyDevQuestionsFilteredCount : pendingKeyDevQuestionsCount})
               </button>
               <button
                 type="button"
-                onClick={() => setPendingQuestionsTab('coreApps')}
-                className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 text-sm sm:text-sm font-medium rounded-md transition-colors touch-manipulation active:scale-95 min-h-[44px] sm:min-h-0 ${
+                onClick={() => updateDashboardSearch(navigate, { subtab: 'coreApps' })}
+                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors touch-manipulation ${
                   pendingQuestionsTab === 'coreApps'
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-gray-700/70'
+                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
               >
-                CoreApps ({pendingCoreAppQuestionsCount})
+                CoreApps ({selectedOwner ? pendingCoreAppQuestionsFilteredCount : pendingCoreAppQuestionsCount})
               </button>
             </div>
           </div>

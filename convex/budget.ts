@@ -104,3 +104,54 @@ export const remove = mutation({
     return null
   }
 })
+
+/**
+ * Copia tutte le allocazioni budget da un mese sorgente al mese di destinazione.
+ * Sovrascrive le allocazioni esistenti per il mese di destinazione.
+ */
+export const copyFromMonth = mutation({
+  args: {
+    sourceMonthRef: v.string(),
+    targetMonthRef: v.string()
+  },
+  returns: v.object({
+    copied: v.number()
+  }),
+  handler: async (ctx, args) => {
+    if (args.sourceMonthRef === args.targetMonthRef) {
+      return { copied: 0 }
+    }
+
+    const sourceAllocations = await ctx.db
+      .query('budgetKeyDev')
+      .withIndex('by_month', (q) => q.eq('monthRef', args.sourceMonthRef))
+      .collect()
+
+    let copied = 0
+    for (const alloc of sourceAllocations) {
+      const existing = await ctx.db
+        .query('budgetKeyDev')
+        .withIndex('by_month_dept_team', (q) =>
+          q
+            .eq('monthRef', args.targetMonthRef)
+            .eq('deptId', alloc.deptId)
+            .eq('teamId', alloc.teamId)
+        )
+        .first()
+
+      if (existing) {
+        await ctx.db.patch(existing._id, { maxAlloc: alloc.maxAlloc })
+      } else {
+        await ctx.db.insert('budgetKeyDev', {
+          monthRef: args.targetMonthRef,
+          deptId: alloc.deptId,
+          teamId: alloc.teamId,
+          maxAlloc: alloc.maxAlloc
+        })
+      }
+      copied++
+    }
+
+    return { copied }
+  }
+})

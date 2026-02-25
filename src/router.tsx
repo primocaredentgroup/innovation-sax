@@ -33,7 +33,13 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: DashboardPage
+  component: DashboardPage,
+  validateSearch: z.object({
+    tab: z.enum(['okr', 'weeklyLoom', 'pastKeyDevs', 'pendingQuestions']).optional(),
+    subtab: z.enum(['keyDevs', 'coreApps']).optional(),
+    owner: z.string().optional(),
+    team: z.string().optional()
+  })
 })
 
 const keydevsRoute = createRoute({

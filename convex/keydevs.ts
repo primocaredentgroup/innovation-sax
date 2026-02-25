@@ -308,9 +308,24 @@ export const getBudgetUtilizationByMonths = query({
   handler: async (ctx, args) => {
     const result: Record<string, { occupiedSlots: number; budgetAssigned: number; maxSlots: number }> = {}
     
-    // Ottieni tutti i mesi
+    // Ottieni tutti i limiti mesi (legacy + per team)
     const allMonths = await ctx.db.query('months').collect()
-    const monthsMap = new Map(allMonths.map(m => [m.monthRef, m]))
+    const monthsMap = new Map<
+      string,
+      { legacyLimit?: number; teamLimits: Map<string, number> }
+    >()
+    for (const month of allMonths) {
+      const current = monthsMap.get(month.monthRef) ?? {
+        legacyLimit: undefined,
+        teamLimits: new Map<string, number>()
+      }
+      if (month.teamId) {
+        current.teamLimits.set(month.teamId, month.totalKeyDev)
+      } else {
+        current.legacyLimit = month.totalKeyDev
+      }
+      monthsMap.set(month.monthRef, current)
+    }
     
     // Ottieni tutte le allocazioni budget
     const allBudgetAllocations = await ctx.db.query('budgetKeyDev').collect()
@@ -322,10 +337,18 @@ export const getBudgetUtilizationByMonths = query({
     for (const monthRef of args.monthRefs) {
       result[monthRef] = { occupiedSlots: 0, budgetAssigned: 0, maxSlots: 0 }
       
-      // Imposta il budget massimo del mese
+      // Imposta il budget massimo:
+      // - se teamId è specificato: limite del team per quel mese (hard block => 0 se assente)
+      // - altrimenti: somma limiti team del mese, con fallback legacy se assenti
       const month = monthsMap.get(monthRef)
       if (month) {
-        result[monthRef].maxSlots = month.totalKeyDev
+        if (args.teamId) {
+          result[monthRef].maxSlots = month.teamLimits.get(args.teamId) ?? 0
+        } else if (month.teamLimits.size > 0) {
+          result[monthRef].maxSlots = Array.from(month.teamLimits.values()).reduce((sum, v) => sum + v, 0)
+        } else {
+          result[monthRef].maxSlots = month.legacyLimit ?? 0
+        }
       }
       
       // Calcola budget assegnato ai dipartimenti (filtrato per dept/team se specificati)
@@ -734,6 +757,17 @@ export const updateStatus = mutation({
       
       // Verifica budget disponibile per il mese specificato (solo se si va avanti)
       if (movingForward && monthRefToUse) {
+        const monthTeamLimit = await ctx.db
+          .query('months')
+          .withIndex('by_monthRef_and_team', (q) =>
+            q.eq('monthRef', monthRefToUse).eq('teamId', keydev.teamId)
+          )
+          .first()
+        const teamLimit = monthTeamLimit?.totalKeyDev ?? 0
+        if (teamLimit <= 0) {
+          throw new Error(`Nessun limite sviluppatori disponibile per il team nel mese ${monthRefToUse}. Contatta l'amministratore.`)
+        }
+
         const budgetAlloc = await ctx.db
           .query('budgetKeyDev')
           .withIndex('by_month_dept_team', (q) =>
@@ -746,6 +780,10 @@ export const updateStatus = mutation({
         
         if (!budgetAlloc || budgetAlloc.maxAlloc <= 0) {
           throw new Error(`Nessun budget disponibile per il mese ${monthRefToUse}. Contatta l'amministratore per allocare il budget.`)
+        }
+        const effectiveTeamLimit = Math.min(budgetAlloc.maxAlloc, teamLimit)
+        if (effectiveTeamLimit <= 0) {
+          throw new Error(`Nessuno slot effettivo disponibile per il mese ${monthRefToUse} e team corrente.`)
         }
         
         // Conta i keydevs già validati per questo mese/dept/team
@@ -763,8 +801,8 @@ export const updateStatus = mutation({
             ['FrontValidated', 'InProgress', 'Done'].includes(kd.status)
         ).length
         
-        if (validatedCount >= budgetAlloc.maxAlloc) {
-          throw new Error(`Budget esaurito per il mese ${monthRefToUse}. Già ${validatedCount}/${budgetAlloc.maxAlloc} KeyDevs validati per questo team/dipartimento.`)
+        if (validatedCount >= effectiveTeamLimit) {
+          throw new Error(`Budget esaurito per il mese ${monthRefToUse}. Già ${validatedCount}/${effectiveTeamLimit} KeyDevs validati per questo team/dipartimento (limite effettivo).`)
         }
       }
       
@@ -1245,16 +1283,29 @@ export const updateMonth = mutation({
 
     // Se si sta assegnando un mese (non rimuovendo)
     if (args.monthRef) {
+      const monthRef = args.monthRef
+      const monthTeamLimit = await ctx.db
+        .query('months')
+        .withIndex('by_monthRef_and_team', (q) =>
+          q.eq('monthRef', monthRef).eq('teamId', keydev.teamId)
+        )
+        .first()
+      const teamLimit = monthTeamLimit?.totalKeyDev ?? 0
+      if (teamLimit <= 0) {
+        throw new Error(`Nessun limite sviluppatori disponibile per il team nel mese ${monthRef}. Configura prima il limite in Planning.`)
+      }
+
       // Verifica info budget per quel mese
       const budgetAlloc = await ctx.db
         .query('budgetKeyDev')
         .withIndex('by_month_dept_team', (q) =>
           q
-            .eq('monthRef', args.monthRef!)
+            .eq('monthRef', monthRef)
             .eq('deptId', keydev.deptId)
             .eq('teamId', keydev.teamId)
         )
         .first()
+      const effectiveTeamLimit = Math.min(budgetAlloc?.maxAlloc ?? 0, teamLimit)
 
       // Conta i keydevs già assegnati a quel mese per questo dept/team
       // (stati che occupano slot: FrontValidated, InProgress, Done, Checked)
@@ -1262,7 +1313,7 @@ export const updateMonth = mutation({
       const existingKeydevs = await ctx.db
         .query('keydevs')
         .withIndex('by_dept_and_month', (q) =>
-          q.eq('deptId', keydev.deptId).eq('monthRef', args.monthRef!)
+          q.eq('deptId', keydev.deptId).eq('monthRef', monthRef)
         )
         .collect()
 
@@ -1276,15 +1327,15 @@ export const updateMonth = mutation({
 
       // Aggiorna il mese
       await ctx.db.patch(args.id, {
-        monthRef: args.monthRef
+        monthRef
       })
 
       return {
         success: true,
         budgetInfo: budgetAlloc ? {
-          maxAlloc: budgetAlloc.maxAlloc,
+          maxAlloc: effectiveTeamLimit,
           currentlyUsed: occupiedCount,
-          available: Math.max(0, budgetAlloc.maxAlloc - occupiedCount)
+          available: Math.max(0, effectiveTeamLimit - occupiedCount)
         } : undefined
       }
     } else {

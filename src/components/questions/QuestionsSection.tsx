@@ -73,9 +73,11 @@ export default function QuestionsSection({
     availableLabels,
     labelsByQuestion,
     createQuestion,
+    updateQuestion,
     createAnswer,
     updateAnswer,
     validateAnswer,
+    deleteQuestion,
     addLabel,
     removeLabel
   } = useQuestionsDomainAdapter({ domain, entityId })
@@ -84,7 +86,8 @@ export default function QuestionsSection({
   const [isCreateQuestionDialogOpen, setIsCreateQuestionDialogOpen] = useState(false)
   const [activeQuestionsTab, setActiveQuestionsTab] = useState<'red' | 'validated'>('red')
   const [answerBody, setAnswerBody] = useState('')
-  const [recipientRole, setRecipientRole] = useState<'owner' | 'requester'>('owner')
+  const [recipientRole, setRecipientRole] = useState<'owner' | 'requester' | 'user'>('owner')
+  const [recipientUserId, setRecipientUserId] = useState<Id<'users'> | undefined>(undefined)
   const [mentionQuery, setMentionQuery] = useState('')
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionPosition, setMentionPosition] = useState<{ start: number; end: number } | null>(null)
@@ -92,7 +95,10 @@ export default function QuestionsSection({
   const [copyToastError, setCopyToastError] = useState(false)
   const [editingAnswerId, setEditingAnswerId] = useState<string | null>(null)
   const [editingAnswerBody, setEditingAnswerBody] = useState('')
-  const [editingAnswerRecipientRole, setEditingAnswerRecipientRole] = useState<'owner' | 'requester'>('owner')
+  const [editingAnswerRecipientRole, setEditingAnswerRecipientRole] = useState<'owner' | 'requester' | 'user'>('owner')
+  const [editingAnswerRecipientUserId, setEditingAnswerRecipientUserId] = useState<Id<'users'> | undefined>(undefined)
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
+  const [editingQuestionText, setEditingQuestionText] = useState('')
   const [labelsFilter, setLabelsFilter] = useState<string>('all')
   const lastAppliedHighlightRef = useRef<string | null>(null)
   const copyToastTimeoutRef = useRef<number | null>(null)
@@ -139,11 +145,10 @@ export default function QuestionsSection({
   const activeRequesterId = activeQuestion?.requesterId ?? participants.requesterId
   const hasRequesterRecipient = domain === 'keydev' || !!activeRequesterId
   const requesterName = users?.find((u) => u._id === activeRequesterId)?.name || 'Requester'
-  const selectedRecipientRole = hasRequesterRecipient ? recipientRole : 'owner'
-  const selectedEditingRecipientRole = hasRequesterRecipient ? editingAnswerRecipientRole : 'owner'
-  const getRecipientLabel = (role: 'owner' | 'requester') => {
+  const getRecipientLabel = (role: 'owner' | 'requester' | 'user', userId?: Id<'users'>) => {
     if (role === 'owner') return ownerName
-    if (hasRequesterRecipient) return requesterName
+    if (role === 'requester' && hasRequesterRecipient) return requesterName
+    if (role === 'user' && userId) return users?.find((u) => u._id === userId)?.name || 'Utente'
     return 'Requester'
   }
   const normalizedSearchTerm = questionSearchTerm?.trim().toLowerCase() || ''
@@ -203,6 +208,7 @@ export default function QuestionsSection({
   const resetAnswerComposer = () => {
     setAnswerBody('')
     setRecipientRole('owner')
+    setRecipientUserId(undefined)
     setMentionQuery('')
     setMentionPosition(null)
     setShowMentionDropdown(false)
@@ -213,6 +219,9 @@ export default function QuestionsSection({
     setEditingAnswerId(null)
     setEditingAnswerBody('')
     setEditingAnswerRecipientRole('owner')
+    setEditingAnswerRecipientUserId(undefined)
+    setEditingQuestionId(null)
+    setEditingQuestionText('')
     updateDialogSearch({ questionId: undefined, highlightedAnswer: undefined, answersPage: undefined })
   }
 
@@ -231,7 +240,15 @@ export default function QuestionsSection({
     setEditingAnswerId(null)
     setEditingAnswerBody('')
     setEditingAnswerRecipientRole('owner')
+    setEditingAnswerRecipientUserId(undefined)
+    setEditingQuestionId(null)
+    setEditingQuestionText('')
     updateDialogSearch({ questionId, highlightedAnswer: undefined, answersPage: '1' })
+  }
+
+  const setRecipientToUser = (userId: Id<'users'>) => {
+    setRecipientRole('user')
+    setRecipientUserId(userId)
   }
 
   useEffect(() => {
@@ -323,7 +340,7 @@ export default function QuestionsSection({
             </div>
             <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
               <span className="font-semibold">Regole:</span>
-              <span>Tutti possono aggiungere Q/A, solo l&apos;owner può validare una risposta.</span>
+              <span>Tutti possono aggiungere Q/A, owner e admin possono validare ed eliminare domande.</span>
             </p>
             {questionsStatus && (
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -377,44 +394,77 @@ export default function QuestionsSection({
             return (
               <div
                 key={question._id}
-                className={`p-3 rounded-lg border ${
+                role="button"
+                tabIndex={0}
+                onClick={() => openAnswersDialog(question._id)}
+                onKeyDown={(e) => e.key === 'Enter' && openAnswersDialog(question._id)}
+                className={`p-3 rounded-lg border cursor-pointer transition-colors hover:bg-opacity-90 ${
                   isValidated
-                    ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
-                    : 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
+                    ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
+                    : 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
                 }`}
               >
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span
-                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      isValidated
-                        ? 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200'
-                        : 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200'
-                    }`}
-                  >
-                    {isValidated ? 'VALIDATA' : 'ROSSA'}
-                  </span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {question.source === 'Template' ? 'Template Admin' : 'Manuale'}
-                  </span>
-                </div>
-
-                <div className="flex flex-col lg:flex-row lg:items-start gap-2 lg:gap-3">
-                  <button
-                    type="button"
-                    onClick={() => openAnswersDialog(question._id)}
-                    className="text-left text-sm text-gray-900 dark:text-gray-100 hover:underline flex-1 min-w-0"
-                  >
-                    {question.text}
-                  </button>
-                  <div className="lg:max-w-[48%] w-full">
-                    <QuestionLabelsInput
-                      availableLabels={availableLabels}
-                      selectedLabels={questionLabels}
-                      onAddLabel={async (labelText) => addLabel(question._id, labelText)}
-                      onRemoveLabel={async (labelId) => removeLabel(question._id, labelId)}
-                    />
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        isValidated
+                          ? 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200'
+                          : 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200'
+                      }`}
+                    >
+                      {isValidated ? 'VALIDATA' : 'ROSSA'}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {question.source === 'Template' ? 'Template Admin' : 'Manuale'}
+                    </span>
+                    <div onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+                      <QuestionLabelsInput
+                        availableLabels={availableLabels}
+                        selectedLabels={questionLabels}
+                        onAddLabel={async (labelText) => addLabel(question._id, labelText)}
+                        onRemoveLabel={async (labelId) => removeLabel(question._id, labelId)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {(isOwner || isCurrentUserAdmin) && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingQuestionId(question._id)
+                            setEditingQuestionText(question.text)
+                          }}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-200/70 dark:hover:bg-gray-700/70"
+                          title="Modifica domanda"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (window.confirm('Eliminare questa domanda? Le risposte associate verranno rimosse.')) {
+                              await deleteQuestion(question._id)
+                            }
+                          }}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-200/70 dark:hover:bg-gray-700/70"
+                          title="Elimina domanda"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
+
+                <p className="text-left text-sm text-gray-900 dark:text-gray-100 min-w-0">
+                  {question.text}
+                </p>
 
                 {question.validatedAnswer && (
                   <div className="mt-2.5 p-2.5 rounded bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-700">
@@ -422,16 +472,6 @@ export default function QuestionsSection({
                     <p className="text-sm text-green-900 dark:text-green-200">{question.validatedAnswer.body}</p>
                   </div>
                 )}
-
-                <div className="mt-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => openAnswersDialog(question._id)}
-                    className="text-xs text-blue-700 dark:text-blue-300 hover:underline"
-                  >
-                    Apri risposte
-                  </button>
-                </div>
               </div>
             )
           })
@@ -486,6 +526,56 @@ export default function QuestionsSection({
         </div>
       )}
 
+      {editingQuestionId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setEditingQuestionId(null)}>
+          <div className="w-full max-w-xl rounded-lg bg-white dark:bg-gray-800 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Modifica domanda</h3>
+              <button onClick={() => setEditingQuestionId(null)} className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">✕</button>
+            </div>
+            <div className="px-5 py-4">
+              <input
+                type="text"
+                value={editingQuestionText}
+                onChange={(e) => setEditingQuestionText(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    if (editingQuestionText.trim()) {
+                      await updateQuestion(editingQuestionId, editingQuestionText.trim())
+                      setEditingQuestionId(null)
+                    }
+                  }
+                }}
+                placeholder="Testo della domanda..."
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                autoFocus
+              />
+            </div>
+            <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+              <button
+                onClick={() => setEditingQuestionId(null)}
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={async () => {
+                  if (editingQuestionText.trim()) {
+                    await updateQuestion(editingQuestionId, editingQuestionText.trim())
+                    setEditingQuestionId(null)
+                  }
+                }}
+                disabled={!editingQuestionText.trim()}
+                className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50"
+              >
+                Salva
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeQuestionId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={(e) => {
           if (e.target === e.currentTarget) closeAnswersDialog()
@@ -494,7 +584,19 @@ export default function QuestionsSection({
             <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <div className="min-w-0">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">Dialog risposte</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{activeQuestion?.text}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{activeQuestion?.text}</p>
+                  {activeQuestion?.source === 'Manual' && (activeQuestion?.createdById ?? activeQuestion?.requesterId) && (
+                    <button
+                      type="button"
+                      onClick={() => setRecipientToUser((activeQuestion?.createdById ?? activeQuestion?.requesterId)!)}
+                      className="text-xs text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap"
+                      title="Rispondi all'autore della domanda"
+                    >
+                      Rispondi all&apos;autore
+                    </button>
+                  )}
+                </div>
               </div>
               <button onClick={closeAnswersDialog} className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">✕</button>
             </div>
@@ -522,10 +624,18 @@ export default function QuestionsSection({
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{formatUserName(senderName)}</span>
                           <span className="text-xs text-gray-500 dark:text-gray-400">
-                            → {getRecipientLabel(answer.recipientRole)}
+                            → {getRecipientLabel(answer.recipientRole, 'recipientUserId' in answer ? answer.recipientUserId : undefined)}
                           </span>
                           <span className="text-xs text-gray-400 dark:text-gray-500">{new Date(answer.ts).toLocaleString('it-IT')}</span>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => setRecipientToUser(answer.senderId)}
+                          className="text-xs text-blue-700 dark:text-blue-300 hover:underline"
+                          title="Rispondi a questo utente"
+                        >
+                          Rispondi
+                        </button>
                         <button
                           type="button"
                           onClick={async () => {
@@ -559,14 +669,29 @@ export default function QuestionsSection({
                       {isEditingThisAnswer ? (
                         <div className="space-y-2">
                           <select
-                            value={selectedEditingRecipientRole}
-                            onChange={(e) => setEditingAnswerRecipientRole(e.target.value as 'owner' | 'requester')}
+                            value={editingAnswerRecipientRole === 'user' && editingAnswerRecipientUserId ? `user:${editingAnswerRecipientUserId}` : editingAnswerRecipientRole}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              if (v === 'owner') {
+                                setEditingAnswerRecipientRole('owner')
+                                setEditingAnswerRecipientUserId(undefined)
+                              } else if (v === 'requester') {
+                                setEditingAnswerRecipientRole('requester')
+                                setEditingAnswerRecipientUserId(undefined)
+                              } else if (v.startsWith('user:')) {
+                                setEditingAnswerRecipientRole('user')
+                                setEditingAnswerRecipientUserId(v.slice(5) as Id<'users'>)
+                              }
+                            }}
                             className="w-full sm:w-72 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100 text-sm"
                           >
                             <option value="owner">Owner ({ownerName})</option>
                             {hasRequesterRecipient && (
                               <option value="requester">Requester ({requesterName})</option>
                             )}
+                            {users?.map((u) => (
+                              <option key={u._id} value={`user:${u._id}`}>{u.name}</option>
+                            ))}
                           </select>
                           <textarea
                             value={editingAnswerBody}
@@ -584,7 +709,8 @@ export default function QuestionsSection({
                                 await updateAnswer({
                                   answerId: editingAnswerId,
                                   body: editingAnswerBody.trim(),
-                                  recipientRole: selectedEditingRecipientRole,
+                                  recipientRole: editingAnswerRecipientRole,
+                                  recipientUserId: editingAnswerRecipientRole === 'user' ? editingAnswerRecipientUserId : undefined,
                                   mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
                                 })
                                 setEditingAnswerId(null)
@@ -609,6 +735,7 @@ export default function QuestionsSection({
                                 setEditingAnswerId(String(answer._id))
                                 setEditingAnswerBody(answer.body)
                                 setEditingAnswerRecipientRole(answer.recipientRole)
+                                setEditingAnswerRecipientUserId('recipientUserId' in answer ? answer.recipientUserId : undefined)
                               }}
                               className="text-xs text-blue-700 dark:text-blue-300 hover:underline"
                             >
@@ -618,7 +745,7 @@ export default function QuestionsSection({
                         </div>
                       )}
 
-                      {isOwner && (
+                      {(isOwner || isCurrentUserAdmin) && (
                         <div className="mt-2">
                           <label className="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
                             <input
@@ -647,14 +774,29 @@ export default function QuestionsSection({
               <div className="mb-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Destinatario</label>
                 <select
-                  value={selectedRecipientRole}
-                  onChange={(e) => setRecipientRole(e.target.value as 'owner' | 'requester')}
+                  value={recipientRole === 'user' && recipientUserId ? `user:${recipientUserId}` : recipientRole}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === 'owner') {
+                      setRecipientRole('owner')
+                      setRecipientUserId(undefined)
+                    } else if (v === 'requester') {
+                      setRecipientRole('requester')
+                      setRecipientUserId(undefined)
+                    } else if (v.startsWith('user:')) {
+                      setRecipientRole('user')
+                      setRecipientUserId(v.slice(5) as Id<'users'>)
+                    }
+                  }}
                   className="w-full sm:w-72 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
                 >
                   <option value="owner">Owner ({ownerName})</option>
                   {hasRequesterRecipient && (
                     <option value="requester">Requester ({requesterName})</option>
                   )}
+                  {users?.map((u) => (
+                    <option key={u._id} value={`user:${u._id}`}>{u.name}</option>
+                  ))}
                 </select>
               </div>
               <div className="relative mention-dropdown-container">
@@ -685,7 +827,8 @@ export default function QuestionsSection({
                     await createAnswer({
                       questionId: activeQuestionId,
                       body: answerBody.trim(),
-                      recipientRole: selectedRecipientRole,
+                      recipientRole,
+                      recipientUserId: recipientRole === 'user' ? recipientUserId : undefined,
                       mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
                     })
                     setAnswerBody('')

@@ -39,8 +39,10 @@ export default function RootLayout() {
 
   // Collassa e chiudi la sidebar automaticamente ad ogni navigazione
   useEffect(() => {
-    setSidebarOpen(false)
-    setSidebarCollapsed(true)
+    queueMicrotask(() => {
+      setSidebarOpen(false)
+      setSidebarCollapsed(true)
+    })
   }, [location.pathname])
 
   // Blocca lo scroll del body quando la sidebar è aperta su mobile

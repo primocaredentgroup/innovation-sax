@@ -271,7 +271,8 @@ export const getKeyDevQuestionAnswerContext = internalQuery({
         questionId: v.id('keyDevQuestions'),
         body: v.string(),
         senderId: v.id('users'),
-        recipientRole: v.union(v.literal('owner'), v.literal('requester')),
+        recipientRole: v.union(v.literal('owner'), v.literal('requester'), v.literal('user')),
+        recipientUserId: v.optional(v.id('users')),
         mentionedUserIds: v.optional(v.array(v.id('users'))),
         ts: v.number()
       }),
@@ -322,8 +323,11 @@ export const getKeyDevQuestionAnswerContext = internalQuery({
     const sender = await ctx.db.get(answer.senderId)
     if (!sender) return null
 
-    const primaryRecipientId =
-      answer.recipientRole === 'owner' ? keyDev.ownerId : keyDev.requesterId
+    const primaryRecipientId = answer.recipientUserId
+      ? answer.recipientUserId
+      : answer.recipientRole === 'owner'
+        ? keyDev.ownerId
+        : keyDev.requesterId
     const primaryRecipient = primaryRecipientId
       ? await ctx.db.get(primaryRecipientId)
       : null
@@ -354,6 +358,7 @@ export const getKeyDevQuestionAnswerContext = internalQuery({
         body: answer.body,
         senderId: answer.senderId,
         recipientRole: answer.recipientRole,
+        recipientUserId: answer.recipientUserId,
         mentionedUserIds: answer.mentionedUserIds,
         ts: answer.ts
       },
@@ -400,7 +405,8 @@ export const getCoreAppQuestionAnswerContext = internalQuery({
         questionId: v.id('coreAppQuestions'),
         body: v.string(),
         senderId: v.id('users'),
-        recipientRole: v.union(v.literal('owner'), v.literal('requester')),
+        recipientRole: v.union(v.literal('owner'), v.literal('requester'), v.literal('user')),
+        recipientUserId: v.optional(v.id('users')),
         mentionedUserIds: v.optional(v.array(v.id('users'))),
         ts: v.number()
       }),
@@ -450,8 +456,9 @@ export const getCoreAppQuestionAnswerContext = internalQuery({
     const sender = await ctx.db.get(answer.senderId)
     if (!sender) return null
 
-    const primaryRecipientId =
-      answer.recipientRole === 'owner'
+    const primaryRecipientId = answer.recipientUserId
+      ? answer.recipientUserId
+      : answer.recipientRole === 'owner'
         ? coreApp.ownerId
         : question.source === 'Manual'
           ? question.createdById
@@ -486,6 +493,7 @@ export const getCoreAppQuestionAnswerContext = internalQuery({
         body: answer.body,
         senderId: answer.senderId,
         recipientRole: answer.recipientRole,
+        recipientUserId: answer.recipientUserId,
         mentionedUserIds: answer.mentionedUserIds,
         ts: answer.ts
       },
@@ -512,6 +520,126 @@ export const getCoreAppQuestionAnswerContext = internalQuery({
           }
         : null,
       mentionedUsers
+    }
+  }
+})
+
+/**
+ * Query interna per recuperare il contesto di una nuova domanda KeyDev (notifica owner).
+ */
+export const getKeyDevNewQuestionContext = internalQuery({
+  args: {
+    questionId: v.id('keyDevQuestions')
+  },
+  returns: v.union(
+    v.object({
+      question: v.object({
+        _id: v.id('keyDevQuestions'),
+        text: v.string()
+      }),
+      keyDev: v.object({
+        _id: v.id('keydevs'),
+        readableId: v.string(),
+        title: v.string()
+      }),
+      owner: v.object({
+        _id: v.id('users'),
+        name: v.string(),
+        email: v.optional(v.string())
+      }),
+      author: v.object({
+        _id: v.id('users'),
+        name: v.string()
+      })
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const question = await ctx.db.get(args.questionId)
+    if (!question) return null
+
+    const keyDev = await ctx.db.get(question.keyDevId)
+    if (!keyDev || !keyDev.ownerId) return null
+
+    const owner = await ctx.db.get(keyDev.ownerId)
+    if (!owner) return null
+
+    const author = await ctx.db.get(question.createdById)
+    if (!author) return null
+
+    return {
+      question: { _id: question._id, text: question.text },
+      keyDev: {
+        _id: keyDev._id,
+        readableId: keyDev.readableId,
+        title: keyDev.title
+      },
+      owner: {
+        _id: owner._id,
+        name: owner.name,
+        email: owner.email
+      },
+      author: { _id: author._id, name: author.name }
+    }
+  }
+})
+
+/**
+ * Query interna per recuperare il contesto di una nuova domanda CoreApp (notifica owner).
+ */
+export const getCoreAppNewQuestionContext = internalQuery({
+  args: {
+    questionId: v.id('coreAppQuestions')
+  },
+  returns: v.union(
+    v.object({
+      question: v.object({
+        _id: v.id('coreAppQuestions'),
+        text: v.string()
+      }),
+      coreApp: v.object({
+        _id: v.id('coreApps'),
+        slug: v.string(),
+        name: v.string()
+      }),
+      owner: v.object({
+        _id: v.id('users'),
+        name: v.string(),
+        email: v.optional(v.string())
+      }),
+      author: v.object({
+        _id: v.id('users'),
+        name: v.string()
+      })
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const question = await ctx.db.get(args.questionId)
+    if (!question) return null
+
+    const coreApp = await ctx.db.get(question.coreAppId)
+    if (!coreApp || !coreApp.ownerId) return null
+
+    const owner = await ctx.db.get(coreApp.ownerId)
+    if (!owner) return null
+
+    const author = await ctx.db.get(question.createdById)
+    if (!author) return null
+
+    return {
+      question: { _id: question._id, text: question.text },
+      coreApp: {
+        _id: coreApp._id,
+        slug: coreApp.slug,
+        name: coreApp.name
+      },
+      owner: {
+        _id: owner._id,
+        name: owner.name,
+        email: owner.email
+      },
+      author: { _id: author._id, name: author.name }
     }
   }
 })

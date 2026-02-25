@@ -2,7 +2,7 @@ import type { Id } from '../../../convex/_generated/dataModel'
 
 export type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
 export type QuestionDomain = 'keydev' | 'coreapp'
-export type RecipientRole = 'owner' | 'requester'
+export type RecipientRole = 'owner' | 'requester' | 'user'
 
 export type UserLite = {
   _id: Id<'users'>
@@ -19,6 +19,7 @@ export type QuestionLite = {
   _id: string
   text: string
   source: 'Template' | 'Manual'
+  createdById?: Id<'users'>
   requesterId?: Id<'users'>
   validatedAnswerId?: string
   validatedAnswer?: {

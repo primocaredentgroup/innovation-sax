@@ -452,9 +452,13 @@ export const getCoreAppsStats = query({
 /**
  * Ottiene i KeyDev scaduti (mese precedente all'attuale e non ancora in stato "Checked").
  * Mostra sempre tutti i keydevs scaduti, indipendentemente dal mese selezionato.
+ * Opzionalmente filtra per team.
  */
 export const getPastKeyDevs = query({
-  args: { currentMonth: v.string() },
+  args: {
+    currentMonth: v.string(),
+    teamId: v.optional(v.id('teams'))
+  },
   returns: v.array(
     v.object({
       _id: v.id('keydevs'),
@@ -468,11 +472,17 @@ export const getPastKeyDevs = query({
     })
   ),
   handler: async (ctx, args) => {
-    const allKeyDevs = await ctx.db.query('keydevs').collect().then(kds => kds.filter(kd => !kd.deletedAt))
+    let allKeyDevs = await ctx.db.query('keydevs').collect().then(kds => kds.filter(kd => !kd.deletedAt))
 
-    return allKeyDevs
-      .filter((kd) => kd.monthRef && kd.monthRef < args.currentMonth && kd.status !== 'Checked')
-      .map((kd) => ({
+    allKeyDevs = allKeyDevs.filter(
+      (kd) => kd.monthRef && kd.monthRef < args.currentMonth && kd.status !== 'Checked'
+    )
+
+    if (args.teamId) {
+      allKeyDevs = allKeyDevs.filter((kd) => kd.teamId === args.teamId)
+    }
+
+    return allKeyDevs.map((kd) => ({
         _id: kd._id,
         readableId: kd.readableId,
         title: kd.title,

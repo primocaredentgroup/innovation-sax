@@ -30,6 +30,7 @@ const keyDevQuestionValidator = v.object({
       body: v.string(),
       senderId: v.id('users'),
       recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+      recipientUserId: v.optional(v.id('users')),
       mentionedUserIds: v.optional(v.array(v.id('users'))),
       ts: v.number()
     })
@@ -43,6 +44,7 @@ const keyDevQuestionAnswerValidator = v.object({
   body: v.string(),
   senderId: v.id('users'),
   recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+  recipientUserId: v.optional(v.id('users')),
   mentionedUserIds: v.optional(v.array(v.id('users'))),
   ts: v.number()
 })
@@ -94,11 +96,12 @@ async function recomputeKeyDevStatusFromQuestions(
   const keydev = keydevDoc as Doc<'keydevs'> | null
   if (!keydev) throw new Error('KeyDev non trovato')
 
-  const questions = await convexCtx.db
+  const allQuestions = await convexCtx.db
     .query('keyDevQuestions')
     .withIndex('by_keyDev', (q) => q.eq('keyDevId', keyDevId))
     .collect()
 
+  const questions = allQuestions.filter((q) => q.deletedAt === undefined)
   if (questions.length === 0) return
 
   const allValidated = questions.every((question) => question.validatedAnswerId !== undefined)
@@ -192,10 +195,12 @@ export const listByKeyDev = query({
   args: { keyDevId: v.id('keydevs') },
   returns: v.array(keyDevQuestionValidator),
   handler: async (ctx, args) => {
-    const questions = await ctx.db
+    const allQuestions = await ctx.db
       .query('keyDevQuestions')
       .withIndex('by_keyDev_and_order', (q) => q.eq('keyDevId', args.keyDevId))
       .collect()
+
+    const questions = allQuestions.filter((q) => q.deletedAt === undefined)
 
     const result: Array<{
       _id: Id<'keyDevQuestions'>
@@ -213,7 +218,8 @@ export const listByKeyDev = query({
         questionId: Id<'keyDevQuestions'>
         body: string
         senderId: Id<'users'>
-        recipientRole: 'owner' | 'requester'
+        recipientRole: 'owner' | 'requester' | 'user'
+        recipientUserId?: Id<'users'>
         mentionedUserIds?: Array<Id<'users'>>
         ts: number
       }
@@ -263,8 +269,42 @@ export const createQuestion = mutation({
       source: 'Manual'
     })
 
+    if (keydev.ownerId && keydev.ownerId !== user._id) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendKeyDevNewQuestionNotification, {
+        questionId
+      })
+    }
+
     await recomputeKeyDevStatusFromQuestions(ctx, args.keyDevId)
     return questionId
+  }
+})
+
+/**
+ * Aggiorna il testo di una domanda. Owner o Admin.
+ */
+export const updateQuestion = mutation({
+  args: {
+    questionId: v.id('keyDevQuestions'),
+    text: v.string()
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await getCurrentUserOrThrow(ctx)
+    const question = await ctx.db.get(args.questionId)
+    if (!question) throw new Error('Domanda non trovata')
+    if (question.deletedAt !== undefined) throw new Error('Domanda eliminata')
+
+    const keydev = await ctx.db.get(question.keyDevId)
+    if (!keydev) throw new Error('KeyDev non trovato')
+
+    const userRoles = user.roles as Role[] | undefined
+    if (keydev.ownerId !== user._id && !isAdmin(userRoles)) {
+      throw new Error("Solo l'owner del KeyDev o un Admin possono modificare domande")
+    }
+
+    await ctx.db.patch(args.questionId, { text: args.text.trim() })
+    return null
   }
 })
 
@@ -290,6 +330,7 @@ export const createAnswer = mutation({
     questionId: v.id('keyDevQuestions'),
     body: v.string(),
     recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+    recipientUserId: v.optional(v.id('users')),
     mentionedUserIds: v.optional(v.array(v.id('users')))
   },
   returns: v.id('keyDevQuestionAnswers'),
@@ -301,11 +342,16 @@ export const createAnswer = mutation({
     const keydev = await ctx.db.get(question.keyDevId)
     if (!keydev) throw new Error('KeyDev non trovato')
 
+    if (args.recipientRole === 'user' && !args.recipientUserId) {
+      throw new Error('recipientUserId obbligatorio quando recipientRole è user')
+    }
+
     const answerId = await ctx.db.insert('keyDevQuestionAnswers', {
       questionId: args.questionId,
       body: args.body.trim(),
       senderId: user._id,
       recipientRole: args.recipientRole,
+      recipientUserId: args.recipientUserId,
       mentionedUserIds: args.mentionedUserIds,
       ts: Date.now()
     })
@@ -327,6 +373,7 @@ export const updateAnswer = mutation({
     answerId: v.id('keyDevQuestionAnswers'),
     body: v.string(),
     recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+    recipientUserId: v.optional(v.id('users')),
     mentionedUserIds: v.optional(v.array(v.id('users')))
   },
   returns: v.null(),
@@ -348,9 +395,14 @@ export const updateAnswer = mutation({
       throw new Error('Puoi modificare solo le tue risposte')
     }
 
+    if (args.recipientRole === 'user' && !args.recipientUserId) {
+      throw new Error('recipientUserId obbligatorio quando recipientRole è user')
+    }
+
     await ctx.db.patch(answer._id, {
       body: args.body.trim(),
       recipientRole: args.recipientRole,
+      recipientUserId: args.recipientUserId,
       mentionedUserIds: args.mentionedUserIds
     })
 
@@ -379,8 +431,9 @@ export const validateAnswer = mutation({
     const keydev = await ctx.db.get(question.keyDevId)
     if (!keydev) throw new Error('KeyDev non trovato')
 
-    if (keydev.ownerId !== user._id) {
-      throw new Error('Solo l’owner del KeyDev può validare la risposta')
+    const userRoles = user.roles as Role[] | undefined
+    if (keydev.ownerId !== user._id && !isAdmin(userRoles)) {
+      throw new Error("Solo l'owner del KeyDev o un Admin possono validare la risposta")
     }
 
     const answer = await ctx.db.get(args.answerId)
@@ -393,6 +446,50 @@ export const validateAnswer = mutation({
       validatedAnswerId: answer._id
     })
 
+    await recomputeKeyDevStatusFromQuestions(ctx, question.keyDevId)
+    return null
+  }
+})
+
+/**
+ * Soft-delete di una domanda. Owner o Admin.
+ */
+export const deleteQuestion = mutation({
+  args: {
+    questionId: v.id('keyDevQuestions')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await getCurrentUserOrThrow(ctx)
+    const question = await ctx.db.get(args.questionId)
+    if (!question) throw new Error('Domanda non trovata')
+    if (question.deletedAt !== undefined) throw new Error('Domanda già eliminata')
+
+    const keydev = await ctx.db.get(question.keyDevId)
+    if (!keydev) throw new Error('KeyDev non trovato')
+
+    const userRoles = user.roles as Role[] | undefined
+    if (keydev.ownerId !== user._id && !isAdmin(userRoles)) {
+      throw new Error("Solo l'owner del KeyDev o un Admin possono eliminare domande")
+    }
+
+    const answers = await ctx.db
+      .query('keyDevQuestionAnswers')
+      .withIndex('by_question_and_ts', (q) => q.eq('questionId', args.questionId))
+      .collect()
+    for (const answer of answers) {
+      await ctx.db.delete(answer._id)
+    }
+
+    const labelLinks = await ctx.db
+      .query('questionToLabels')
+      .withIndex('by_keyDevQuestion', (q) => q.eq('keyDevQuestionId', args.questionId))
+      .collect()
+    for (const link of labelLinks) {
+      await ctx.db.delete(link._id)
+    }
+
+    await ctx.db.patch(args.questionId, { deletedAt: Date.now() })
     await recomputeKeyDevStatusFromQuestions(ctx, question.keyDevId)
     return null
   }
@@ -426,11 +523,12 @@ export const getQuestionsStatus = query({
     const keydev = await ctx.db.get(args.keyDevId)
     if (!keydev) throw new Error('KeyDev non trovato')
 
-    const questions = await ctx.db
+    const allQuestions = await ctx.db
       .query('keyDevQuestions')
       .withIndex('by_keyDev', (q) => q.eq('keyDevId', args.keyDevId))
       .collect()
 
+    const questions = allQuestions.filter((q) => q.deletedAt === undefined)
     const total = questions.length
     const validated = questions.filter((q) => q.validatedAnswerId !== undefined).length
     const hasUnvalidated = validated < total
@@ -461,11 +559,12 @@ export const getStatusByKeyDevIds = query({
   handler: async (ctx, args) => {
     const result: Record<string, { total: number; validated: number; missing: number }> = {}
     for (const keyDevId of args.keyDevIds) {
-      const questions = await ctx.db
+      const allQuestions = await ctx.db
         .query('keyDevQuestions')
         .withIndex('by_keyDev', (q) => q.eq('keyDevId', keyDevId))
         .collect()
 
+      const questions = allQuestions.filter((q) => q.deletedAt === undefined)
       const total = questions.length
       const validated = questions.filter((question) => question.validatedAnswerId !== undefined).length
       result[keyDevId] = {

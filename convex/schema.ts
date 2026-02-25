@@ -45,7 +45,8 @@ export const keyDevQuestionSourceValidator = v.union(
 
 export const keyDevQuestionAnswerRecipientRoleValidator = v.union(
   v.literal('owner'),
-  v.literal('requester')
+  v.literal('requester'),
+  v.literal('user')
 )
 
 export const questionDomainValidator = v.union(
@@ -133,8 +134,11 @@ export default defineSchema({
   // Months (riferimento mese e budget totale)
   months: defineTable({
     monthRef: v.string(), // formato "2026-01"
+    teamId: v.optional(v.id('teams')), // opzionale per compatibilità record legacy globali
     totalKeyDev: v.number() // budget X totale per il mese
-  }).index('by_monthRef', ['monthRef']),
+  })
+    .index('by_monthRef', ['monthRef'])
+    .index('by_monthRef_and_team', ['monthRef', 'teamId']),
 
   // KeyDevs - entità principale
   keydevs: defineTable({
@@ -217,7 +221,8 @@ export default defineSchema({
     createdAt: v.number(),
     order: v.number(),
     source: keyDevQuestionSourceValidator,
-    validatedAnswerId: v.optional(v.id('keyDevQuestionAnswers'))
+    validatedAnswerId: v.optional(v.id('keyDevQuestionAnswers')),
+    deletedAt: v.optional(v.number())
   })
     .index('by_keyDev', ['keyDevId'])
     .index('by_keyDev_and_order', ['keyDevId', 'order']),
@@ -228,6 +233,7 @@ export default defineSchema({
     body: v.string(),
     senderId: v.id('users'),
     recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+    recipientUserId: v.optional(v.id('users')),
     mentionedUserIds: v.optional(v.array(v.id('users'))),
     ts: v.number()
   })
@@ -335,7 +341,8 @@ export default defineSchema({
     createdAt: v.number(),
     order: v.number(),
     source: keyDevQuestionSourceValidator,
-    validatedAnswerId: v.optional(v.id('coreAppQuestionAnswers'))
+    validatedAnswerId: v.optional(v.id('coreAppQuestionAnswers')),
+    deletedAt: v.optional(v.number())
   })
     .index('by_coreApp', ['coreAppId'])
     .index('by_coreApp_and_order', ['coreAppId', 'order']),
@@ -346,6 +353,7 @@ export default defineSchema({
     body: v.string(),
     senderId: v.id('users'),
     recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+    recipientUserId: v.optional(v.id('users')),
     mentionedUserIds: v.optional(v.array(v.id('users'))),
     ts: v.number()
   })

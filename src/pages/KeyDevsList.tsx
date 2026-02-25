@@ -458,6 +458,10 @@ export default function KeyDevsListPage() {
     api.budget.getByMonth, 
     selectedMonth ? { monthRef: selectedMonth } : 'skip'
   )
+  const teamMonthLimits = useQuery(
+    api.months.listByMonth,
+    selectedMonth ? { monthRef: selectedMonth } : 'skip'
+  )
   const monthData = useQuery(
     api.months.getByRef, 
     selectedMonth ? { monthRef: selectedMonth } : 'skip'
@@ -690,8 +694,14 @@ export default function KeyDevsListPage() {
       (!search.team || b.teamId === search.team)
     ).reduce((sum, b) => sum + b.maxAlloc, 0) ?? 0
     
-    // Slot massimi disponibili (totalKeyDev del mese) - numero sviluppatori
-    const maxSlots = monthData?.totalKeyDev ?? 0
+    // Slot massimi disponibili:
+    // - se team selezionato: limite team del mese (hard block => 0 se assente)
+    // - altrimenti: somma limiti team del mese, con fallback legacy se non presenti
+    const maxSlots = search.team
+      ? (teamMonthLimits?.find((m) => m.teamId === search.team)?.totalKeyDev ?? 0)
+      : ((teamMonthLimits?.length ?? 0) > 0
+          ? (teamMonthLimits?.reduce((sum, m) => sum + m.totalKeyDev, 0) ?? 0)
+          : (monthData?.totalKeyDev ?? 0))
     
     // Slot in competizione: differenza tra allocati e massimi (se allocati > massimi)
     const competitionSlots = Math.max(0, budgetAssigned - maxSlots)
@@ -703,7 +713,7 @@ export default function KeyDevsListPage() {
     const remainingSlots = Math.max(0, maxSlots - occupiedSlots)
     
     return { occupiedSlots, budgetAssigned, maxSlots, competitionSlots, percentage, remainingSlots }
-  }, [showAllMonths, keydevsByMonth, budgetAllocations, monthData, search.dept, search.team])
+  }, [showAllMonths, keydevsByMonth, budgetAllocations, teamMonthLimits, monthData, search.dept, search.team])
 
   // Generate month options
   const monthOptions = useMemo(() => {

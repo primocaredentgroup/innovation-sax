@@ -29,6 +29,7 @@ const coreAppQuestionValidator = v.object({
       body: v.string(),
       senderId: v.id('users'),
       recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+      recipientUserId: v.optional(v.id('users')),
       mentionedUserIds: v.optional(v.array(v.id('users'))),
       ts: v.number()
     })
@@ -42,6 +43,7 @@ const coreAppQuestionAnswerValidator = v.object({
   body: v.string(),
   senderId: v.id('users'),
   recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+  recipientUserId: v.optional(v.id('users')),
   mentionedUserIds: v.optional(v.array(v.id('users'))),
   ts: v.number()
 })
@@ -120,10 +122,12 @@ export const listByCoreApp = query({
   args: { coreAppId: v.id('coreApps') },
   returns: v.array(coreAppQuestionValidator),
   handler: async (ctx, args) => {
-    const questions = await ctx.db
+    const allQuestions = await ctx.db
       .query('coreAppQuestions')
       .withIndex('by_coreApp_and_order', (q) => q.eq('coreAppId', args.coreAppId))
       .collect()
+
+    const questions = allQuestions.filter((q) => q.deletedAt === undefined)
 
     const result: Array<{
       _id: Id<'coreAppQuestions'>
@@ -142,7 +146,8 @@ export const listByCoreApp = query({
         questionId: Id<'coreAppQuestions'>
         body: string
         senderId: Id<'users'>
-        recipientRole: 'owner' | 'requester'
+        recipientRole: 'owner' | 'requester' | 'user'
+        recipientUserId?: Id<'users'>
         mentionedUserIds?: Array<Id<'users'>>
         ts: number
       }
@@ -181,7 +186,7 @@ export const createQuestion = mutation({
 
     const maxOrder = questions.reduce((acc, item) => Math.max(acc, item.order), 0)
 
-    return await ctx.db.insert('coreAppQuestions', {
+    const questionId = await ctx.db.insert('coreAppQuestions', {
       coreAppId: args.coreAppId,
       text: args.text.trim(),
       createdById: user._id,
@@ -189,6 +194,42 @@ export const createQuestion = mutation({
       order: maxOrder + 1,
       source: 'Manual'
     })
+
+    if (coreApp.ownerId && coreApp.ownerId !== user._id) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendCoreAppNewQuestionNotification, {
+        questionId
+      })
+    }
+
+    return questionId
+  }
+})
+
+/**
+ * Aggiorna il testo di una domanda. Owner o Admin.
+ */
+export const updateQuestion = mutation({
+  args: {
+    questionId: v.id('coreAppQuestions'),
+    text: v.string()
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await getCurrentUserOrThrow(ctx)
+    const question = await ctx.db.get(args.questionId)
+    if (!question) throw new Error('Domanda non trovata')
+    if (question.deletedAt !== undefined) throw new Error('Domanda eliminata')
+
+    const coreApp = await ctx.db.get(question.coreAppId)
+    if (!coreApp) throw new Error('CoreApp non trovata')
+
+    const userRoles = user.roles as Role[] | undefined
+    if (coreApp.ownerId !== user._id && !isAdmin(userRoles)) {
+      throw new Error("Solo l'owner della CoreApp o un Admin possono modificare domande")
+    }
+
+    await ctx.db.patch(args.questionId, { text: args.text.trim() })
+    return null
   }
 })
 
@@ -208,6 +249,7 @@ export const createAnswer = mutation({
     questionId: v.id('coreAppQuestions'),
     body: v.string(),
     recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+    recipientUserId: v.optional(v.id('users')),
     mentionedUserIds: v.optional(v.array(v.id('users')))
   },
   returns: v.id('coreAppQuestionAnswers'),
@@ -216,11 +258,16 @@ export const createAnswer = mutation({
     const question = await ctx.db.get(args.questionId)
     if (!question) throw new Error('Domanda non trovata')
 
+    if (args.recipientRole === 'user' && !args.recipientUserId) {
+      throw new Error('recipientUserId obbligatorio quando recipientRole è user')
+    }
+
     const answerId = await ctx.db.insert('coreAppQuestionAnswers', {
       questionId: args.questionId,
       body: args.body.trim(),
       senderId: user._id,
       recipientRole: args.recipientRole,
+      recipientUserId: args.recipientUserId,
       mentionedUserIds: args.mentionedUserIds,
       ts: Date.now()
     })
@@ -238,6 +285,7 @@ export const updateAnswer = mutation({
     answerId: v.id('coreAppQuestionAnswers'),
     body: v.string(),
     recipientRole: keyDevQuestionAnswerRecipientRoleValidator,
+    recipientUserId: v.optional(v.id('users')),
     mentionedUserIds: v.optional(v.array(v.id('users')))
   },
   returns: v.null(),
@@ -257,9 +305,14 @@ export const updateAnswer = mutation({
     const canEdit = answer.senderId === user._id || isAdmin(userRoles)
     if (!canEdit) throw new Error('Puoi modificare solo le tue risposte')
 
+    if (args.recipientRole === 'user' && !args.recipientUserId) {
+      throw new Error('recipientUserId obbligatorio quando recipientRole è user')
+    }
+
     await ctx.db.patch(answer._id, {
       body: args.body.trim(),
       recipientRole: args.recipientRole,
+      recipientUserId: args.recipientUserId,
       mentionedUserIds: args.mentionedUserIds
     })
 
@@ -267,6 +320,49 @@ export const updateAnswer = mutation({
       answerId: answer._id
     })
 
+    return null
+  }
+})
+
+/**
+ * Soft-delete di una domanda. Owner o Admin.
+ */
+export const deleteQuestion = mutation({
+  args: {
+    questionId: v.id('coreAppQuestions')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await getCurrentUserOrThrow(ctx)
+    const question = await ctx.db.get(args.questionId)
+    if (!question) throw new Error('Domanda non trovata')
+    if (question.deletedAt !== undefined) throw new Error('Domanda già eliminata')
+
+    const coreApp = await ctx.db.get(question.coreAppId)
+    if (!coreApp) throw new Error('CoreApp non trovata')
+
+    const userRoles = user.roles as Role[] | undefined
+    if (coreApp.ownerId !== user._id && !isAdmin(userRoles)) {
+      throw new Error('Solo l\'owner della CoreApp o un Admin possono eliminare domande')
+    }
+
+    const answers = await ctx.db
+      .query('coreAppQuestionAnswers')
+      .withIndex('by_question_and_ts', (q) => q.eq('questionId', args.questionId))
+      .collect()
+    for (const answer of answers) {
+      await ctx.db.delete(answer._id)
+    }
+
+    const labelLinks = await ctx.db
+      .query('questionToLabels')
+      .withIndex('by_coreAppQuestion', (q) => q.eq('coreAppQuestionId', args.questionId))
+      .collect()
+    for (const link of labelLinks) {
+      await ctx.db.delete(link._id)
+    }
+
+    await ctx.db.patch(args.questionId, { deletedAt: Date.now() })
     return null
   }
 })
@@ -310,11 +406,12 @@ export const getQuestionsStatus = query({
     allValidated: v.boolean()
   }),
   handler: async (ctx, args) => {
-    const questions = await ctx.db
+    const allQuestions = await ctx.db
       .query('coreAppQuestions')
       .withIndex('by_coreApp', (q) => q.eq('coreAppId', args.coreAppId))
       .collect()
 
+    const questions = allQuestions.filter((q) => q.deletedAt === undefined)
     const total = questions.length
     const validated = questions.filter((q) => q.validatedAnswerId !== undefined).length
     const hasUnvalidated = validated < total
@@ -342,11 +439,12 @@ export const getStatusByCoreAppIds = query({
     const result: Record<string, { total: number; validated: number; missing: number }> = {}
 
     for (const coreAppId of args.coreAppIds) {
-      const questions = await ctx.db
+      const allQuestions = await ctx.db
         .query('coreAppQuestions')
         .withIndex('by_coreApp', (q) => q.eq('coreAppId', coreAppId))
         .collect()
 
+      const questions = allQuestions.filter((q) => q.deletedAt === undefined)
       const total = questions.length
       const validated = questions.filter((question) => question.validatedAnswerId !== undefined).length
       result[coreAppId] = {
