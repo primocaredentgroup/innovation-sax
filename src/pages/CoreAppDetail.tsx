@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Link, useParams } from '@tanstack/react-router'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
@@ -384,6 +384,7 @@ function normalizeExternalUrl(url: string): string {
 
 export default function CoreAppDetailPage() {
   const { slug } = useParams({ strict: false }) as { slug: string }
+  const navigate = useNavigate()
 
   const coreApp = useQuery(api.coreApps.getBySlug, { slug })
   const months = useQuery(api.months.list)
@@ -425,6 +426,7 @@ export default function CoreAppDetailPage() {
   const updateUpdate = useMutation(api.coreAppUpdates.update)
   const deleteUpdate = useMutation(api.coreAppUpdates.remove)
   const updateCoreApp = useMutation(api.coreApps.update)
+  const removeCoreApp = useMutation(api.coreApps.remove)
   const setPriority = useMutation(api.coreApps.setPriority)
   const addCategorySubscriber = useMutation(api.coreAppsCategories.addSubscriber)
   const removeCategorySubscriber = useMutation(api.coreAppsCategories.removeSubscriber)
@@ -707,6 +709,18 @@ export default function CoreAppDetailPage() {
     setIsEditingName(false)
   }, [coreApp, tempName, updateCoreApp])
 
+  const handleDeleteCoreApp = useCallback(async () => {
+    if (!coreApp) return
+    if (!confirm("Sei sicuro di voler eliminare questa CoreApp? L'operazione non può essere annullata.")) return
+
+    try {
+      await removeCoreApp({ id: coreApp._id })
+      navigate({ to: '/core-apps' })
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Errore durante l'eliminazione della CoreApp")
+    }
+  }, [coreApp, removeCoreApp, navigate])
+
   if (!coreApp) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -772,6 +786,13 @@ export default function CoreAppDetailPage() {
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <button
+              onClick={handleDeleteCoreApp}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 border border-red-300 dark:border-red-700 hover:border-red-400 dark:hover:border-red-600"
+              title="Elimina CoreApp"
+            >
+              Elimina
+            </button>
             {/* Link Note */}
             <Link
               to="/core-apps/$slug/notes"

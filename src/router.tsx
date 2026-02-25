@@ -46,7 +46,8 @@ const keydevsRoute = createRoute({
     team: z.string().optional(),
     status: z.union([z.string(), z.array(z.string())]).optional(),
     query: z.string().optional(),
-    owner: z.string().optional()
+    owner: z.string().optional(),
+    requester: z.string().optional()
   })
 })
 

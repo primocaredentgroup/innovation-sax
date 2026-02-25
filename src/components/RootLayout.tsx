@@ -17,7 +17,7 @@ export default function RootLayout() {
   const location = useLocation()
   const isLoginPage = location.pathname === '/login'
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
 
   const currentMonth = useMemo(() => {
     const now = new Date()
@@ -36,6 +36,12 @@ export default function RootLayout() {
       navigate({ to: '/login' })
     }
   }, [isAuthenticated, isLoading, isLoginPage, getOrCreateUser, navigate])
+
+  // Collassa e chiudi la sidebar automaticamente ad ogni navigazione
+  useEffect(() => {
+    setSidebarOpen(false)
+    setSidebarCollapsed(true)
+  }, [location.pathname])
 
   // Blocca lo scroll del body quando la sidebar è aperta su mobile
   useEffect(() => {
@@ -97,32 +103,67 @@ export default function RootLayout() {
       >
         <div className="flex flex-col h-full p-4">
           {/* Header con toggle */}
-          <div className="mb-4 sm:mb-8 flex items-center justify-between shrink-0">
+          <div className={`mb-4 sm:mb-8 shrink-0 ${sidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center justify-between'}`}>
             {!sidebarCollapsed && (
-              <div>
+              <Link
+                to="/"
+                onClick={() => setSidebarOpen(false)}
+                className="flex flex-col hover:opacity-90 transition-opacity"
+                title="Torna alla homepage"
+              >
                 <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Innovation Sax</h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">La musica è cambiata!</p>
-              </div>
+              </Link>
             )}
             {sidebarCollapsed && (
-              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">IS</h1>
+              <>
+                <Link
+                  to="/"
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex items-center justify-center hover:opacity-90 transition-opacity"
+                  title="Torna alla homepage"
+                >
+                  <img src="/sax-icon.png" alt="Sax" className="w-8 h-8 object-contain" />
+                </Link>
+                {/* Toggle collapse button - sotto il logo quando collassata */}
+                <button
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  className="hidden lg:flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                  aria-label="Collassa sidebar"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </>
             )}
-            {/* Toggle collapse button - solo su desktop */}
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="hidden lg:flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-              aria-label="Collassa sidebar"
-            >
-              {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-            </button>
-            {/* Close button - solo su mobile */}
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-              aria-label="Chiudi sidebar"
-            >
-              <X size={20} />
-            </button>
+            {!sidebarCollapsed && (
+              <>
+                {/* Toggle collapse button - affiancato quando espansa */}
+                <button
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  className="hidden lg:flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                  aria-label="Collassa sidebar"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                {/* Close button - solo su mobile */}
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="lg:hidden flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                  aria-label="Chiudi sidebar"
+                >
+                  <X size={20} />
+                </button>
+              </>
+            )}
+            {sidebarCollapsed && (
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="lg:hidden flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                aria-label="Chiudi sidebar"
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
 
           {/* Navigation */}

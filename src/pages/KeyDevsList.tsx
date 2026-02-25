@@ -6,15 +6,17 @@ import type { Id } from '../../convex/_generated/dataModel'
 import { ChevronDown, ChevronUp, X, MessageSquare, Calendar, Search } from 'lucide-react'
 import PrioritySelector from '../components/PrioritySelector'
 
-// Componente Avatar con Tooltip
+// Componente Avatar con Tooltip (riutilizzabile per Owner e Requester)
 function OwnerAvatar({ 
   owner, 
   size = 'sm', 
-  onClick 
+  onClick,
+  clickTitle = 'Clicca per cambiare owner'
 }: { 
   owner: { _id: string; name: string; picture?: string; pictureUrl?: string } | null | undefined
   size?: 'sm' | 'md'
   onClick?: () => void
+  clickTitle?: string
 }) {
   const [showTooltip, setShowTooltip] = useState(false)
   
@@ -53,7 +55,7 @@ function OwnerAvatar({
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         onClick={onClick}
-        title={onClick ? 'Clicca per cambiare owner' : owner.name}
+        title={onClick ? clickTitle : owner.name}
       >
         {(owner.picture ?? owner.pictureUrl) ? (
           <img src={owner.picture ?? owner.pictureUrl} alt={owner.name} className="w-full h-full object-cover" />
@@ -67,6 +69,106 @@ function OwnerAvatar({
           <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Modal per cambio requester
+interface RequesterChangeModalProps {
+  isOpen: boolean
+  keyDevTitle: string
+  keyDevReadableId: string
+  currentRequester: { _id: string; name: string } | null | undefined
+  users: Array<{ _id: string; name: string }> | undefined
+  onConfirm: (requesterId: Id<'users'>) => Promise<void>
+  onCancel: () => void
+  isLoading: boolean
+  error: string
+}
+
+function RequesterChangeModal({
+  isOpen,
+  keyDevTitle,
+  keyDevReadableId,
+  currentRequester,
+  users,
+  onConfirm,
+  onCancel,
+  isLoading,
+  error
+}: RequesterChangeModalProps) {
+  const [selectedRequesterId, setSelectedRequesterId] = useState<string>(() => currentRequester?._id || '')
+
+  if (!isOpen) return null
+
+  const handleConfirm = async () => {
+    if (!selectedRequesterId) return
+    await onConfirm(selectedRequesterId as Id<'users'>)
+  }
+
+  return (
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50" onClick={onCancel}>
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Cambia Requester
+        </h3>
+
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p className="text-sm text-blue-800 dark:text-blue-300">
+            <span className="font-medium">{keyDevReadableId}</span> - {keyDevTitle}
+          </p>
+          {currentRequester && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              Requester attuale: <span className="font-medium">{currentRequester.name}</span>
+            </p>
+          )}
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Seleziona nuovo requester
+          </label>
+          <select
+            value={selectedRequesterId}
+            onChange={(e) => setSelectedRequesterId(e.target.value)}
+            disabled={isLoading}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 disabled:opacity-50"
+          >
+            {!currentRequester && <option value="">Seleziona un requester...</option>}
+            {users?.map((user) => (
+              <option key={user._id} value={user._id}>
+                {user.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isLoading}
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isLoading || !selectedRequesterId}
+            className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Salvataggio...' : 'Conferma'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -214,7 +316,7 @@ const getStatusLabel = (
 const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
 
 // Colonne ordinabili
-type SortField = 'priority' | 'title' | 'status' | 'month' | 'department' | 'team' | 'owner' | 'notes'
+type SortField = 'priority' | 'title' | 'status' | 'month' | 'department' | 'team' | 'requester' | 'owner' | 'notes'
 
 // Header colonna ordinabile
 function SortableHeader({
@@ -288,6 +390,23 @@ export default function KeyDevsListPage() {
   const [ownerChangeLoading, setOwnerChangeLoading] = useState(false)
   const [ownerChangeError, setOwnerChangeError] = useState('')
 
+  // Stato per il modal di cambio requester
+  const [requesterChangeModal, setRequesterChangeModal] = useState<{
+    isOpen: boolean
+    keyDevId: Id<'keydevs'> | null
+    keyDevTitle: string
+    keyDevReadableId: string
+    currentRequesterId: Id<'users'> | null | undefined
+  }>({
+    isOpen: false,
+    keyDevId: null,
+    keyDevTitle: '',
+    keyDevReadableId: '',
+    currentRequesterId: null
+  })
+  const [requesterChangeLoading, setRequesterChangeLoading] = useState(false)
+  const [requesterChangeError, setRequesterChangeError] = useState('')
+
   // Ordinamento tabella: default priorità (1,2,3,4,0)
   const [sortField, setSortField] = useState<SortField>('priority')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -332,6 +451,7 @@ export default function KeyDevsListPage() {
   const updateStatus = useMutation(api.keydevs.updateStatus)
   const updateMonth = useMutation(api.keydevs.updateMonth)
   const assignOwner = useMutation(api.keydevs.assignOwner)
+  const assignRequester = useMutation(api.keydevs.assignRequester)
   
   // Query per budget e mese (solo se un mese specifico è selezionato)
   const budgetAllocations = useQuery(
@@ -402,6 +522,9 @@ export default function KeyDevsListPage() {
         ? filteredForCounts.filter((kd) => !kd.ownerId)
         : filteredForCounts.filter((kd) => kd.ownerId === search.owner)
     }
+    if (search.requester) {
+      filteredForCounts = filteredForCounts.filter((kd) => kd.requesterId === search.requester)
+    }
     
     // Conta gli stati nei keydevs filtrati
     for (const kd of filteredForCounts) {
@@ -409,7 +532,7 @@ export default function KeyDevsListPage() {
     }
     
     return counts
-  }, [keydevs, search.dept, search.team, search.owner])
+  }, [keydevs, search.dept, search.team, search.owner, search.requester])
 
   // Normalizza gli status selezionati (può essere stringa o array)
   const selectedStatuses = useMemo(() => {
@@ -434,8 +557,11 @@ export default function KeyDevsListPage() {
         ? result.filter((kd) => !kd.ownerId)
         : result.filter((kd) => kd.ownerId === search.owner)
     }
+    if (search.requester) {
+      result = result.filter((kd) => kd.requesterId === search.requester)
+    }
     return result
-  }, [keydevs, isSearchMode, search.dept, search.team, search.owner, selectedStatuses])
+  }, [keydevs, isSearchMode, search.dept, search.team, search.owner, search.requester, selectedStatuses])
 
   // filteredKeyDevs: in modalità ricerca = baseFilteredKeyDevs (già da backend); altrimenti = baseFilteredKeyDevs
   const filteredKeyDevs = baseFilteredKeyDevs
@@ -474,6 +600,11 @@ export default function KeyDevsListPage() {
           const tb = teams?.find((t) => t._id === b.teamId)?.name || ''
           return mult * ta.localeCompare(tb)
         }
+        case 'requester': {
+          const ra = users?.find((u) => u._id === a.requesterId)?.name || ''
+          const rb = users?.find((u) => u._id === b.requesterId)?.name || ''
+          return mult * ra.localeCompare(rb)
+        }
         case 'owner': {
           const oa = users?.find((u) => u._id === a.ownerId)?.name || ''
           const ob = users?.find((u) => u._id === b.ownerId)?.name || ''
@@ -500,13 +631,38 @@ export default function KeyDevsListPage() {
     if (selectedStatuses.length > 0) {
       filtered = filtered.filter((kd) => selectedStatuses.includes(kd.status))
     }
+    if (search.requester) {
+      filtered = filtered.filter((kd) => kd.requesterId === search.requester)
+    }
     const counts: Record<string, number> = {}
     for (const kd of filtered) {
       const id = kd.ownerId || '__no_owner__'
       counts[id] = (counts[id] ?? 0) + 1
     }
     return counts
-  }, [keydevs, search.dept, search.team, selectedStatuses])
+  }, [keydevs, search.dept, search.team, search.requester, selectedStatuses])
+
+  // Contatori requester per i keydevs filtrati - per popolare gli avatar
+  const requesterCounts = useMemo(() => {
+    if (!keydevs) return {} as Record<string, number>
+    let filtered = keydevs
+    if (search.dept) filtered = filtered.filter((kd) => kd.deptId === search.dept)
+    if (search.team) filtered = filtered.filter((kd) => kd.teamId === search.team)
+    if (selectedStatuses.length > 0) {
+      filtered = filtered.filter((kd) => selectedStatuses.includes(kd.status))
+    }
+    if (search.owner) {
+      filtered = search.owner === '__no_owner__'
+        ? filtered.filter((kd) => !kd.ownerId)
+        : filtered.filter((kd) => kd.ownerId === search.owner)
+    }
+    const counts: Record<string, number> = {}
+    for (const kd of filtered) {
+      const id = kd.requesterId
+      counts[id] = (counts[id] ?? 0) + 1
+    }
+    return counts
+  }, [keydevs, search.dept, search.team, search.owner, selectedStatuses])
 
   // Calcola l'utilizzo del budget (slot occupati vs slot massimi disponibili)
   const budgetUtilization = useMemo(() => {
@@ -594,7 +750,8 @@ export default function KeyDevsListPage() {
         dept: undefined,
         team: undefined,
         status: undefined,
-        owner: undefined
+        owner: undefined,
+        requester: undefined
       })
     } else {
       updateSearch({ query: undefined })
@@ -682,6 +839,55 @@ export default function KeyDevsListPage() {
       currentOwnerId: null
     })
     setOwnerChangeError('')
+  }
+
+  // Handler per aprire il modal di cambio requester
+  const handleOpenRequesterChangeModal = (kd: {
+    _id: Id<'keydevs'>
+    title: string
+    readableId: string
+    requesterId: Id<'users'>
+  }) => {
+    setRequesterChangeError('')
+    setRequesterChangeModal({
+      isOpen: true,
+      keyDevId: kd._id,
+      keyDevTitle: kd.title,
+      keyDevReadableId: kd.readableId,
+      currentRequesterId: kd.requesterId
+    })
+  }
+
+  // Handler per confermare il cambio requester
+  const handleConfirmRequesterChange = async (requesterId: Id<'users'>) => {
+    if (!requesterChangeModal.keyDevId) return
+
+    setRequesterChangeLoading(true)
+    setRequesterChangeError('')
+
+    try {
+      await assignRequester({
+        id: requesterChangeModal.keyDevId,
+        requesterId
+      })
+      handleCloseRequesterChangeModal()
+    } catch (err) {
+      setRequesterChangeError(err instanceof Error ? err.message : 'Errore durante il cambio requester')
+    } finally {
+      setRequesterChangeLoading(false)
+    }
+  }
+
+  // Handler per chiudere il modal di cambio requester
+  const handleCloseRequesterChangeModal = () => {
+    setRequesterChangeModal({
+      isOpen: false,
+      keyDevId: null,
+      keyDevTitle: '',
+      keyDevReadableId: '',
+      currentRequesterId: null
+    })
+    setRequesterChangeError('')
   }
   
   // Formatta il mese per la visualizzazione
@@ -1068,7 +1274,7 @@ export default function KeyDevsListPage() {
                     )
                   })}
                 </div>
-                {/* Filtra per Owner - Mobile (con Filtro mese attivo affiancato) */}
+                {/* Filtra per Owner e Requester - Mobile */}
                 <div className="border-t border-gray-200 dark:border-gray-700 p-2">
                   <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 px-2">Filtra per Owner</p>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1093,6 +1299,33 @@ export default function KeyDevsListPage() {
                           >
                             <OwnerAvatar owner={owner} size="sm" />
                             <span className="sr-only">{owner ? owner.name : 'Senza owner'}</span>
+                          </button>
+                        )
+                      })}
+                  </div>
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 mt-3 px-2">Filtra per Requester</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {Object.entries(requesterCounts)
+                      .filter(([, count]) => count > 0)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([requesterId]) => {
+                        const requester = usersMap.get(requesterId as Id<'users'>) ? { _id: requesterId, name: usersMap.get(requesterId as Id<'users'>)!.name, picture: usersMap.get(requesterId as Id<'users'>)?.picture } : null
+                        const isSelected = search.requester === requesterId
+                        return (
+                          <button
+                            key={requesterId}
+                            type="button"
+                            onClick={() => {
+                              updateSearch({ requester: isSelected ? undefined : requesterId })
+                              if (isSelected) setDropdownOpen(false)
+                            }}
+                            className={`rounded-full p-0.5 transition-all ${
+                              isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
+                            }`}
+                            title={requester ? `${requester.name} (${requesterCounts[requesterId]})` : `Requester (${requesterCounts[requesterId]})`}
+                          >
+                            <OwnerAvatar owner={requester} size="sm" />
+                            <span className="sr-only">{requester ? requester.name : 'Requester'}</span>
                           </button>
                         )
                       })}
@@ -1144,6 +1377,18 @@ export default function KeyDevsListPage() {
                         Rimuovi filtro owner
                       </button>
                     )}
+                    {search.requester && (
+                      <button
+                        onClick={() => {
+                          updateSearch({ requester: undefined })
+                          setDropdownOpen(false)
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                      >
+                        <X size={14} />
+                        Rimuovi filtro requester
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1183,68 +1428,113 @@ export default function KeyDevsListPage() {
               )
             })}
           </div>
-          {/* Filtra per Owner - Desktop (con Filtro mese attivo affiancato) */}
-          <div className="mt-3">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Filtra per Owner
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              {Object.entries(ownerCounts)
-                .filter(([, count]) => count > 0)
-                .sort(([, a], [, b]) => b - a)
-                .map(([ownerId]) => {
-                  const owner = ownerId === '__no_owner__' ? null : (usersMap.get(ownerId as Id<'users'>) ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture } : null)
-                  const isSelected = search.owner === ownerId
-                  const count = ownerCounts[ownerId] ?? 0
-                  return (
-                    <button
-                      key={ownerId}
-                      type="button"
-                      onClick={() => updateSearch({ owner: isSelected ? undefined : ownerId })}
-                      className={`rounded-full p-0.5 transition-all ${
-                        isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
-                      }`}
-                      title={owner ? `${owner.name} (${count})` : `Senza owner (${count})`}
-                    >
-                      <OwnerAvatar owner={owner} size="sm" />
-                      {count > 0 && (
-                        <span className="sr-only">
-                          {owner ? owner.name : 'Senza owner'} - {count} KeyDev
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              {selectedMonth && !showAllMonths && (
-                <div className="flex items-center gap-2 ml-2 pl-3 border-l border-gray-200 dark:border-gray-600">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Filtro mese attivo: <span className="font-semibold text-gray-900 dark:text-gray-100">
-                      {(() => {
-                        const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
-                        return monthOpt?.label || formatMonthShort(selectedMonth)
-                      })()}
+          {/* Filtra per Owner e Requester - Desktop (stessa riga, requester allineato a destra) */}
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Filtra per Owner
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                {Object.entries(ownerCounts)
+                  .filter(([, count]) => count > 0)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([ownerId]) => {
+                    const owner = ownerId === '__no_owner__' ? null : (usersMap.get(ownerId as Id<'users'>) ? { _id: ownerId, name: usersMap.get(ownerId as Id<'users'>)!.name, picture: usersMap.get(ownerId as Id<'users'>)?.picture } : null)
+                    const isSelected = search.owner === ownerId
+                    const count = ownerCounts[ownerId] ?? 0
+                    return (
+                      <button
+                        key={ownerId}
+                        type="button"
+                        onClick={() => updateSearch({ owner: isSelected ? undefined : ownerId })}
+                        className={`rounded-full p-0.5 transition-all ${
+                          isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
+                        }`}
+                        title={owner ? `${owner.name} (${count})` : `Senza owner (${count})`}
+                      >
+                        <OwnerAvatar owner={owner} size="sm" />
+                        {count > 0 && (
+                          <span className="sr-only">
+                            {owner ? owner.name : 'Senza owner'} - {count} KeyDev
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                {selectedMonth && !showAllMonths && (
+                  <div className="flex items-center gap-2 ml-2 pl-3 border-l border-gray-200 dark:border-gray-600">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Filtro mese attivo: <span className="font-semibold text-gray-900 dark:text-gray-100">
+                        {(() => {
+                          const monthOpt = monthOptions.find(opt => opt.value === selectedMonth)
+                          return monthOpt?.label || formatMonthShort(selectedMonth)
+                        })()}
+                      </span>
                     </span>
-                  </span>
+                    <button
+                      onClick={() => updateSearch({ month: 'all' })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                      title="Rimuovi filtro mese"
+                    >
+                      <X size={16} />
+                      Rimuovi
+                    </button>
+                  </div>
+                )}
+                {search.owner && (
                   <button
-                    onClick={() => updateSearch({ month: 'all' })}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                    title="Rimuovi filtro mese"
+                    onClick={() => updateSearch({ owner: undefined })}
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                    title="Rimuovi filtro owner"
                   >
-                    <X size={16} />
-                    Rimuovi
+                    <X size={14} />
+                    Rimuovi filtro owner
                   </button>
-                </div>
-              )}
-              {search.owner && (
-                <button
-                  onClick={() => updateSearch({ owner: undefined })}
-                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                  title="Rimuovi filtro owner"
-                >
-                  <X size={14} />
-                  Rimuovi filtro owner
-                </button>
-              )}
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col items-end">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Filtra per Requester
+              </label>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {Object.entries(requesterCounts)
+                  .filter(([, count]) => count > 0)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([requesterId]) => {
+                    const requester = usersMap.get(requesterId as Id<'users'>) ? { _id: requesterId, name: usersMap.get(requesterId as Id<'users'>)!.name, picture: usersMap.get(requesterId as Id<'users'>)?.picture } : null
+                    const isSelected = search.requester === requesterId
+                    const count = requesterCounts[requesterId] ?? 0
+                    return (
+                      <button
+                        key={requesterId}
+                        type="button"
+                        onClick={() => updateSearch({ requester: isSelected ? undefined : requesterId })}
+                        className={`rounded-full p-0.5 transition-all ${
+                          isSelected ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800' : 'hover:opacity-80'
+                        }`}
+                        title={requester ? `${requester.name} (${count})` : `Requester (${count})`}
+                      >
+                        <OwnerAvatar owner={requester} size="sm" />
+                        {count > 0 && (
+                          <span className="sr-only">
+                            {requester ? requester.name : 'Requester'} - {count} KeyDev
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                {search.requester && (
+                  <button
+                    onClick={() => updateSearch({ requester: undefined })}
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                    title="Rimuovi filtro requester"
+                  >
+                    <X size={14} />
+                    Rimuovi filtro requester
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-4 mt-2 flex-wrap">
@@ -1345,6 +1635,17 @@ export default function KeyDevsListPage() {
                     <span>{teams?.find((t) => t._id === kd.teamId)?.name || 'N/A'}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-medium">Requester:</span>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <OwnerAvatar
+                        owner={kd.requesterId && usersMap.get(kd.requesterId) ? { _id: kd.requesterId, name: usersMap.get(kd.requesterId)!.name, picture: usersMap.get(kd.requesterId)?.picture } : null}
+                        size="sm"
+                        onClick={() => handleOpenRequesterChangeModal(kd)}
+                        clickTitle="Clicca per cambiare requester"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                     <span className="font-medium">Owner:</span>
                     <div onClick={(e) => e.stopPropagation()}>
                       <OwnerAvatar 
@@ -1432,6 +1733,7 @@ export default function KeyDevsListPage() {
                 <SortableHeader label="Priorità" field="priority" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 <SortableHeader label="Dipartimento" field="department" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 <SortableHeader label="Team" field="team" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader label="Requester" field="requester" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} className="hidden lg:table-cell" center />
                 <SortableHeader label="Owner" field="owner" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} className="hidden lg:table-cell" center />
                 <SortableHeader label="Note" field="notes" currentSortField={sortField} sortDir={sortDir} onSort={handleSort} />
               </tr>
@@ -1549,6 +1851,15 @@ export default function KeyDevsListPage() {
                   </td>
                   <td className="px-4 py-3 text-sm hidden lg:table-cell" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-center">
+                      <OwnerAvatar
+                        owner={kd.requesterId && usersMap.get(kd.requesterId) ? { _id: kd.requesterId, name: usersMap.get(kd.requesterId)!.name, picture: usersMap.get(kd.requesterId)?.picture } : null}
+                        onClick={() => handleOpenRequesterChangeModal(kd)}
+                        clickTitle="Clicca per cambiare requester"
+                      />
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm hidden lg:table-cell" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-center">
                       <OwnerAvatar 
                         owner={kd.ownerId && usersMap.get(kd.ownerId) ? { _id: kd.ownerId, name: usersMap.get(kd.ownerId)!.name, picture: usersMap.get(kd.ownerId)?.picture } : null}
                         onClick={() => handleOpenOwnerChangeModal(kd)}
@@ -1594,6 +1905,20 @@ export default function KeyDevsListPage() {
         onCancel={handleCloseOwnerChangeModal}
         isLoading={ownerChangeLoading}
         error={ownerChangeError}
+      />
+
+      {/* Modal per cambio requester */}
+      <RequesterChangeModal
+        key={requesterChangeModal.keyDevId || 'requester-modal'}
+        isOpen={requesterChangeModal.isOpen}
+        keyDevTitle={requesterChangeModal.keyDevTitle}
+        keyDevReadableId={requesterChangeModal.keyDevReadableId}
+        currentRequester={users?.find(u => u._id === requesterChangeModal.currentRequesterId)}
+        users={users}
+        onConfirm={handleConfirmRequesterChange}
+        onCancel={handleCloseRequesterChangeModal}
+        isLoading={requesterChangeLoading}
+        error={requesterChangeError}
       />
     </div>
   )
