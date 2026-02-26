@@ -8,6 +8,7 @@ const noteReturnValidator = v.object({
   _creationTime: v.number(),
   keyDevId: v.optional(v.id('keydevs')),
   coreAppId: v.optional(v.id('coreApps')),
+  milestoneId: v.optional(v.id('coreAppMilestones')),
   authorId: v.id('users'),
   body: v.string(),
   ts: v.number(),
@@ -32,16 +33,34 @@ export const listByKeyDev = query({
 
 /**
  * Lista le note di una CoreApp.
+ * milestoneFilter: opzionale - 'none' = solo note senza milestoneId, id = solo note con quella milestone, assente = tutte
  */
 export const listByCoreApp = query({
-  args: { coreAppId: v.id('coreApps') },
+  args: {
+    coreAppId: v.id('coreApps'),
+    milestoneFilter: v.optional(
+      v.union(v.id('coreAppMilestones'), v.literal('none'))
+    )
+  },
   returns: v.array(noteReturnValidator),
   handler: async (ctx, args) => {
-    return await ctx.db
+    const allNotes = await ctx.db
       .query('notes')
       .withIndex('by_coreApp', (q) => q.eq('coreAppId', args.coreAppId))
       .order('desc')
       .collect()
+
+    if (!args.milestoneFilter) {
+      return allNotes
+    }
+
+    if (args.milestoneFilter === 'none') {
+      return allNotes.filter((n) => !n.milestoneId)
+    }
+
+    return allNotes.filter(
+      (n) => n.milestoneId === args.milestoneFilter
+    )
   }
 })
 
@@ -53,6 +72,7 @@ export const create = mutation({
   args: {
     keyDevId: v.optional(v.id('keydevs')),
     coreAppId: v.optional(v.id('coreApps')),
+    milestoneId: v.optional(v.id('coreAppMilestones')), // Solo se coreAppId è presente
     body: v.string(),
     type: noteTypeValidator,
     mentionedUserIds: v.optional(v.array(v.id('users')))
@@ -72,6 +92,10 @@ export const create = mutation({
     // Validazione: non possono essere entrambi presenti
     if (args.keyDevId && args.coreAppId) {
       throw new Error('Non puoi specificare sia keyDevId che coreAppId')
+    }
+
+    if (args.milestoneId && !args.coreAppId) {
+      throw new Error('milestoneId può essere specificato solo insieme a coreAppId')
     }
 
     const user = await ctx.db
@@ -145,8 +169,16 @@ export const create = mutation({
         throw new Error('CoreApp non trovata')
       }
 
+      if (args.milestoneId) {
+        const milestone = await ctx.db.get(args.milestoneId)
+        if (!milestone || milestone.coreAppId !== args.coreAppId) {
+          throw new Error('Milestone non trovata o non appartiene a questa CoreApp')
+        }
+      }
+
       const noteId = await ctx.db.insert('notes', {
         coreAppId: args.coreAppId,
+        milestoneId: args.milestoneId,
         authorId: user._id,
         body: args.body,
         ts: Date.now(),

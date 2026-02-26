@@ -185,6 +185,7 @@ export default defineSchema({
   notes: defineTable({
     keyDevId: v.optional(v.id('keydevs')), // Opzionale: presente se la nota è collegata a un KeyDev
     coreAppId: v.optional(v.id('coreApps')), // Opzionale: presente se la nota è collegata a una CoreApp
+    milestoneId: v.optional(v.id('coreAppMilestones')), // Opzionale: presente se la nota è collegata a una milestone specifica della CoreApp
     authorId: v.id('users'),
     body: v.string(),
     ts: v.number(),
@@ -193,7 +194,8 @@ export default defineSchema({
   })
     .index('by_keydev', ['keyDevId'])
     .index('by_coreApp', ['coreAppId'])
-    .index('by_author', ['authorId']),
+    .index('by_author', ['authorId'])
+    .index('by_coreApp_and_milestone', ['coreAppId', 'milestoneId']),
 
   // Template domande obbligatorie per KeyDev Questions (gestite da Admin)
   keyDevQuestionTemplates: defineTable({
@@ -288,7 +290,8 @@ export default defineSchema({
     status: v.union(
       v.literal('Planning'),
       v.literal('InProgress'),
-      v.literal('Completed')
+      v.literal('Completed'),
+      v.literal('Overdue')
     ),
     ownerId: v.optional(v.id('users')), // Owner responsabile dell'app (temporaneamente opzionale per migrazione)
     businessRefId: v.optional(v.id('users')), // Referente Business
@@ -309,11 +312,18 @@ export default defineSchema({
     description: v.string(),
     valuePercent: v.number(), // Peso/valore della milestone (0-100, somma ideale = 100)
     completed: v.boolean(), // Completata sì/no (on/off, non parziale)
-    targetDate: v.optional(v.number()), // Timestamp, opzionale
+    targetDate: v.number(), // Timestamp obbligatorio (2 settimane dopo la precedente)
     order: v.number() // Ordinamento
   })
     .index('by_coreApp', ['coreAppId'])
     .index('by_coreApp_and_order', ['coreAppId', 'order']),
+
+  // Core App Problems (problemi Legacy da risolvere per milestone)
+  coreAppProblems: defineTable({
+    milestoneId: v.id('coreAppMilestones'),
+    description: v.string(),
+    status: v.union(v.literal('NOT_RESOLVED'), v.literal('RESOLVED'))
+  }).index('by_milestone', ['milestoneId']),
 
   // Core App Weekly Updates (Loom videos)
   coreAppUpdates: defineTable({

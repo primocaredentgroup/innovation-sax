@@ -101,7 +101,8 @@ export const getNoteWithContext = internalQuery({
 const coreAppStatusValidator = v.union(
   v.literal('Planning'),
   v.literal('InProgress'),
-  v.literal('Completed')
+  v.literal('Completed'),
+  v.literal('Overdue')
 );
 
 /**

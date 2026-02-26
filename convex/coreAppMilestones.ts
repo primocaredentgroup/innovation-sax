@@ -1,6 +1,7 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
 import type { Doc } from './_generated/dataModel'
+import { internal } from './_generated/api'
 import { isAdmin } from './users'
 
 const milestoneReturnValidator = v.object({
@@ -72,7 +73,7 @@ export const create = mutation({
     coreAppId: v.id('coreApps'),
     description: v.string(),
     valuePercent: v.number(),
-    targetDate: v.optional(v.number())
+    targetDate: v.number()
   },
   returns: v.id('coreAppMilestones'),
   handler: async (ctx, args) => {
@@ -114,6 +115,9 @@ export const create = mutation({
     const sum = completedSum(allMilestones)
     await ctx.db.patch(args.coreAppId, { percentComplete: Math.round(sum) })
 
+    await ctx.scheduler.runAfter(0, internal.coreAppOverdue.syncOverdueStatusForCoreApp, {
+      coreAppId: args.coreAppId
+    })
     return milestoneId
   }
 })
@@ -175,6 +179,9 @@ export const update = mutation({
     const sum = completedSum(toCalculate)
     await ctx.db.patch(existing.coreAppId, { percentComplete: Math.round(sum) })
 
+    await ctx.scheduler.runAfter(0, internal.coreAppOverdue.syncOverdueStatusForCoreApp, {
+      coreAppId: existing.coreAppId
+    })
     return null
   }
 })
@@ -205,6 +212,9 @@ export const remove = mutation({
       await ctx.db.patch(existing.coreAppId, { percentComplete: 0 })
     }
 
+    await ctx.scheduler.runAfter(0, internal.coreAppOverdue.syncOverdueStatusForCoreApp, {
+      coreAppId: existing.coreAppId
+    })
     return null
   }
 })
@@ -289,17 +299,25 @@ export const applyTemplateToCoreAppsWithoutMilestones = mutation({
       (app) => !coreAppIdsWithMilestones.has(app._id)
     )
 
+    const MS_PER_14_DAYS = 14 * 24 * 60 * 60 * 1000
     let updatedCount = 0
     for (const coreApp of coreAppsWithoutMilestones) {
-      for (const t of templates) {
+      const baseTime = Date.now()
+      for (let i = 0; i < templates.length; i++) {
+        const t = templates[i]
+        const targetDate = baseTime + (i + 1) * MS_PER_14_DAYS
         await ctx.db.insert('coreAppMilestones', {
           coreAppId: coreApp._id,
           description: t.description,
           valuePercent: t.valuePercent,
           completed: false,
+          targetDate,
           order: t.order
         })
       }
+      await ctx.scheduler.runAfter(0, internal.coreAppOverdue.syncOverdueStatusForCoreApp, {
+        coreAppId: coreApp._id
+      })
       updatedCount++
     }
 

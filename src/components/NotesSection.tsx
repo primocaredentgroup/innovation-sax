@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from 'convex/react'
+import { useNavigate } from '@tanstack/react-router'
 import { api } from '../../convex/_generated/api'
 import { useState, useMemo, useEffect, useRef } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
@@ -123,6 +124,8 @@ const renderTextWithLinks = (text: string, users: Array<{ _id: Id<'users'>; name
   return elements
 }
 
+type MilestoneForFilter = { _id: Id<'coreAppMilestones'>; description: string }
+
 interface NotesSectionProps {
   keyDevId?: Id<'keydevs'>
   coreAppId?: Id<'coreApps'>
@@ -130,9 +133,22 @@ interface NotesSectionProps {
   users: Array<{ _id: Id<'users'>; name: string; email?: string }> | undefined
   entityIdentifier?: string // readableId per keydevs o slug per coreApps
   highlightedNote?: string
+  milestoneIdFilter?: Id<'coreAppMilestones'> | 'none'
+  milestones?: MilestoneForFilter[]
+  notesBasePath?: string // es. /core-apps/my-slug/notes per Link al filtro
 }
 
-export default function NotesSection({ keyDevId, coreAppId, currentUser, users, entityIdentifier, highlightedNote }: NotesSectionProps) {
+export default function NotesSection({
+  keyDevId,
+  coreAppId,
+  currentUser,
+  users,
+  entityIdentifier,
+  highlightedNote,
+  milestoneIdFilter,
+  milestones,
+  notesBasePath
+}: NotesSectionProps) {
   // Usa la query appropriata in base al tipo di entità
   const keyDevNotes = useQuery(
     api.notes.listByKeyDev,
@@ -140,7 +156,12 @@ export default function NotesSection({ keyDevId, coreAppId, currentUser, users, 
   )
   const coreAppNotes = useQuery(
     api.notes.listByCoreApp,
-    coreAppId ? { coreAppId } : 'skip'
+    coreAppId
+      ? {
+          coreAppId,
+          milestoneFilter: milestoneIdFilter
+        }
+      : 'skip'
   )
   const notes = keyDevId ? keyDevNotes : coreAppNotes
   const addNote = useMutation(api.notes.create)
@@ -164,6 +185,8 @@ export default function NotesSection({ keyDevId, coreAppId, currentUser, users, 
   // Stati per la ricerca delle note
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedAuthorId, setSelectedAuthorId] = useState<Id<'users'> | ''>('')
+
+  const navigate = useNavigate()
   
   // Stato per il toast di successo
   const [showToast, setShowToast] = useState(false)
@@ -210,7 +233,11 @@ export default function NotesSection({ keyDevId, coreAppId, currentUser, users, 
       noteUrl = `${window.location.origin}/keydevs/${identifier}/notes?highlightedNote=${noteId}`
     } else if (coreAppId) {
       const identifier = entityIdentifier || coreAppId
-      noteUrl = `${window.location.origin}/core-apps/${identifier}/notes?highlightedNote=${noteId}`
+      const searchParams = new URLSearchParams({ highlightedNote: noteId })
+      if (milestoneIdFilter && milestoneIdFilter !== 'none') {
+        searchParams.set('milestoneId', milestoneIdFilter)
+      }
+      noteUrl = `${window.location.origin}/core-apps/${identifier}/notes?${searchParams.toString()}`
     } else {
       console.error('Nessuna entità associata alla nota')
       return
@@ -389,6 +416,7 @@ export default function NotesSection({ keyDevId, coreAppId, currentUser, users, 
     await addNote({
       keyDevId,
       coreAppId,
+      milestoneId: coreAppId && milestoneIdFilter && milestoneIdFilter !== 'none' ? milestoneIdFilter : undefined,
       body: newNote,
       type: noteType,
       mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
@@ -482,11 +510,46 @@ export default function NotesSection({ keyDevId, coreAppId, currentUser, users, 
     setConfirmDeleteNoteId(null)
   }
 
+  const handleMilestoneFilterChange = (value: string) => {
+    if (!coreAppId || !entityIdentifier) return
+    navigate({
+      to: '/core-apps/$slug/notes',
+      params: { slug: entityIdentifier },
+      search: value === '' ? {} : { milestoneId: value }
+    })
+  }
+
+  const selectedMilestone = milestoneIdFilter && milestoneIdFilter !== 'none' && milestones
+    ? milestones.find((m) => m._id === milestoneIdFilter)
+    : null
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col h-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 shrink-0">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Note</h2>
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Note</h2>
+          {selectedMilestone && (
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              Milestone: {selectedMilestone.description}
+            </p>
+          )}
+        </div>
         <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:max-w-2xl">
+          {coreAppId && notesBasePath && milestones && milestones.length > 0 && (
+            <select
+              value={milestoneIdFilter === 'none' ? 'none' : milestoneIdFilter ?? ''}
+              onChange={(e) => handleMilestoneFilterChange(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer min-w-[180px]"
+            >
+              <option value="">Tutte le note</option>
+              <option value="none">Nessuna</option>
+              {milestones.map((m) => (
+                <option key={m._id} value={m._id}>
+                  {m.description.length > 40 ? m.description.slice(0, 40) + '…' : m.description}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             value={selectedAuthorId}
             onChange={(e) => setSelectedAuthorId(e.target.value as Id<'users'> | '')}

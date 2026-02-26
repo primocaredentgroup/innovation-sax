@@ -6,7 +6,8 @@ import { v } from 'convex/values'
 const coreAppStatusValidator = v.union(
   v.literal('Planning'),
   v.literal('InProgress'),
-  v.literal('Completed')
+  v.literal('Completed'),
+  v.literal('Overdue')
 )
 
 const coreAppReturnValidator = v.object({
@@ -16,6 +17,7 @@ const coreAppReturnValidator = v.object({
   slug: v.string(),
   description: v.optional(v.string()),
   percentComplete: v.number(),
+  milestonesTotalSum: v.optional(v.number()), // somma valuePercent di tutte le milestones (max raggiungibile)
   weight: v.optional(v.number()),
   repoUrl: v.optional(v.string()),
   hubMilestonesUrl: v.optional(v.string()),
@@ -39,8 +41,13 @@ export const list = query({
   returns: v.array(coreAppReturnValidator),
   handler: async (ctx) => {
     const apps = await ctx.db.query('coreApps').collect()
-    
-    // Per ogni app, trova l'ultimo aggiornamento
+    const allMilestones = await ctx.db.query('coreAppMilestones').collect()
+    const totalSumByApp = new Map<Id<'coreApps'>, number>()
+    for (const m of allMilestones) {
+      const current = totalSumByApp.get(m.coreAppId) ?? 0
+      totalSumByApp.set(m.coreAppId, current + m.valuePercent)
+    }
+
     const appsWithLastUpdate = await Promise.all(
       apps.map(async (app) => {
         const lastUpdate = await ctx.db
@@ -48,9 +55,12 @@ export const list = query({
           .withIndex('by_coreApp', (q) => q.eq('coreAppId', app._id))
           .order('desc')
           .first()
-        
+
+        const milestonesTotalSum = totalSumByApp.get(app._id)
+
         return {
           ...app,
+          milestonesTotalSum,
           lastUpdate: lastUpdate ? {
             createdAt: lastUpdate.createdAt,
             weekRef: lastUpdate.weekRef
@@ -58,7 +68,7 @@ export const list = query({
         }
       })
     )
-    
+
     return appsWithLastUpdate
   }
 })
@@ -74,8 +84,14 @@ export const listByCategory = query({
       .query('coreApps')
       .withIndex('by_category', (q) => q.eq('categoryId', args.categoryId))
       .collect()
-    
-    // Per ogni app, trova l'ultimo aggiornamento
+
+    const allMilestones = await ctx.db.query('coreAppMilestones').collect()
+    const totalSumByApp = new Map<Id<'coreApps'>, number>()
+    for (const m of allMilestones) {
+      const current = totalSumByApp.get(m.coreAppId) ?? 0
+      totalSumByApp.set(m.coreAppId, current + m.valuePercent)
+    }
+
     const appsWithLastUpdate = await Promise.all(
       apps.map(async (app) => {
         const lastUpdate = await ctx.db
@@ -83,9 +99,12 @@ export const listByCategory = query({
           .withIndex('by_coreApp', (q) => q.eq('coreAppId', app._id))
           .order('desc')
           .first()
-        
+
+        const milestonesTotalSum = totalSumByApp.get(app._id)
+
         return {
           ...app,
+          milestonesTotalSum,
           lastUpdate: lastUpdate ? {
             createdAt: lastUpdate.createdAt,
             weekRef: lastUpdate.weekRef
@@ -93,7 +112,7 @@ export const listByCategory = query({
         }
       })
     )
-    
+
     return appsWithLastUpdate
   }
 })
@@ -131,6 +150,21 @@ function generateSlug(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+async function hasOverdueMilestone(
+  ctx: MutationCtx,
+  coreAppId: Id<'coreApps'>
+): Promise<boolean> {
+  const nowMs = Date.now()
+  const milestones = await ctx.db
+    .query('coreAppMilestones')
+    .withIndex('by_coreApp', (q) => q.eq('coreAppId', coreAppId))
+    .collect()
+
+  return milestones.some(
+    (m) => m.targetDate < nowMs && !m.completed
+  )
 }
 
 /**
@@ -227,17 +261,22 @@ export const create = mutation({
       priority
     })
 
-    // Applica i template milestones: ogni nuova CoreApp parte con il set predefinito
+    // Applica i template milestones: ogni nuova CoreApp parte con il set predefinito (2 settimane l'una dall'altra)
     const templates = await ctx.db
       .query('coreAppMilestoneTemplates')
       .withIndex('by_order')
       .collect()
-    for (const t of templates) {
+    const MS_PER_14_DAYS = 14 * 24 * 60 * 60 * 1000
+    const baseTime = Date.now()
+    for (let i = 0; i < templates.length; i++) {
+      const t = templates[i]
+      const targetDate = baseTime + (i + 1) * MS_PER_14_DAYS
       await ctx.db.insert('coreAppMilestones', {
         coreAppId,
         description: t.description,
         valuePercent: t.valuePercent,
         completed: false,
+        targetDate,
         order: t.order
       })
     }
@@ -313,6 +352,20 @@ export const update = mutation({
         throw new Error('Il peso deve essere un numero tra 1 e 10')
       }
       updates.weight = Math.floor(updates.weight)
+    }
+
+    // Gli stati Completed/Overdue sono automatici e non possono essere impostati manualmente.
+    if (updates.status === 'Completed' || updates.status === 'Overdue') {
+      throw new Error('Lo stato selezionato è automatico e non può essere impostato manualmente')
+    }
+
+    // Blocca il passaggio manuale a InProgress se esiste almeno una milestone scaduta.
+    // In questo modo non può esistere una CoreApp "In Corso" con milestone in ritardo.
+    if (updates.status === 'InProgress') {
+      const hasOverdue = await hasOverdueMilestone(ctx, id)
+      if (hasOverdue) {
+        throw new Error('Impossibile impostare "In Corso": sono presenti milestone in ritardo')
+      }
     }
 
     await ctx.db.patch(id, updates)

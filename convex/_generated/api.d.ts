@@ -13,6 +13,8 @@ import type * as agents from "../agents.js";
 import type * as budget from "../budget.js";
 import type * as coreAppMilestoneTemplates from "../coreAppMilestoneTemplates.js";
 import type * as coreAppMilestones from "../coreAppMilestones.js";
+import type * as coreAppOverdue from "../coreAppOverdue.js";
+import type * as coreAppProblems from "../coreAppProblems.js";
 import type * as coreAppQuestionTemplates from "../coreAppQuestionTemplates.js";
 import type * as coreAppQuestions from "../coreAppQuestions.js";
 import type * as coreAppUpdates from "../coreAppUpdates.js";
@@ -49,6 +51,8 @@ declare const fullApi: ApiFromModules<{
   budget: typeof budget;
   coreAppMilestoneTemplates: typeof coreAppMilestoneTemplates;
   coreAppMilestones: typeof coreAppMilestones;
+  coreAppOverdue: typeof coreAppOverdue;
+  coreAppProblems: typeof coreAppProblems;
   coreAppQuestionTemplates: typeof coreAppQuestionTemplates;
   coreAppQuestions: typeof coreAppQuestions;
   coreAppUpdates: typeof coreAppUpdates;

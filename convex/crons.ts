@@ -12,4 +12,12 @@ crons.cron(
   {}
 );
 
+// Ogni giorno dopo la mezzanotte UTC: sincronizza status OVERDUE CoreApp
+crons.cron(
+  "sync overdue core apps",
+  "0 0 * * *",
+  internal.coreAppOverdue.syncAllOverdueStatuses,
+  {}
+);
+
 export default crons;

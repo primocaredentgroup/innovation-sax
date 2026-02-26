@@ -423,7 +423,8 @@ export const getCoreAppsStats = query({
         status: v.union(
           v.literal('Planning'),
           v.literal('InProgress'),
-          v.literal('Completed')
+          v.literal('Completed'),
+          v.literal('Overdue')
         )
       })
     ),

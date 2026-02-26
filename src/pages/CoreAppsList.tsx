@@ -265,15 +265,19 @@ function BusinessRefChangeModal({
   )
 }
 
+const statusOrder = ['Planning', 'InProgress', 'Overdue', 'Completed'] as const
+
 const statusColors: Record<string, string> = {
   Planning: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
   InProgress: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
+  Overdue: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300',
   Completed: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
 }
 
 const statusLabels: Record<string, string> = {
   Planning: 'In Pianificazione',
   InProgress: 'In Corso',
+  Overdue: 'In Ritardo',
   Completed: 'Completato'
 }
 
@@ -286,8 +290,7 @@ function isRecentUpdate(createdAt: number | undefined): boolean {
 
 type SortField = 'priority' | 'name' | 'category' | 'status' | 'owner' | 'businessRef' | 'weight' | 'progress' | 'lastUpdate'
 type SortDirection = 'asc' | 'desc'
-type CoreAppStatus = keyof typeof statusLabels
-type StatusFilter = CoreAppStatus | 'All'
+type CoreAppStatus = (typeof statusOrder)[number]
 type OwnerFilterValue = Id<'users'> | '__no_owner__'
 
 function parseOwnerFilterFromSearch(ownerParam: unknown): Array<OwnerFilterValue> {
@@ -335,27 +338,33 @@ export default function CoreAppsListPage() {
   
   // Stato per la ricerca
   const [searchQuery, setSearchQuery] = useState('')
-  
-  // Stato per il filtro status (default: In Corso)
-  const [selectedStatus, setSelectedStatus] = useState<StatusFilter>(() => {
-    const statusFromSearch = typeof search.status === 'string' ? search.status : undefined
-    if (statusFromSearch === 'All' || (statusFromSearch && Object.prototype.hasOwnProperty.call(statusLabels, statusFromSearch))) {
-      return statusFromSearch as StatusFilter
-    }
-    return 'All'
-  })
 
-  // Sincronizza lo stato locale quando arrivano nuovi filtri dalla URL.
+  // Normalizza gli status selezionati dalla URL (può essere stringa o array)
+  const selectedStatuses = useMemo(() => {
+    if (!search.status) return []
+    if (Array.isArray(search.status)) return search.status.filter((s) => statusOrder.includes(s as CoreAppStatus))
+    return statusOrder.includes(search.status as CoreAppStatus) ? [search.status] : []
+  }, [search.status])
+
+  // Sincronizza owner quando arrivano nuovi filtri dalla URL.
   useEffect(() => {
     setSelectedOwnerIds(parseOwnerFilterFromSearch(search.owner))
+  }, [search.owner])
 
-    const statusFromSearch = typeof search.status === 'string' ? search.status : undefined
-    if (statusFromSearch === 'All' || (statusFromSearch && Object.prototype.hasOwnProperty.call(statusLabels, statusFromSearch))) {
-      setSelectedStatus(statusFromSearch as StatusFilter)
-    } else {
-      setSelectedStatus('All')
-    }
-  }, [search.owner, search.status])
+  const updateSearch = (updates: Record<string, string | string[] | undefined>) => {
+    navigate({
+      to: '/core-apps',
+      search: { ...search, ...updates }
+    })
+  }
+
+  const toggleStatus = (status: string) => {
+    const current = selectedStatuses
+    const newStatuses = current.includes(status)
+      ? current.filter((s) => s !== status)
+      : [...current, status]
+    updateSearch({ status: newStatuses.length > 0 ? newStatuses : undefined })
+  }
 
   // Stato per il modal di cambio owner
   const [ownerChangeModal, setOwnerChangeModal] = useState<{
@@ -615,8 +624,8 @@ export default function CoreAppsListPage() {
   // Filtra le app in base a categoria, owner, status e ricerca
   const filteredApps = useMemo(() => {
     let apps = appsMatchingOwnerAndSearch
-    if (selectedStatus !== 'All') {
-      apps = apps.filter(app => app.status === selectedStatus)
+    if (selectedStatuses.length > 0) {
+      apps = apps.filter((app) => selectedStatuses.includes(app.status))
     }
     
     // Applica l'ordinamento
@@ -673,7 +682,7 @@ export default function CoreAppsListPage() {
     })
     
     return sortedApps
-  }, [appsMatchingOwnerAndSearch, selectedStatus, sortField, sortDirection, categoriesMap, usersMap])
+  }, [appsMatchingOwnerAndSearch, selectedStatuses, sortField, sortDirection, categoriesMap, usersMap])
 
   // Progresso totale pesato (calcolato al volo sui risultati filtrati)
   const weightedTotalProgress = useMemo(() => {
@@ -709,13 +718,14 @@ export default function CoreAppsListPage() {
 
   // Contatori status con gli altri filtri attivi (escluso il filtro status)
   const statusCounts = useMemo(() => {
-    const counts: Record<CoreAppStatus, number> = {
+    const counts: Record<string, number> = {
       Planning: 0,
       InProgress: 0,
+      Overdue: 0,
       Completed: 0
     }
     for (const app of appsMatchingOwnerAndSearch) {
-      counts[app.status] += 1
+      counts[app.status] = (counts[app.status] ?? 0) + 1
     }
     return counts
   }, [appsMatchingOwnerAndSearch])
@@ -726,9 +736,9 @@ export default function CoreAppsListPage() {
     const appsByCategory = selectedCategoryId === null
       ? coreApps
       : coreApps.filter(app => app.categoryId === selectedCategoryId)
-    const appsByStatus = selectedStatus === 'All'
+    const appsByStatus = selectedStatuses.length === 0
       ? appsByCategory
-      : appsByCategory.filter(app => app.status === selectedStatus)
+      : appsByCategory.filter((app) => selectedStatuses.includes(app.status))
     const apps = searchQuery.trim()
       ? appsByStatus.filter((app) => {
           const q = searchQuery.trim().toLowerCase()
@@ -741,7 +751,7 @@ export default function CoreAppsListPage() {
       counts[id] = (counts[id] ?? 0) + 1
     }
     return counts
-  }, [coreApps, selectedCategoryId, selectedStatus, searchQuery])
+  }, [coreApps, selectedCategoryId, selectedStatuses, searchQuery])
 
   // Conta le app per categoria con gli altri filtri attivi (owner + status + ricerca)
   const appCountByCategory = useMemo(() => {
@@ -753,8 +763,8 @@ export default function CoreAppsListPage() {
         return selectedOwnerIdSet.has(ownerKey)
       })
     }
-    if (selectedStatus !== 'All') {
-      apps = apps.filter(app => app.status === selectedStatus)
+    if (selectedStatuses.length > 0) {
+      apps = apps.filter((app) => selectedStatuses.includes(app.status))
     }
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase()
@@ -770,7 +780,7 @@ export default function CoreAppsListPage() {
       counts.set(key, (counts.get(key) || 0) + 1)
     }
     return counts
-  }, [coreApps, selectedOwnerIdSet, selectedStatus, searchQuery])
+  }, [coreApps, selectedOwnerIdSet, selectedStatuses, searchQuery])
 
   const totalAppsForCategoryTabs = useMemo(() => {
     let total = 0
@@ -786,17 +796,6 @@ export default function CoreAppsListPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Applicazioni Core</h1>
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value as StatusFilter)}
-            className="w-full sm:w-44 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-            aria-label="Filtra per status"
-          >
-            <option value="All">Tutti ({appsMatchingOwnerAndSearch.length})</option>
-            <option value="Planning">{statusLabels.Planning} ({statusCounts.Planning})</option>
-            <option value="InProgress">{statusLabels.InProgress} ({statusCounts.InProgress}) ★</option>
-            <option value="Completed">{statusLabels.Completed} ({statusCounts.Completed})</option>
-          </select>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 self-start sm:self-auto">
           <div className="relative px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
@@ -843,6 +842,52 @@ export default function CoreAppsListPage() {
             + Nuova Applicazione Core
           </Link>
         </div>
+      </div>
+
+      {/* Filtra per Stato - label con contatori */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 sm:p-4 mb-6">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Filtra per Stato
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {statusOrder.map((key) => {
+            const label = statusLabels[key]
+            const isSelected = selectedStatuses.includes(key)
+            const count = statusCounts?.[key] ?? 0
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => toggleStatus(key)}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                  isSelected
+                    ? `${statusColors[key]} ring-2 ring-offset-2 ring-gray-600 dark:ring-gray-400 shadow-md font-semibold`
+                    : `${statusColors[key]} opacity-70 hover:opacity-100`
+                }`}
+              >
+                {label}
+                {count > 0 && (
+                  <span
+                    className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+                      isSelected ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900' : 'bg-gray-700 dark:bg-gray-300 text-white dark:text-gray-900'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+        {selectedStatuses.length > 0 && (
+          <button
+            type="button"
+            onClick={() => updateSearch({ status: undefined })}
+            className="mt-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
+          >
+            Rimuovi tutti i filtri per stato
+          </button>
+        )}
       </div>
 
       {/* Tab categorie + Filtro owner + Search */}
@@ -1052,7 +1097,7 @@ export default function CoreAppsListPage() {
                   onClick={(e) => handleSort('businessRef', e)}
                 >
                   <div className="flex items-center gap-2">
-                    Referente Business
+                    Referente
                     {sortField === 'businessRef' && (
                       <span className="text-blue-600 dark:text-blue-400">
                         {sortDirection === 'asc' ? '↑' : '↓'}
@@ -1281,6 +1326,22 @@ export default function CoreAppsListPage() {
                             style={{ width: `${app.percentComplete}%` }}
                           />
                         </div>
+                        {app.milestonesTotalSum !== undefined && (
+                          <span
+                            className={`text-[10px] tabular-nums ${
+                              app.milestonesTotalSum !== 100
+                                ? 'text-red-600 dark:text-red-400 font-medium'
+                                : 'text-gray-500 dark:text-gray-400'
+                            }`}
+                            title={
+                              app.milestonesTotalSum !== 100
+                                ? `Massimo raggiungibile: ${app.milestonesTotalSum}% (mancano milestones per arrivare al 100%)`
+                                : 'Totale milestones: 100%'
+                            }
+                          >
+                            /{Math.round(app.milestonesTotalSum)}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -1516,8 +1577,26 @@ export default function CoreAppsListPage() {
                 }}
                 title="Clicca per gestire le milestones"
               >
-                <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {app.percentComplete}%
+                <div className="flex items-center justify-end gap-1.5">
+                  <span className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {app.percentComplete}%
+                  </span>
+                  {app.milestonesTotalSum !== undefined && (
+                    <span
+                      className={`text-[10px] tabular-nums self-end ${
+                        app.milestonesTotalSum !== 100
+                          ? 'text-red-600 dark:text-red-400 font-medium'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}
+                      title={
+                        app.milestonesTotalSum !== 100
+                          ? `Massimo raggiungibile: ${app.milestonesTotalSum}%`
+                          : 'Totale milestones: 100%'
+                      }
+                    >
+                      /{Math.round(app.milestonesTotalSum)}
+                    </span>
+                  )}
                 </div>
                 <div className="w-full sm:w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-2">
                   <div

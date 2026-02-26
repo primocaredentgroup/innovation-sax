@@ -18,6 +18,7 @@ interface WeightLabelProps {
 export default function WeightLabel({ keyDevId, weight }: WeightLabelProps) {
   const updateWeight = useMutation(api.keydevs.updateWeight)
 
+  // ?? corretto: 0 è un valore valido, solo undefined/null devono defaultare a 1
   const currentValue = weight ?? 1
   const displayLabel = formatWeight(weight)
 

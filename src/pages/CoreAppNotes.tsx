@@ -1,15 +1,30 @@
 import { Link, useParams, useSearch } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
+import type { Id } from '../../convex/_generated/dataModel'
 import NotesSection from '../components/NotesSection'
 
 export default function CoreAppNotesPage() {
   const { slug } = useParams({ strict: false }) as { slug: string }
-  const search = useSearch({ strict: false }) as { highlightedNote?: string }
-  
+  const search = useSearch({ strict: false }) as {
+    highlightedNote?: string
+    milestoneId?: string
+  }
+
   const coreApp = useQuery(api.coreApps.getBySlug, { slug })
+  const milestonesData = useQuery(
+    api.coreAppMilestones.listByCoreApp,
+    coreApp ? { coreAppId: coreApp._id } : 'skip'
+  )
   const users = useQuery(api.users.listUsers)
   const currentUser = useQuery(api.users.getCurrentUser)
+
+  const milestoneIdFilter: Id<'coreAppMilestones'> | 'none' | undefined =
+    search.milestoneId === 'none'
+      ? 'none'
+      : search.milestoneId
+        ? (search.milestoneId as Id<'coreAppMilestones'>)
+        : undefined
 
   if (!coreApp) {
     return (
@@ -41,12 +56,15 @@ export default function CoreAppNotesPage() {
 
       {/* Notes Section */}
       <div className="w-full">
-        <NotesSection 
-          coreAppId={coreApp._id} 
-          currentUser={currentUser} 
-          users={users} 
+        <NotesSection
+          coreAppId={coreApp._id}
+          currentUser={currentUser}
+          users={users}
           entityIdentifier={slug}
           highlightedNote={search.highlightedNote}
+          milestoneIdFilter={milestoneIdFilter}
+          milestones={milestonesData?.milestones}
+          notesBasePath={`/core-apps/${slug}/notes`}
         />
       </div>
     </div>
