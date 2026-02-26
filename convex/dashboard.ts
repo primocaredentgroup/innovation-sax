@@ -18,7 +18,7 @@ function filterKeydevsByOwner<T extends { ownerId?: Id<'users'> | null }>(keydev
 
 /**
  * Calcola l'OKR score per un mese.
- * Score = (KeyDev Checked / Totale KeyDev del mese) * 100
+ * Score = (KeyDev Done / Totale KeyDev del mese) * 100
  * Include anche le bozze senza mese associato.
  */
 export const getOKRScore = query({
@@ -28,13 +28,13 @@ export const getOKRScore = query({
   },
   returns: v.object({
     score: v.number(),
-    checkedCount: v.number(),
+    doneCount: v.number(),
     totalCount: v.number(),
     byTeam: v.array(
       v.object({
         teamId: v.id('teams'),
         teamName: v.string(),
-        checked: v.number(),
+        done: v.number(),
         total: v.number()
       })
     )
@@ -51,8 +51,8 @@ export const getOKRScore = query({
     keydevs = filterKeydevsByOwner(keydevs, args.owner)
 
     const totalCount = keydevs.length
-    const checkedCount = keydevs.filter((kd) => kd.status === 'Checked').length
-    const score = totalCount > 0 ? (checkedCount / totalCount) * 100 : 0
+    const doneCount = keydevs.filter((kd) => kd.status === 'Done').length
+    const score = totalCount > 0 ? (doneCount / totalCount) * 100 : 0
 
     // Raggruppa per team
     const teams = await ctx.db.query('teams').collect()
@@ -61,14 +61,14 @@ export const getOKRScore = query({
       return {
         teamId: team._id,
         teamName: team.name,
-        checked: teamKeyDevs.filter((kd) => kd.status === 'Checked').length,
+        done: teamKeyDevs.filter((kd) => kd.status === 'Done').length,
         total: teamKeyDevs.length
       }
     }).filter((t) => t.total > 0)
 
     return {
       score,
-      checkedCount,
+      doneCount,
       totalCount,
       byTeam
     }
@@ -199,7 +199,7 @@ export const getKeyDevsByStatus = query({
       .then(kds => kds.filter(kd => !kd.deletedAt))
 
     // Filtra solo quelli con status >= FrontValidated
-    const validStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked'] as const
+    const validStatuses = ['FrontValidated', 'InProgress', 'Done'] as const
     const filteredKeydevs = keydevsByMonth.filter((kd) =>
       validStatuses.includes(kd.status as typeof validStatuses[number])
     )
@@ -256,7 +256,7 @@ export const getKeyDevsByTeamAndStatus = query({
     keydevsByMonth = filterKeydevsByOwner(keydevsByMonth, args.owner)
 
     // Tutti gli stati possibili
-    const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
+    const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done'] as const
 
     // Ottieni tutti i team
     const teams = await ctx.db.query('teams').collect()
@@ -320,7 +320,7 @@ export const getKeyDevsByTeamAndStatusAllMonths = query({
     allKeydevs = filterKeydevsByOwner(allKeydevs, args.owner)
 
     // Tutti gli stati possibili
-    const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
+    const allStatuses = ['Draft', 'MockupDone', 'Approved', 'Rejected', 'FrontValidated', 'InProgress', 'Done'] as const
 
     // Ottieni tutti i team
     const teams = await ctx.db.query('teams').collect()
@@ -354,7 +354,7 @@ export const getKeyDevsByTeamAndStatusAllMonths = query({
 
 /**
  * Calcola l'OKR score aggregato per tutti i mesi.
- * Score = (KeyDev Checked / Totale KeyDev) * 100
+ * Score = (KeyDev Done / Totale KeyDev) * 100
  * Include tutti i KeyDev (anche quelli con monthRef undefined).
  */
 export const getOKRScoreAllMonths = query({
@@ -363,13 +363,13 @@ export const getOKRScoreAllMonths = query({
   },
   returns: v.object({
     score: v.number(),
-    checkedCount: v.number(),
+    doneCount: v.number(),
     totalCount: v.number(),
     byTeam: v.array(
       v.object({
         teamId: v.id('teams'),
         teamName: v.string(),
-        checked: v.number(),
+        done: v.number(),
         total: v.number()
       })
     )
@@ -384,8 +384,8 @@ export const getOKRScoreAllMonths = query({
     keydevs = filterKeydevsByOwner(keydevs, args.owner)
 
     const totalCount = keydevs.length
-    const checkedCount = keydevs.filter((kd) => kd.status === 'Checked').length
-    const score = totalCount > 0 ? (checkedCount / totalCount) * 100 : 0
+    const doneCount = keydevs.filter((kd) => kd.status === 'Done').length
+    const score = totalCount > 0 ? (doneCount / totalCount) * 100 : 0
 
     // Raggruppa per team
     const teams = await ctx.db.query('teams').collect()
@@ -394,14 +394,14 @@ export const getOKRScoreAllMonths = query({
       return {
         teamId: team._id,
         teamName: team.name,
-        checked: teamKeyDevs.filter((kd) => kd.status === 'Checked').length,
+        done: teamKeyDevs.filter((kd) => kd.status === 'Done').length,
         total: teamKeyDevs.length
       }
     }).filter((t) => t.total > 0)
 
     return {
       score,
-      checkedCount,
+      doneCount,
       totalCount,
       byTeam
     }
@@ -450,7 +450,7 @@ export const getCoreAppsStats = query({
 })
 
 /**
- * Ottiene i KeyDev scaduti (mese precedente all'attuale e non ancora in stato "Checked").
+ * Ottiene i KeyDev scaduti (mese precedente all'attuale e non ancora in stato "Done").
  * Mostra sempre tutti i keydevs scaduti, indipendentemente dal mese selezionato.
  * Opzionalmente filtra per team.
  */
@@ -475,7 +475,7 @@ export const getPastKeyDevs = query({
     let allKeyDevs = await ctx.db.query('keydevs').collect().then(kds => kds.filter(kd => !kd.deletedAt))
 
     allKeyDevs = allKeyDevs.filter(
-      (kd) => kd.monthRef && kd.monthRef < args.currentMonth && kd.status !== 'Checked'
+      (kd) => kd.monthRef && kd.monthRef < args.currentMonth && kd.status !== 'Done'
     )
 
     if (args.teamId) {

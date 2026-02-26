@@ -1,5 +1,7 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
+import type { Doc } from './_generated/dataModel'
+import { internal } from './_generated/api'
 import { keydevStatusValidator, keydevWeightValidator, keydevPriorityValidator } from './schema'
 import { hasRole, isAdmin } from './users'
 
@@ -7,7 +9,7 @@ import { hasRole, isAdmin } from './users'
 type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
 
 // Ordine degli stati nel processo
-const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
+const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done']
 
 // Helper per determinare se si sta andando avanti o indietro nello stato
 const isMovingForward = (currentStatus: string, newStatus: string): boolean => {
@@ -31,12 +33,8 @@ const keydevReturnValidator = v.object({
   techValidatorId: v.optional(v.id('users')),
   ownerId: v.optional(v.id('users')),
   status: keydevStatusValidator,
-  rejectionReason: v.optional(v.string()),
-  rejectedById: v.optional(v.id('users')),
   mockupRepoUrl: v.optional(v.string()),
-  validatedMockupCommit: v.optional(v.string()),
   repoUrl: v.optional(v.string()),
-  releaseCommit: v.optional(v.string()),
   weight: v.optional(keydevWeightValidator),
   priority: v.optional(keydevPriorityValidator),
   approvedAt: v.optional(v.number()),
@@ -226,16 +224,15 @@ export const getPhaseCountsByMonths = query({
     v.object({
       FrontValidated: v.number(),
       InProgress: v.number(),
-      Done: v.number(),
-      Checked: v.number()
+      Done: v.number()
     })
   ),
   handler: async (ctx, args) => {
-    const result: Record<string, { FrontValidated: number; InProgress: number; Done: number; Checked: number }> = {}
+    const result: Record<string, { FrontValidated: number; InProgress: number; Done: number }> = {}
     
     // Inizializza tutti i mesi con contatori a zero
     for (const monthRef of args.monthRefs) {
-      result[monthRef] = { FrontValidated: 0, InProgress: 0, Done: 0, Checked: 0 }
+      result[monthRef] = { FrontValidated: 0, InProgress: 0, Done: 0 }
     }
     
     // Ottieni tutte le bozze senza mese associato (che compaiono in tutti i mesi)
@@ -277,8 +274,6 @@ export const getPhaseCountsByMonths = query({
           result[monthRef].InProgress++
         } else if (kd.status === 'Done') {
           result[monthRef].Done++
-        } else if (kd.status === 'Checked') {
-          result[monthRef].Checked++
         }
       }
     }
@@ -331,7 +326,7 @@ export const getBudgetUtilizationByMonths = query({
     const allBudgetAllocations = await ctx.db.query('budgetKeyDev').collect()
     
     // Stati che occupano slot
-    const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked']
+    const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done']
     
     // Inizializza tutti i mesi con valori a zero
     for (const monthRef of args.monthRefs) {
@@ -401,8 +396,7 @@ export const getTotalPhaseCounts = query({
   returns: v.object({
     FrontValidated: v.number(),
     InProgress: v.number(),
-    Done: v.number(),
-    Checked: v.number()
+    Done: v.number()
   }),
   handler: async (ctx, args) => {
     let allKeydevs = await ctx.db.query('keydevs').collect().then(kds => kds.filter(kd => !kd.deletedAt))
@@ -415,7 +409,6 @@ export const getTotalPhaseCounts = query({
     let frontValidated = 0
     let inProgress = 0
     let done = 0
-    let checked = 0
     
     for (const kd of allKeydevs) {
       if (kd.status === 'FrontValidated') {
@@ -424,12 +417,10 @@ export const getTotalPhaseCounts = query({
         inProgress++
       } else if (kd.status === 'Done') {
         done++
-      } else if (kd.status === 'Checked') {
-        checked++
       }
     }
     
-    return { FrontValidated: frontValidated, InProgress: inProgress, Done: done, Checked: checked }
+    return { FrontValidated: frontValidated, InProgress: inProgress, Done: done }
   }
 })
 
@@ -442,7 +433,8 @@ export const create = mutation({
     desc: v.string(),
     monthRef: v.optional(v.string()), // Opzionale per le bozze
     teamId: v.id('teams'),
-    deptId: v.id('departments')
+    deptId: v.id('departments'),
+    weight: v.optional(keydevWeightValidator) // Default: 1 (sviluppo completo)
   },
   returns: v.object({
     id: v.id('keydevs'),
@@ -494,7 +486,8 @@ export const create = mutation({
       teamId: args.teamId,
       deptId: args.deptId,
       requesterId: user._id,
-      status: 'Draft'
+      status: 'Draft',
+      weight: args.weight ?? 1 // Default: sviluppo completo (100%)
     })
 
     return { id, readableId }
@@ -534,8 +527,7 @@ export const update = mutation({
  * 3. MockupDone → Rejected (TechValidator rifiuta con motivo)
  * 4. Approved → FrontValidated (BusinessValidator del dipartimento)
  * 5. FrontValidated → InProgress (TechValidator prende ownership)
- * 6. InProgress → Done (solo owner)
- * 7. Done → Checked (solo admin)
+ * 6. InProgress → Done (solo owner) - stato finale
  * 
  * Admin può fare qualsiasi transizione.
  */
@@ -543,9 +535,7 @@ export const updateStatus = mutation({
   args: {
     id: v.id('keydevs'),
     status: keydevStatusValidator,
-    rejectionReason: v.optional(v.string()),
     monthRef: v.optional(v.string()), // Richiesto per FrontValidated
-    validatedMockupCommit: v.optional(v.string()), // Commit validato per FrontValidated
     weight: v.optional(keydevWeightValidator) // Peso obbligatorio quando TechValidator approva (MockupDone → Approved)
   },
   returns: v.null(),
@@ -609,15 +599,12 @@ export const updateStatus = mutation({
         }
 
         case 'Rejected':
-          // Solo TechValidator può rifiutare un MockupDone
+          // Solo TechValidator può impostare Rejected (il flusso principale è via questions)
           if (keydev.status !== 'MockupDone') {
             throw new Error('Transizione non valida: solo da MockupDone a Rejected')
           }
           if (!hasRole(userRoles, 'TechValidator')) {
             throw new Error('Solo i TechValidator possono rifiutare')
-          }
-          if (!args.rejectionReason || args.rejectionReason.trim() === '') {
-            throw new Error('Devi specificare un motivo per il rifiuto')
           }
           break
 
@@ -637,10 +624,6 @@ export const updateStatus = mutation({
           // Verifica che sia stato specificato un mese (solo quando si va avanti)
           if (isMovingToFrontValidated && !args.monthRef && !keydev.monthRef) {
             throw new Error('Devi specificare il mese di riferimento per la validazione')
-          }
-          // Verifica che sia stato specificato il commit validato (solo quando si va avanti)
-          if (isMovingToFrontValidated && (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '') && !keydev.validatedMockupCommit) {
-            throw new Error('Devi specificare il commit del mockup validato')
           }
           break
         }
@@ -682,37 +665,8 @@ export const updateStatus = mutation({
       }
     }
 
-    // Validazioni obbligatorie che si applicano anche agli admin
-    if (args.status === 'Checked') {
-      // Solo admin può passare a Checked, e solo da Done
-      if (keydev.status !== 'Done') {
-        throw new Error('Transizione non valida: solo da Done a Checked')
-      }
-      if (!userIsAdmin) {
-        throw new Error('Solo gli admin possono contrassegnare come controllato')
-      }
-    }
-
     // Determina se si sta andando avanti o indietro
     const movingForward = isMovingForward(keydev.status, args.status)
-    
-    if (args.status === 'FrontValidated') {
-      // Se si sta andando avanti, richiedi il commit validato
-      // Se si sta tornando indietro, usa quello esistente se disponibile
-      if (movingForward) {
-        if (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '') {
-          throw new Error('Devi specificare il commit del mockup validato')
-        }
-      } else {
-        // Tornando indietro: usa il valore esistente se disponibile
-        if (keydev.validatedMockupCommit && (!args.validatedMockupCommit || args.validatedMockupCommit.trim() === '')) {
-          // Mantieni il valore esistente, non passare undefined
-        } else if (args.validatedMockupCommit && args.validatedMockupCommit.trim() !== '') {
-          // Se viene passato un nuovo valore, usalo
-        }
-        // Se non c'è né esistente né nuovo, va bene (stato precedente non richiede questo campo)
-      }
-    }
 
     // Applica gli aggiornamenti specifici per ogni stato
     if (args.status === 'Approved') {
@@ -741,14 +695,6 @@ export const updateStatus = mutation({
         if (keydev.techValidatedAt) updates.techValidatedAt = keydev.techValidatedAt
         if (keydev.techValidatorId) updates.techValidatorId = keydev.techValidatorId
       }
-      // NOTA: Non impostare rejectionReason e rejectedById a undefined qui
-      // perché patch() non accetta valori undefined. La pulizia avviene sotto
-      // usando replace() se necessario.
-    }
-
-    if (args.status === 'Rejected') {
-      updates.rejectionReason = args.rejectionReason
-      updates.rejectedById = user._id
     }
 
     if (args.status === 'FrontValidated') {
@@ -810,13 +756,7 @@ export const updateStatus = mutation({
       if (monthRefToUse) {
         updates.monthRef = monthRefToUse
       }
-      
-      // Salva il commit validato: usa quello passato o quello esistente se si torna indietro
-      const commitToUse = args.validatedMockupCommit || keydev.validatedMockupCommit
-      if (commitToUse && commitToUse.trim() !== '') {
-        updates.validatedMockupCommit = commitToUse.trim()
-      }
-      
+
       // Aggiorna i timestamp solo se si va avanti, altrimenti mantieni quelli esistenti
       if (movingForward) {
         const now = Date.now()
@@ -839,31 +779,39 @@ export const updateStatus = mutation({
       updates.releasedAt = Date.now()
     }
 
-    // Se stiamo passando da Rejected a Draft o a Approved, dobbiamo cancellare i campi rejectionReason e rejectedById
-    // Usiamo replace() invece di patch() perché patch() non accetta valori undefined
-    const needsRejectionFieldsCleanup = 
-      (args.status === 'Draft' && keydev.status === 'Rejected') ||
-      (args.status === 'Approved' && (keydev.rejectionReason !== undefined || keydev.rejectedById !== undefined))
+    // Passando da Rejected a Draft: usa replace() per escludere eventuali campi legacy (rejectionReason, rejectedById)
+    const needsRejectionFieldsCleanup = args.status === 'Draft' && keydev.status === 'Rejected'
     
     if (needsRejectionFieldsCleanup) {
-      // Ottieni il documento esistente
       const existing = await ctx.db.get(args.id)
       if (!existing) {
         throw new Error('KeyDev non trovato')
       }
-      
-      // Costruisce il documento aggiornato rimuovendo i campi di sistema e i campi da cancellare
+      type KeydevWithLegacy = Doc<'keydevs'> & { rejectionReason?: string; rejectedById?: unknown }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { _id: _unusedId, _creationTime: _unusedCreationTime, rejectionReason: _unusedRejectionReason, rejectedById: _unusedRejectedById, ...docWithoutSystemFields } = existing
-      const updatedDoc = {
-        ...docWithoutSystemFields,
+      const { _id, _creationTime, rejectionReason, rejectedById, ...docWithoutSystemAndLegacy } = existing as KeydevWithLegacy
+      const updatedDoc: Omit<Doc<'keydevs'>, '_id' | '_creationTime'> = {
+        ...docWithoutSystemAndLegacy,
         ...updates
       }
-      
       await ctx.db.replace(args.id, updatedDoc)
     } else {
       await ctx.db.patch(args.id, updates)
     }
+
+    // Notifica email al requester per transizioni InProgress e Done
+    if (args.status === 'InProgress' && keydev.status === 'FrontValidated') {
+      await ctx.scheduler.runAfter(0, internal.emails.sendKeyDevStatusChangeNotification, {
+        keyDevId: args.id,
+        newStatus: 'InProgress'
+      })
+    } else if (args.status === 'Done' && keydev.status === 'InProgress') {
+      await ctx.scheduler.runAfter(0, internal.emails.sendKeyDevStatusChangeNotification, {
+        keyDevId: args.id,
+        newStatus: 'Done'
+      })
+    }
+
     return null
   }
 })
@@ -924,20 +872,25 @@ export const takeOwnership = mutation({
     }
 
     await ctx.db.patch(args.id, updates)
+
+    // Notifica email al requester quando il KeyDev diventa InProgress
+    await ctx.scheduler.runAfter(0, internal.emails.sendKeyDevStatusChangeNotification, {
+      keyDevId: args.id,
+      newStatus: 'InProgress'
+    })
+
     return null
   }
 })
 
 /**
  * Dichiara completato un KeyDev (solo owner o admin).
- * Richiede il releaseCommit che l'owner deve fornire quando completa lo sviluppo.
- * Richiede anche la repoUrl definitiva del repository di sviluppo.
+ * Richiede la repoUrl definitiva del repository di sviluppo.
  */
 export const markAsDone = mutation({
   args: {
     id: v.id('keydevs'),
-    repoUrl: v.string(), // URL del repository definitivo di sviluppo
-    releaseCommit: v.string()
+    repoUrl: v.string() // URL del repository definitivo di sviluppo
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -978,16 +931,18 @@ export const markAsDone = mutation({
       throw new Error('Devi specificare l\'URL del repository definitivo')
     }
 
-    if (!args.releaseCommit || args.releaseCommit.trim() === '') {
-      throw new Error('Devi specificare il commit di rilascio')
-    }
-
     await ctx.db.patch(args.id, {
       status: 'Done',
       repoUrl: args.repoUrl.trim(),
-      releaseCommit: args.releaseCommit.trim(),
       releasedAt: Date.now()
     })
+
+    // Notifica email al requester quando il KeyDev viene completato
+    await ctx.scheduler.runAfter(0, internal.emails.sendKeyDevStatusChangeNotification, {
+      keyDevId: args.id,
+      newStatus: 'Done'
+    })
+
     return null
   }
 })
@@ -1242,6 +1197,32 @@ export const updatePriority = mutation({
 })
 
 /**
+ * Aggiorna il peso (weight) di un KeyDev.
+ * Chiunque può modificare il peso, indipendentemente dalla fase.
+ */
+export const updateWeight = mutation({
+  args: {
+    id: v.id('keydevs'),
+    weight: keydevWeightValidator
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const keydev = await ctx.db.get(args.id)
+    if (!keydev) {
+      throw new Error('KeyDev non trovato')
+    }
+    if (keydev.deletedAt) {
+      throw new Error('Non è possibile modificare un KeyDev eliminato')
+    }
+
+    await ctx.db.patch(args.id, {
+      weight: args.weight
+    })
+    return null
+  }
+})
+
+/**
  * Aggiorna il mese di riferimento di un KeyDev senza cambiare lo stato.
  * Permette di "prenotare" un mese per ragionare sul budget.
  * 
@@ -1308,8 +1289,8 @@ export const updateMonth = mutation({
       const effectiveTeamLimit = Math.min(budgetAlloc?.maxAlloc ?? 0, teamLimit)
 
       // Conta i keydevs già assegnati a quel mese per questo dept/team
-      // (stati che occupano slot: FrontValidated, InProgress, Done, Checked)
-      const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked']
+      // (stati che occupano slot: FrontValidated, InProgress, Done)
+      const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done']
       const existingKeydevs = await ctx.db
         .query('keydevs')
         .withIndex('by_dept_and_month', (q) =>

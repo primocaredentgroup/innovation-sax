@@ -5,6 +5,7 @@ import { useMemo, useState, useRef, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 import { ChevronDown, ChevronUp, X, MessageSquare, Calendar, Search } from 'lucide-react'
 import PrioritySelector from '../components/PrioritySelector'
+import WeightLabel from '../components/WeightLabel'
 
 // Componente Avatar con Tooltip (riutilizzabile per Owner e Requester)
 function OwnerAvatar({ 
@@ -277,7 +278,7 @@ function OwnerChangeModal({
 }
 
 // Tipo per lo status
-type KeyDevStatus = 'Draft' | 'MockupDone' | 'Approved' | 'Rejected' | 'FrontValidated' | 'InProgress' | 'Done' | 'Checked'
+type KeyDevStatus = 'Draft' | 'MockupDone' | 'Approved' | 'Rejected' | 'FrontValidated' | 'InProgress' | 'Done'
 
 const statusColors: Record<string, string> = {
   Draft: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
@@ -286,8 +287,7 @@ const statusColors: Record<string, string> = {
   Rejected: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300',
   FrontValidated: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
   InProgress: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300',
-  Done: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300',
-  Checked: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
+  Done: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300'
 }
 
 const statusLabels: Record<string, string> = {
@@ -297,8 +297,7 @@ const statusLabels: Record<string, string> = {
   Approved: 'Approvato',
   FrontValidated: 'Mese Stabilito',
   InProgress: 'In Corso',
-  Done: 'Completato',
-  Checked: 'Controllato'
+  Done: 'Completato'
 }
 
 const getStatusLabel = (
@@ -313,7 +312,7 @@ const getStatusLabel = (
 }
 
 // Ordine degli stati per la visualizzazione
-const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
+const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done']
 
 // Colonne ordinabili
 type SortField = 'priority' | 'title' | 'status' | 'month' | 'department' | 'team' | 'requester' | 'owner' | 'notes'
@@ -675,7 +674,7 @@ export default function KeyDevsListPage() {
       return { occupiedSlots: 0, budgetAssigned: 0, maxSlots: 0, competitionSlots: 0, percentage: 0, remainingSlots: 0 }
     }
     
-    const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done', 'Checked']
+    const occupiedStatuses = ['FrontValidated', 'InProgress', 'Done']
     
     // Filtra keydevs per stati che occupano slot E per dipartimento/team se selezionati
     // Usa keydevsByMonth per avere solo i keydevs del mese corrente
@@ -1010,11 +1009,6 @@ export default function KeyDevsListPage() {
                                 {totalPhaseCounts.Done}
                               </span>
                             )}
-                            {totalPhaseCounts.Checked > 0 && (
-                              <span className="px-2 py-0.5 text-xs rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 font-semibold">
-                                {totalPhaseCounts.Checked}
-                              </span>
-                            )}
                           </>
                         )}
                         {showAllMonths && (
@@ -1032,7 +1026,6 @@ export default function KeyDevsListPage() {
                       const frontValidated = counts?.FrontValidated || 0
                       const inProgress = counts?.InProgress || 0
                       const done = counts?.Done || 0
-                      const checked = counts?.Checked || 0
                       const isSelected = !showAllMonths && selectedMonth === opt.value
                       const budgetData = budgetUtilizationByMonth?.[opt.value]
                       const occupiedSlots = budgetData?.occupiedSlots || 0
@@ -1071,11 +1064,6 @@ export default function KeyDevsListPage() {
                             {done > 0 && (
                               <span className="px-2 py-0.5 text-xs rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 font-semibold">
                                 {done}
-                              </span>
-                            )}
-                            {checked > 0 && (
-                              <span className="px-2 py-0.5 text-xs rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 font-semibold">
-                                {checked}
                               </span>
                             )}
                             {isSelected && (
@@ -1628,8 +1616,11 @@ export default function KeyDevsListPage() {
                         />
                       </div>
                     </div>
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 wrap-break-word">
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 wrap-break-word flex items-center gap-1 flex-wrap">
                       {kd.title}
+                      <span onClick={(e) => e.stopPropagation()}>
+                        <WeightLabel keyDevId={kd._id} weight={kd.weight} />
+                      </span>
                     </h3>
                   </div>
                 </div>
@@ -1763,6 +1754,9 @@ export default function KeyDevsListPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500 dark:text-gray-400 font-mono text-xs">{kd.readableId}</span>
                       <span>{kd.title}</span>
+                      <span onClick={(e) => e.stopPropagation()}>
+                        <WeightLabel keyDevId={kd._id} weight={kd.weight} />
+                      </span>
                       {(() => {
                         const qStatus = questionsStatusByKeyDev?.[String(kd._id)]
                         if (!qStatus || qStatus.total === 0) return null

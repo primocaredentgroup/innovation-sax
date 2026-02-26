@@ -745,6 +745,103 @@ export const sendWeeklyReminder = internalAction({
 });
 
 /**
+ * Genera il template HTML per notifica cambio stato KeyDev (InProgress/Done) al requester.
+ */
+function generateKeyDevStatusChangeTemplate(
+  requesterName: string,
+  actorName: string,
+  keyDevTitle: string,
+  readableId: string,
+  status: 'InProgress' | 'Done',
+  keyDevUrl: string
+): string {
+  const isDone = status === 'Done'
+  const statusLabel = isDone ? 'completato' : 'preso in carico'
+  const message = isDone
+    ? `Il KeyDev <strong>${keyDevTitle}</strong> è stato completato da <strong>${actorName}</strong>.`
+    : `<strong>${actorName}</strong> ha preso in carico il KeyDev <strong>${keyDevTitle}</strong>.`
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KeyDev ${statusLabel}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h1 style="color: #1f2937; margin-top: 0; font-size: 24px;">Ciao ${requesterName},</h1>
+    <p style="color: #4b5563; font-size: 16px; margin-bottom: 20px;">
+      ${message}
+    </p>
+    <div style="background-color: #f3f4f6; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+      <p style="margin: 0; color: #374151;"><strong>${readableId}</strong> - ${keyDevTitle}</p>
+    </div>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${keyDevUrl}" 
+         style="display: inline-block; background-color: #3b82f6; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+        Vai al KeyDev
+      </a>
+    </div>
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+    <p style="color: #6b7280; font-size: 14px; margin: 0;">
+      Ricevi questa email perché sei il requester di questo KeyDev.
+    </p>
+  </div>
+  <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
+    <p>Questa è una notifica automatica. Non rispondere a questa email.</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * Invia una notifica email al requester quando un KeyDev diventa InProgress o Done.
+ */
+export const sendKeyDevStatusChangeNotification = internalAction({
+  args: {
+    keyDevId: v.id('keydevs'),
+    newStatus: v.union(v.literal('InProgress'), v.literal('Done'))
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const data = await ctx.runQuery(internal.emailsQueries.getKeyDevStatusChangeContext, {
+      keyDevId: args.keyDevId,
+      newStatus: args.newStatus
+    })
+    if (!data || !data.requester.email) {
+      return null
+    }
+
+    const baseUrl = process.env.APP_BASE_URL || 'http://localhost:5173'
+    const keyDevUrl = `${baseUrl}/keydevs/${data.keyDev.readableId}`
+    const html = generateKeyDevStatusChangeTemplate(
+      data.requester.name,
+      data.actor.name,
+      data.keyDev.title,
+      data.keyDev.readableId,
+      args.newStatus,
+      keyDevUrl
+    )
+
+    const subject =
+      args.newStatus === 'Done'
+        ? `✅ Il KeyDev ${data.keyDev.readableId} è stato completato`
+        : `📋 Il KeyDev ${data.keyDev.readableId} è stato preso in carico`
+
+    await resend.sendEmail(ctx, {
+      from: getFromEmail(),
+      to: data.requester.email,
+      subject,
+      html
+    })
+    return null
+  }
+});
+
+/**
  * Invia notifica ai subscribers quando viene creato un nuovo update
  */
 export const sendNewUpdateNotification = internalAction({

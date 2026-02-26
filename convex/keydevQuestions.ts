@@ -114,11 +114,13 @@ async function recomputeKeyDevStatusFromQuestions(
     return
   }
 
-  // Per passaggio a Approved puliamo eventuali campi rejection storici.
+  // Per passaggio a Approved: escludiamo eventuali campi legacy (rejectionReason, rejectedById) da documenti nel DB
+  type KeydevWithLegacy = Doc<'keydevs'> & { rejectionReason?: string; rejectedById?: Id<'users'> }
+  const keydevWithLegacy = keydev as KeydevWithLegacy
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { _id: _unusedId, _creationTime: _unusedCreationTime, rejectionReason: _unusedRejectionReason, rejectedById: _unusedRejectedById, ...docWithoutSystemFields } = keydev
+  const { _id, _creationTime, rejectionReason, rejectedById, ...docWithoutSystemAndLegacy } = keydevWithLegacy
   await convexCtx.db.replace(keyDevId, {
-    ...docWithoutSystemFields,
+    ...docWithoutSystemAndLegacy,
     status: 'Approved'
   })
 }

@@ -17,11 +17,10 @@ export const rolesValidator = v.array(singleRoleValidator)
 // 1. Draft (Bozza) - stato iniziale
 // 2. MockupDone (Mockup Terminato) - quando viene aggiunto mockupRepoUrl
 // 3. Approved (Approvato) - dopo approvazione TechValidator
-// 4. Rejected (Rifiutato) - se TechValidator rifiuta (con motivo)
+// 4. Rejected (Rifiutato) - se ci sono domande non validate
 // 5. FrontValidated (Mese Stabilito) - dopo validazione BusinessValidator del dipartimento
 // 6. InProgress (In Corso) - quando un TechValidator diventa owner
-// 7. Done (Completato) - quando l'owner dichiara completato
-// 8. Checked (Controllato) - quando l'admin aziendale ha controllato e applicato eventuali penalità
+// 7. Done (Completato) - quando l'owner dichiara completato (stato finale)
 export const keydevStatusValidator = v.union(
   v.literal('Draft'),
   v.literal('MockupDone'),
@@ -29,8 +28,7 @@ export const keydevStatusValidator = v.union(
   v.literal('Rejected'),
   v.literal('FrontValidated'),
   v.literal('InProgress'),
-  v.literal('Done'),
-  v.literal('Checked')
+  v.literal('Done')
 )
 
 export const noteTypeValidator = v.union(
@@ -153,15 +151,10 @@ export default defineSchema({
     techValidatorId: v.optional(v.id('users')), // TechValidator che ha approvato il mockup
     ownerId: v.optional(v.id('users')), // TechValidator assegnatario (sviluppatore)
     status: keydevStatusValidator,
-    // Rejection info
-    rejectionReason: v.optional(v.string()), // Motivo del rifiuto da parte del TechValidator
-    rejectedById: v.optional(v.id('users')), // Chi ha rifiutato
     // Mockup repo (React-TS template)
     mockupRepoUrl: v.optional(v.string()),
-    validatedMockupCommit: v.optional(v.string()), // Commit validato dal BusinessValidator
     // Real development repo
     repoUrl: v.optional(v.string()),
-    releaseCommit: v.optional(v.string()), // Commit rilasciato dall'owner quando completa lo sviluppo
     // Weight (peso dello sviluppo per validazione tech)
     weight: v.optional(keydevWeightValidator), // Peso da 0 a 1 (0, 0.25, 0.50, 0.75, 1)
     // Priority (priorità del keydev)

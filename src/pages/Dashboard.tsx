@@ -80,8 +80,7 @@ function formatStatus(status: string): string {
     Rejected: 'Rifiutato',
     FrontValidated: 'Mese Stabilito',
     InProgress: 'In Corso',
-    Done: 'Completato',
-    Checked: 'Controllato'
+    Done: 'Completato'
   }
   return statusMap[status] || status
 }
@@ -256,8 +255,7 @@ const statusColors: Record<string, { light: string; dark: string }> = {
   Rejected: { light: '#ef4444', dark: '#b91c1c' }, // red-500 / red-700
   FrontValidated: { light: '#3b82f6', dark: '#1e40af' }, // blue-500 / blue-800
   InProgress: { light: '#a855f7', dark: '#7e22ce' }, // purple-500 / purple-700
-  Done: { light: '#10b981', dark: '#047857' }, // emerald-500 / emerald-700
-  Checked: { light: '#f97316', dark: '#c2410c' } // orange-500 / orange-700
+  Done: { light: '#10b981', dark: '#047857' } // emerald-500 / emerald-700
 }
 
 // Hook per rilevare il tema
@@ -453,8 +451,8 @@ function PieChart({
   )
 }
 
-// Ordine del flusso: 1. Bozza, 2. Mockup terminato, 3. Rifiutato, 4. Approvato, 5. Mese stabilito, 6. In corso, 7. Completato, 8. Controllato
-const statusFlowOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked'] as const
+// Ordine del flusso: 1. Bozza, 2. Mockup terminato, 3. Rifiutato, 4. Approvato, 5. Mese stabilito, 6. In corso, 7. Completato
+const statusFlowOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done'] as const
 
 // Componente per la legenda condivisa (mostra tutti gli stati possibili con conteggio e frecce)
 function SharedLegend({
@@ -941,7 +939,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0 w-full sm:w-auto">
                   <div className="flex flex-wrap sm:flex-nowrap justify-between text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-2 gap-2">
-                    <span className="whitespace-nowrap shrink-0 font-medium">Controllati: {okrData.checkedCount}</span>
+                    <span className="whitespace-nowrap shrink-0 font-medium">Completati: {okrData.doneCount}</span>
                     <span className="whitespace-nowrap shrink-0 font-medium">Totale: {okrData.totalCount}</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 sm:h-5 min-w-0">
@@ -1194,7 +1192,7 @@ export default function DashboardPage() {
                   Attenzione
                 </p>
                 <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-400 break-words">
-                  Mostra tutti gli sviluppi chiave con un mese di riferimento precedente all'attuale che non sono ancora stati controllati (stato diverso da "Checked").
+                  Mostra tutti gli sviluppi chiave con un mese di riferimento precedente all'attuale che non sono ancora stati completati (stato diverso da "Done").
                 </p>
               </div>
             </div>

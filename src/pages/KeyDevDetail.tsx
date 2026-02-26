@@ -4,12 +4,13 @@ import { api } from '../../convex/_generated/api'
 import { useState, useMemo, useEffect } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 import PrioritySelector from '../components/PrioritySelector'
+import WeightLabel from '../components/WeightLabel'
 
 // Tipo per i ruoli
 type Role = 'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'
 
 // Tipo per lo status
-type KeyDevStatus = 'Draft' | 'MockupDone' | 'Approved' | 'Rejected' | 'FrontValidated' | 'InProgress' | 'Done' | 'Checked'
+type KeyDevStatus = 'Draft' | 'MockupDone' | 'Approved' | 'Rejected' | 'FrontValidated' | 'InProgress' | 'Done'
 
 // Helper per verificare ruoli
 const hasRole = (roles: Role[] | undefined, role: Role): boolean => {
@@ -26,8 +27,7 @@ const statusColors: Record<string, string> = {
   Rejected: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300',
   FrontValidated: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
   InProgress: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300',
-  Done: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300',
-  Checked: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
+  Done: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300'
 }
 
 const statusLabels: Record<string, string> = {
@@ -37,12 +37,11 @@ const statusLabels: Record<string, string> = {
   Rejected: 'Rifiutato',
   FrontValidated: 'Mese stabilito',
   InProgress: 'In Corso',
-  Done: 'Completato',
-  Checked: 'Controllato'
+  Done: 'Completato'
 }
 
 // Ordine degli stati per la visualizzazione
-const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done', 'Checked']
+const statusOrder = ['Draft', 'MockupDone', 'Rejected', 'Approved', 'FrontValidated', 'InProgress', 'Done']
 
 // Helper per ottenere solo gli stati precedenti (incluso quello attuale)
 const getPreviousStatuses = (currentStatus: string): string[] => {
@@ -76,11 +75,10 @@ const statusDescriptions: Record<string, string> = {
   Draft: 'Aggiungi il mockupRepoUrl e poi dichiara "Mockup Terminato" quando sei pronto',
   MockupDone: 'Avvia Start Questions: finché almeno una domanda non è validata lo stato resta Rifiutato',
   Approved: 'In attesa di stabilimento del mese da parte del BusinessValidator del dipartimento',
-  Rejected: 'Rifiutato dal TechValidator - vedere motivo',
+  Rejected: 'Rifiutato: restano domande da validare prima di procedere',
   FrontValidated: 'In attesa che un TechValidator prenda in carico lo sviluppo',
   InProgress: 'In sviluppo - l\'owner può dichiararlo completato',
-  Done: 'Completato',
-  Checked: 'Controllato dall\'admin aziendale'
+  Done: 'Completato'
 }
 
 export default function KeyDevDetailPage() {
@@ -130,10 +128,8 @@ export default function KeyDevDetailPage() {
 
   const [mockupRepoUrlInput, setMockupRepoUrlInput] = useState('')
   const [validationMonth, setValidationMonth] = useState(currentMonth)
-  const [validationCommit, setValidationCommit] = useState('')
   const [validationError, setValidationError] = useState('')
   const [repoUrl, setRepoUrl] = useState('')
-  const [releaseCommit, setReleaseCommit] = useState('')
   const [ownershipWeight, setOwnershipWeight] = useState<0 | 0.25 | 0.5 | 0.75 | 1>(() => {
     if (keydev?.weight !== undefined) {
       return keydev.weight as 0 | 0.25 | 0.5 | 0.75 | 1
@@ -417,17 +413,11 @@ export default function KeyDevDetailPage() {
       alert('Devi specificare l\'URL del repository definitivo')
       return
     }
-    if (!releaseCommit.trim()) {
-      alert('Devi specificare il commit di rilascio')
-      return
-    }
     await markAsDone({ 
       id: keydev._id, 
-      repoUrl: repoUrl.trim(),
-      releaseCommit: releaseCommit.trim() 
+      repoUrl: repoUrl.trim()
     })
     setRepoUrl('')
-    setReleaseCommit('')
   }
 
   if (!isNew && !keydev) {
@@ -452,8 +442,11 @@ export default function KeyDevDetailPage() {
             >
               ← Torna alla lista
             </Link>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100 truncate min-w-0">
-              {isNew ? 'Nuovo Sviluppo Chiave' : keydev?.title}
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100 min-w-0 flex items-center gap-2 flex-wrap">
+              <span className="truncate">{isNew ? 'Nuovo Sviluppo Chiave' : keydev?.title}</span>
+              {!isNew && keydev && (
+                <WeightLabel keyDevId={keydev._id} weight={keydev.weight} />
+              )}
             </h1>
           </div>
           {/* Pulsante cestino per soft-delete - in alto a destra */}
@@ -674,26 +667,6 @@ export default function KeyDevDetailPage() {
                   {statusDescriptions[keydev.status]}
                 </p>
                 
-                {/* Mostra motivo rifiuto */}
-                {keydev.status === 'Rejected' && keydev.rejectionReason && (
-                  <div className="mt-3 p-3 bg-red-100 dark:bg-red-900/30 rounded">
-                    <p className="text-sm font-medium text-red-800 dark:text-red-300">Motivo del rifiuto:</p>
-                    <p className="text-sm text-red-700 dark:text-red-300 mt-1">{keydev.rejectionReason}</p>
-                    {keydev.rejectedById && (
-                      <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-                        Rifiutato da: {users?.find((u) => u._id === keydev.rejectedById)?.name || 'N/A'}
-                      </p>
-                    )}
-                    {/* Messaggio per requester/admin */}
-                    {(isRequester || userIsAdmin) && (
-                      <div className="mt-3 p-2 bg-blue-100 dark:bg-blue-900/30 rounded border border-blue-200 dark:border-blue-800">
-                        <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                          💡 Puoi riportare questo sviluppo in Bozza per modificare il mockupRepoUrl e ripassarlo a "Mockup Terminato"
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
                 {keydev.status === 'Rejected' && questionsStatus && questionsStatus.total > 0 && questionsStatus.hasUnvalidated && (
                   <div className="mt-3 p-3 bg-amber-100 dark:bg-amber-900/30 rounded border border-amber-200 dark:border-amber-800">
                     <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
@@ -820,8 +793,7 @@ export default function KeyDevDetailPage() {
                 {keydev.status === 'Approved' && (isBusinessValidatorOfDept || userIsAdmin) && (
                   <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                     <p className="text-sm text-green-800 dark:text-green-300 mb-4">
-                      Come BusinessValidator del dipartimento, puoi stabilire il mese.
-                      Seleziona il mese di riferimento per l'allocazione del budget e, se necessario, inserisci il commit validato.
+                      Come BusinessValidator del dipartimento, puoi stabilire il mese di riferimento per l'allocazione del budget.
                     </p>
                     
                     <div className="space-y-4">
@@ -859,39 +831,7 @@ export default function KeyDevDetailPage() {
                           }
                         </p>
                       </div>
-                      
-                      <div>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Commit Validato dal Business
-                          </label>
-                          {keydev.mockupRepoUrl && (
-                            <a
-                              href={`${keydev.mockupRepoUrl.replace(/\/+$/, '')}/commits/`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors whitespace-nowrap"
-                              title="Vai alla pagina dei commit, clicca il bottone 'Copia' dell'ultimo commit (dove apparirà 'Copy full SHA for [xxx]') e incollalo qui: sarà il patto tra sviluppatori e dipartimento richiedente."
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                              Open on a new tab
-                            </a>
-                          )}
-                        </div>
-                        <input
-                          type="text"
-                          value={validationCommit}
-                          onChange={(e) => setValidationCommit(e.target.value)}
-                          placeholder="es. abc1234 o hash completo del commit (opzionale)"
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 font-mono text-sm"
-                        />
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Opzionale: inserisci l'hash del commit del mockup che stai validando
-                        </p>
-                      </div>
-                      
+
                       {/* Info budget */}
                       <div className={`p-3 rounded-lg ${
                         budgetForValidation && budgetForValidation.maxAlloc > 0
@@ -931,8 +871,7 @@ export default function KeyDevDetailPage() {
                             await updateStatus({ 
                               id: keydev._id, 
                               status: 'FrontValidated',
-                              monthRef: validationMonth,
-                              validatedMockupCommit: validationCommit.trim() || undefined
+                              monthRef: validationMonth
                             })
                           } catch (err) {
                             setValidationError(err instanceof Error ? err.message : 'Errore durante lo stabilimento del mese')
@@ -1021,36 +960,9 @@ export default function KeyDevDetailPage() {
                           }
                         </p>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Commit di Rilascio <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={releaseCommit}
-                          onChange={(e) => setReleaseCommit(e.target.value)}
-                          placeholder="es. abc1234 o hash completo del commit"
-                          className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 font-mono text-sm ${
-                            !releaseCommit.trim() 
-                              ? 'border-red-300 dark:border-red-600' 
-                              : 'border-gray-300 dark:border-gray-600'
-                          }`}
-                          required
-                        />
-                        <p className={`mt-1 text-xs ${
-                          !releaseCommit.trim() 
-                            ? 'text-red-500 dark:text-red-400' 
-                            : 'text-gray-500 dark:text-gray-400'
-                        }`}>
-                          {!releaseCommit.trim() 
-                            ? 'Obbligatorio: inserisci l\'hash del commit di rilascio'
-                            : 'Inserisci l\'hash del commit di rilascio quando completi lo sviluppo'
-                          }
-                        </p>
-                      </div>
                       <button
                         onClick={handleMarkAsDone}
-                        disabled={!repoUrl.trim() || !releaseCommit.trim()}
+                        disabled={!repoUrl.trim()}
                         className="px-4 py-2 bg-emerald-600 dark:bg-emerald-700 text-white rounded-md hover:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Dichiara Completato
@@ -1062,25 +974,8 @@ export default function KeyDevDetailPage() {
                 {/* Done: Messaggio di completamento */}
                 {keydev.status === 'Done' && (
                   <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
-                    <p className="text-sm text-emerald-800 dark:text-emerald-300 mb-4">
+                    <p className="text-sm text-emerald-800 dark:text-emerald-300">
                       Questo Sviluppo Chiave è stato completato con successo!
-                    </p>
-                    {userIsAdmin && (
-                      <button
-                        onClick={() => updateStatus({ id: keydev._id, status: 'Checked' })}
-                        className="px-4 py-2 bg-orange-600 dark:bg-orange-700 text-white rounded-md hover:bg-orange-700 dark:hover:bg-orange-600"
-                      >
-                        Contrassegna come Controllato
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Checked: Messaggio di controllo completato */}
-                {keydev.status === 'Checked' && (
-                  <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                    <p className="text-sm text-orange-800 dark:text-orange-300">
-                      Questo Sviluppo Chiave è stato controllato dall'admin aziendale.
                     </p>
                   </div>
                 )}
@@ -1088,63 +983,28 @@ export default function KeyDevDetailPage() {
             </div>
           )}
 
-          {/* Sezione Penalità per Admin quando status è Done o Checked */}
-          {!isNew && keydev && (keydev.status === 'Done' || keydev.status === 'Checked') && userIsAdmin && (
+          {/* Sezione Penalità per Admin quando status è Done */}
+          {!isNew && keydev && keydev.status === 'Done' && userIsAdmin && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
                 Controllo e Penalità
               </h2>
 
-              {/* Riferimenti ai commit */}
-              <div className="mb-6 space-y-4">
-                {keydev.validatedMockupCommit && keydev.mockupRepoUrl && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Commit Mockup Validato
-                    </label>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono break-all">
-                        {keydev.validatedMockupCommit}
-                      </span>
-                      <a
-                        href={`${keydev.mockupRepoUrl}/commit/${keydev.validatedMockupCommit}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline text-sm whitespace-nowrap"
-                      >
-                        Vedi su GitHub
-                      </a>
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 break-all">
-                      Repository: {keydev.mockupRepoUrl}
-                    </p>
-                  </div>
-                )}
-
-                {keydev.releaseCommit && keydev.repoUrl && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Commit di Rilascio
-                    </label>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-200 font-mono break-all">
-                        {keydev.releaseCommit}
-                      </span>
-                      <a
-                        href={`${keydev.repoUrl}/commit/${keydev.releaseCommit}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline text-sm whitespace-nowrap"
-                      >
-                        Vedi su GitHub
-                      </a>
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 break-all">
-                      Repository: {keydev.repoUrl}
-                    </p>
-                  </div>
-                )}
-              </div>
+              {keydev.repoUrl && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Repository di sviluppo
+                  </label>
+                  <a
+                    href={keydev.repoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline text-sm break-all"
+                  >
+                    {keydev.repoUrl}
+                  </a>
+                </div>
+              )}
 
               {/* Form per aggiungere penalità */}
               <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">

@@ -72,21 +72,14 @@ export default function AdminRejectedPage() {
 
                       {kd.mockupRepoUrl && (
                         <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded">
-                          <div className="flex items-center gap-4 text-sm">
-                            <a
-                              href={kd.mockupRepoUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                            >
-                              {kd.mockupRepoUrl}
-                            </a>
-                            {kd.validatedMockupCommit && (
-                              <span className="text-gray-500 dark:text-gray-400 font-mono text-xs">
-                                Commit: {kd.validatedMockupCommit.substring(0, 7)}
-                              </span>
-                            )}
-                          </div>
+                          <a
+                            href={kd.mockupRepoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          >
+                            {kd.mockupRepoUrl}
+                          </a>
                         </div>
                       )}
                     </div>

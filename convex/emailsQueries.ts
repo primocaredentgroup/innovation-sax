@@ -643,3 +643,60 @@ export const getCoreAppNewQuestionContext = internalQuery({
     }
   }
 })
+
+/**
+ * Query interna per recuperare il contesto per notifica cambio stato KeyDev al requester.
+ * Usata per InProgress e Done.
+ */
+export const getKeyDevStatusChangeContext = internalQuery({
+  args: {
+    keyDevId: v.id('keydevs'),
+    newStatus: v.union(v.literal('InProgress'), v.literal('Done'))
+  },
+  returns: v.union(
+    v.object({
+      keyDev: v.object({
+        _id: v.id('keydevs'),
+        readableId: v.string(),
+        title: v.string()
+      }),
+      requester: v.object({
+        _id: v.id('users'),
+        name: v.string(),
+        email: v.optional(v.string())
+      }),
+      actor: v.object({
+        _id: v.id('users'),
+        name: v.string()
+      })
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const keyDev = await ctx.db.get(args.keyDevId)
+    if (!keyDev) return null
+
+    const requester = await ctx.db.get(keyDev.requesterId)
+    if (!requester) return null
+
+    const actor = keyDev.ownerId ? await ctx.db.get(keyDev.ownerId) : null
+    if (!actor) return null
+
+    return {
+      keyDev: {
+        _id: keyDev._id,
+        readableId: keyDev.readableId,
+        title: keyDev.title
+      },
+      requester: {
+        _id: requester._id,
+        name: requester.name,
+        email: requester.email
+      },
+      actor: {
+        _id: actor._id,
+        name: actor.name
+      }
+    }
+  }
+})

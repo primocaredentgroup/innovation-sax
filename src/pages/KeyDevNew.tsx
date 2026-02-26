@@ -17,6 +17,7 @@ export default function KeyDevNewPage() {
   const [desc, setDesc] = useState('')
   const [selectedDeptId, setSelectedDeptId] = useState<string>('')
   const [selectedTeamId, setSelectedTeamId] = useState<string>('')
+  const [weight, setWeight] = useState<0.25 | 0.5 | 0.75 | 1>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -85,7 +86,8 @@ export default function KeyDevNewPage() {
         title: title.trim(),
         desc: desc.trim(),
         teamId: selectedTeamId as Id<'teams'>,
-        deptId: selectedDeptId as Id<'departments'>
+        deptId: selectedDeptId as Id<'departments'>,
+        weight
       })
       navigate({ to: '/keydevs/$id', params: { id: result.readableId } })
     } catch (err) {
@@ -140,7 +142,7 @@ export default function KeyDevNewPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Dipartimento richiedente
@@ -179,6 +181,22 @@ export default function KeyDevNewPage() {
                 {availableTeams.map((t) => (
                   <option key={t._id} value={t._id}>{t.name}</option>
                 ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Peso dello sviluppo
+              </label>
+              <select
+                value={weight}
+                onChange={(e) => setWeight(parseFloat(e.target.value) as 0.25 | 0.5 | 0.75 | 1)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                title="Peso per allocazione budget"
+              >
+                <option value={1}>x1 - Occupa tutto lo slot mensile</option>
+                <option value={0.75}>x0.75 - Sviluppo significativo (75%)</option>
+                <option value={0.5}>x0.5 - Sviluppo medio (50%)</option>
+                <option value={0.25}>x0.25 - Sviluppo leggero (25%)</option>
               </select>
             </div>
           </div>
