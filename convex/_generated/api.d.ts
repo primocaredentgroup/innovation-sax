@@ -11,6 +11,7 @@
 import type * as agentApps from "../agentApps.js";
 import type * as agents from "../agents.js";
 import type * as budget from "../budget.js";
+import type * as coreAppMilestoneTemplates from "../coreAppMilestoneTemplates.js";
 import type * as coreAppMilestones from "../coreAppMilestones.js";
 import type * as coreAppQuestionTemplates from "../coreAppQuestionTemplates.js";
 import type * as coreAppQuestions from "../coreAppQuestions.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   agentApps: typeof agentApps;
   agents: typeof agents;
   budget: typeof budget;
+  coreAppMilestoneTemplates: typeof coreAppMilestoneTemplates;
   coreAppMilestones: typeof coreAppMilestones;
   coreAppQuestionTemplates: typeof coreAppQuestionTemplates;
   coreAppQuestions: typeof coreAppQuestions;

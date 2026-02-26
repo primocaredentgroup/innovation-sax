@@ -204,8 +204,12 @@ export default function RootLayout() {
               <span className="text-lg">💻</span>
               {!sidebarCollapsed && <span>Applicazioni Core</span>}
             </Link>
+          </nav>
+
+          {/* Footer */}
+          <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
             {isAdmin === true && (
-              <>
+              <div className={`mb-4 space-y-1 ${sidebarCollapsed ? 'flex flex-col items-center' : ''}`}>
                 <Link
                   to="/admin"
                   onClick={() => setSidebarOpen(false)}
@@ -250,12 +254,8 @@ export default function RootLayout() {
                   <span className="text-lg">🤖</span>
                   {!sidebarCollapsed && <span>Agenti</span>}
                 </Link>
-              </>
+              </div>
             )}
-          </nav>
-
-          {/* Footer */}
-          <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
             <div className="mb-4 flex justify-center">
               <DarkModeToggle />
             </div>

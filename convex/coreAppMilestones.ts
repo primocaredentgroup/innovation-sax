@@ -1,5 +1,7 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
+import type { Doc } from './_generated/dataModel'
+import { isAdmin } from './users'
 
 const milestoneReturnValidator = v.object({
   _id: v.id('coreAppMilestones'),
@@ -12,30 +14,30 @@ const milestoneReturnValidator = v.object({
   order: v.number()
 })
 
-function calculateProgress(
-  milestones: { valuePercent: number; completed: boolean }[]
-): number {
-  if (milestones.length === 0) return 0
-  const sumWeight = milestones.reduce((s, m) => s + m.valuePercent, 0)
-  if (sumWeight <= 0) return 0
-  const completedWeight = milestones
+/** Somma dei valuePercent per le milestone completate (progresso = somma valori, nessun ricalcolo in base 100) */
+function completedSum(milestones: { valuePercent: number; completed: boolean }[]): number {
+  return milestones
     .filter((m) => m.completed)
     .reduce((s, m) => s + m.valuePercent, 0)
-  return Math.round((completedWeight / sumWeight) * 100)
 }
 
-function normalizePercent(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(value)))
+/** Somma totale dei valuePercent di tutte le milestones */
+function totalSum(milestones: { valuePercent: number }[]): number {
+  return milestones.reduce((s, m) => s + m.valuePercent, 0)
 }
 
 /**
  * Lista le milestone di una Core App, ordinate per order.
+ * progressPercent = somma dei valuePercent completati (no scaling).
+ * completedSum/totalSum per il counter e avviso se totalSum < 100.
  */
 export const listByCoreApp = query({
   args: { coreAppId: v.id('coreApps') },
   returns: v.object({
     milestones: v.array(milestoneReturnValidator),
     progressPercent: v.number(),
+    completedSum: v.number(),
+    totalSum: v.number(),
     completedCount: v.number(),
     totalCount: v.number()
   }),
@@ -48,13 +50,15 @@ export const listByCoreApp = query({
       .order('asc')
       .collect()
 
-    const progressPercent = normalizePercent(calculateProgress(milestones))
-    const completedCount = milestones.filter((m) => m.completed).length
+    const completed = completedSum(milestones)
+    const total = totalSum(milestones)
 
     return {
       milestones,
-      progressPercent,
-      completedCount,
+      progressPercent: Math.round(completed),
+      completedSum: Math.round(completed * 10) / 10,
+      totalSum: Math.round(total * 10) / 10,
+      completedCount: milestones.filter((m) => m.completed).length,
       totalCount: milestones.length
     }
   }
@@ -107,8 +111,8 @@ export const create = mutation({
       ...existing,
       { valuePercent, completed: false }
     ]
-    const calculated = normalizePercent(calculateProgress(allMilestones))
-    await ctx.db.patch(args.coreAppId, { percentComplete: calculated })
+    const sum = completedSum(allMilestones)
+    await ctx.db.patch(args.coreAppId, { percentComplete: Math.round(sum) })
 
     return milestoneId
   }
@@ -168,8 +172,8 @@ export const update = mutation({
         ? { valuePercent, completed }
         : { valuePercent: m.valuePercent, completed: m.completed }
     )
-    const calculated = normalizePercent(calculateProgress(toCalculate))
-    await ctx.db.patch(existing.coreAppId, { percentComplete: calculated })
+    const sum = completedSum(toCalculate)
+    await ctx.db.patch(existing.coreAppId, { percentComplete: Math.round(sum) })
 
     return null
   }
@@ -195,12 +199,110 @@ export const remove = mutation({
       .collect()
 
     if (remaining.length > 0) {
-      const calculated = normalizePercent(calculateProgress(remaining))
-      await ctx.db.patch(existing.coreAppId, { percentComplete: calculated })
+      const sum = completedSum(remaining)
+      await ctx.db.patch(existing.coreAppId, { percentComplete: Math.round(sum) })
     } else {
       await ctx.db.patch(existing.coreAppId, { percentComplete: 0 })
     }
 
     return null
+  }
+})
+
+const coreAppBasicValidator = v.object({
+  _id: v.id('coreApps'),
+  name: v.string(),
+  slug: v.string()
+})
+
+async function getCurrentUserOrThrow(ctx: unknown) {
+  const convexCtx = ctx as {
+    auth: { getUserIdentity: () => Promise<{ subject: string } | null> }
+    db: {
+      query: (table: 'users') => {
+        withIndex: (
+          indexName: 'by_sub',
+          indexRange: (q: { eq: (field: 'sub', value: string) => unknown }) => unknown
+        ) => { first: () => Promise<Doc<'users'> | null> }
+      }
+    }
+  }
+  const identity = await convexCtx.auth.getUserIdentity()
+  if (!identity) throw new Error('Non autenticato')
+  const user = await convexCtx.db
+    .query('users')
+    .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+    .first()
+  if (!user) throw new Error('Utente non trovato')
+  return user
+}
+
+/**
+ * Lista le CoreApp senza milestones (per inizializzazione).
+ */
+export const listCoreAppsWithoutMilestones = query({
+  args: {},
+  returns: v.array(coreAppBasicValidator),
+  handler: async (ctx) => {
+    const allCoreApps = await ctx.db.query('coreApps').collect()
+    const allMilestones = await ctx.db.query('coreAppMilestones').collect()
+    const coreAppIdsWithMilestones = new Set(
+      allMilestones.map((m) => m.coreAppId)
+    )
+    return allCoreApps
+      .filter((app) => !coreAppIdsWithMilestones.has(app._id))
+      .map((app) => ({ _id: app._id, name: app.name, slug: app.slug }))
+  }
+})
+
+/**
+ * Applica i template milestones a tutte le CoreApp senza milestones (solo Admin).
+ */
+export const applyTemplateToCoreAppsWithoutMilestones = mutation({
+  args: {},
+  returns: v.object({
+    updatedCount: v.number()
+  }),
+  handler: async (ctx) => {
+    const user = await getCurrentUserOrThrow(ctx)
+    const userRoles = user.roles as
+      | Array<'Requester' | 'BusinessValidator' | 'TechValidator' | 'Admin'>
+      | undefined
+    if (!isAdmin(userRoles)) {
+      throw new Error('Solo gli Admin possono inizializzare le CoreApp con i template milestones')
+    }
+
+    const templates = await ctx.db
+      .query('coreAppMilestoneTemplates')
+      .withIndex('by_order')
+      .collect()
+    if (templates.length === 0) {
+      return { updatedCount: 0 }
+    }
+
+    const allCoreApps = await ctx.db.query('coreApps').collect()
+    const allMilestones = await ctx.db.query('coreAppMilestones').collect()
+    const coreAppIdsWithMilestones = new Set(
+      allMilestones.map((m) => m.coreAppId)
+    )
+    const coreAppsWithoutMilestones = allCoreApps.filter(
+      (app) => !coreAppIdsWithMilestones.has(app._id)
+    )
+
+    let updatedCount = 0
+    for (const coreApp of coreAppsWithoutMilestones) {
+      for (const t of templates) {
+        await ctx.db.insert('coreAppMilestones', {
+          coreAppId: coreApp._id,
+          description: t.description,
+          valuePercent: t.valuePercent,
+          completed: false,
+          order: t.order
+        })
+      }
+      updatedCount++
+    }
+
+    return { updatedCount }
   }
 })

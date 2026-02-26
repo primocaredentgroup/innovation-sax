@@ -240,9 +240,10 @@ export const getCoreAppWithSubscribers = internalQuery({
     }
 
     // Aggiungi il referente business (senza duplicati se già subscriber della categoria)
+    // Stessa logica dei subscriber di categoria: aggiungi se esiste, indipendentemente dall'email
     if (coreApp.businessRefId && !seenIds.has(coreApp.businessRefId)) {
       const businessRef = await ctx.db.get(coreApp.businessRefId);
-      if (businessRef && businessRef.email) {
+      if (businessRef) {
         seenIds.add(businessRef._id);
         subscribers.push({
           _id: businessRef._id,

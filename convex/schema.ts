@@ -341,6 +341,13 @@ export default defineSchema({
     .index('by_order', ['order'])
     .index('by_active_and_order', ['active', 'order']),
 
+  // Template milestones per CoreApp (default per tutte le nuove CoreApp)
+  coreAppMilestoneTemplates: defineTable({
+    description: v.string(),
+    valuePercent: v.number(), // 0-100, peso della milestone
+    order: v.number() // Ordinamento
+  }).index('by_order', ['order']),
+
   // Domande istanziate su una CoreApp specifica
   coreAppQuestions: defineTable({
     coreAppId: v.id('coreApps'),

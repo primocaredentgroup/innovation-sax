@@ -198,6 +198,14 @@ export const create = mutation({
       }
     }
 
+    // Verifica che il referente business esista (se specificato)
+    if (args.businessRefId) {
+      const businessRef = await ctx.db.get(args.businessRefId)
+      if (!businessRef) {
+        throw new Error('Referente business non trovato')
+      }
+    }
+
     // Calcola la prossima priority unica per la categoria
     const priority = await getNextPriorityForCategory(ctx, args.categoryId)
     const weight = args.weight ?? 1
@@ -205,7 +213,7 @@ export const create = mutation({
       throw new Error('Il peso deve essere un numero tra 1 e 10')
     }
 
-    return await ctx.db.insert('coreApps', {
+    const coreAppId = await ctx.db.insert('coreApps', {
       name: args.name,
       slug,
       description: args.description,
@@ -218,6 +226,23 @@ export const create = mutation({
       categoryId: args.categoryId,
       priority
     })
+
+    // Applica i template milestones: ogni nuova CoreApp parte con il set predefinito
+    const templates = await ctx.db
+      .query('coreAppMilestoneTemplates')
+      .withIndex('by_order')
+      .collect()
+    for (const t of templates) {
+      await ctx.db.insert('coreAppMilestones', {
+        coreAppId,
+        description: t.description,
+        valuePercent: t.valuePercent,
+        completed: false,
+        order: t.order
+      })
+    }
+
+    return coreAppId
   }
 })
 

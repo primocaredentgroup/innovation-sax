@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
+import { MilestonesDialog } from '../components/MilestonesDialog'
 
 // Componente Avatar con Tooltip - cliccabile per cambiare owner/referente
 function OwnerAvatar({
@@ -276,37 +277,11 @@ const statusLabels: Record<string, string> = {
   Completed: 'Completato'
 }
 
-// Helper per calcolare il numero della settimana ISO
-function getISOWeek(date: Date): { year: number; week: number } {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  const dayNum = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-  return { year: d.getUTCFullYear(), week: weekNo }
-}
-
-// Helper per ottenere la settimana corrente in formato ISO
-function getCurrentWeekRef(): string {
-  const now = new Date()
-  const { year, week } = getISOWeek(now)
-  return `${year}-W${week.toString().padStart(2, '0')}`
-}
-
-// Helper per ottenere la settimana precedente in formato ISO
-function getPreviousWeekRef(): string {
-  const now = new Date()
-  now.setDate(now.getDate() - 7)
-  const { year, week } = getISOWeek(now)
-  return `${year}-W${week.toString().padStart(2, '0')}`
-}
-
-// Verifica se l'ultimo aggiornamento è nella settimana corrente o precedente
-function isRecentUpdate(weekRef: string | undefined): boolean {
-  if (!weekRef) return false
-  const currentWeek = getCurrentWeekRef()
-  const previousWeek = getPreviousWeekRef()
-  return weekRef === currentWeek || weekRef === previousWeek
+// Verifica se l'ultimo aggiornamento è stato nei primi 7 giorni (verde, altrimenti rosso)
+function isRecentUpdate(createdAt: number | undefined): boolean {
+  if (createdAt == null) return false
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+  return createdAt >= sevenDaysAgo
 }
 
 type SortField = 'priority' | 'name' | 'category' | 'status' | 'owner' | 'businessRef' | 'weight' | 'progress' | 'lastUpdate'
@@ -426,6 +401,21 @@ export default function CoreAppsListPage() {
   const [sortField, setSortField] = useState<SortField>('priority')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [showProgressTooltip, setShowProgressTooltip] = useState(false)
+
+  // Stato per il dialog milestones
+  const [milestonesDialog, setMilestonesDialog] = useState<{
+    isOpen: boolean
+    coreAppId: Id<'coreApps'> | null
+    appName: string
+    appSlug: string
+    percentComplete: number
+  }>({
+    isOpen: false,
+    coreAppId: null,
+    appName: '',
+    appSlug: '',
+    percentComplete: 0
+  })
   
   // Mappa userId -> user per trovare velocemente gli owner
   const usersMap = useMemo(() => {
@@ -1261,7 +1251,20 @@ export default function CoreAppsListPage() {
                         </button>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td
+                      className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setMilestonesDialog({
+                          isOpen: true,
+                          coreAppId: app._id,
+                          appName: app.name,
+                          appSlug: app.slug,
+                          percentComplete: app.percentComplete
+                        })
+                      }}
+                      title="Clicca per gestire le milestones"
+                    >
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-900 dark:text-gray-100 w-12">
                           {app.percentComplete}%
@@ -1284,7 +1287,7 @@ export default function CoreAppsListPage() {
                       {app.lastUpdate ? (
                         <div className="text-sm">
                           <div className={`font-medium ${
-                            isRecentUpdate(app.lastUpdate.weekRef)
+                            isRecentUpdate(app.lastUpdate.createdAt)
                               ? 'text-green-600 dark:text-green-400'
                               : 'text-red-600 dark:text-red-400'
                           }`}>
@@ -1306,7 +1309,7 @@ export default function CoreAppsListPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={10} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     {searchQuery.trim()
                       ? selectedCategoryId !== null
                         ? 'Nessun risultato per la ricerca in questa categoria'
@@ -1482,7 +1485,7 @@ export default function CoreAppsListPage() {
                 )}
                 {app.lastUpdate ? (
                   <p className={`text-xs sm:text-sm mt-2 font-medium wrap-break-word ${
-                    isRecentUpdate(app.lastUpdate.weekRef)
+                    isRecentUpdate(app.lastUpdate.createdAt)
                       ? 'text-green-600 dark:text-green-400'
                       : 'text-red-600 dark:text-red-400'
                   }`}>
@@ -1498,7 +1501,21 @@ export default function CoreAppsListPage() {
                   </p>
                 )}
               </div>
-              <div className="sm:ml-6 sm:text-right shrink-0">
+              <div
+                className="sm:ml-6 sm:text-right shrink-0 cursor-pointer hover:opacity-80"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setMilestonesDialog({
+                    isOpen: true,
+                    coreAppId: app._id,
+                    appName: app.name,
+                    appSlug: app.slug,
+                    percentComplete: app.percentComplete
+                  })
+                }}
+                title="Clicca per gestire le milestones"
+              >
                 <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {app.percentComplete}%
                 </div>
@@ -1560,6 +1577,26 @@ export default function CoreAppsListPage() {
         isLoading={businessRefChangeLoading}
         error={businessRefChangeError}
       />
+
+      {/* Dialog milestones */}
+      {milestonesDialog.coreAppId && (
+        <MilestonesDialog
+          isOpen={milestonesDialog.isOpen}
+          onClose={() =>
+            setMilestonesDialog({
+              isOpen: false,
+              coreAppId: null,
+              appName: '',
+              appSlug: '',
+              percentComplete: 0
+            })
+          }
+          coreAppId={milestonesDialog.coreAppId}
+          appName={milestonesDialog.appName}
+          appSlug={milestonesDialog.appSlug}
+          initialPercentComplete={milestonesDialog.percentComplete}
+        />
+      )}
     </div>
   )
 }

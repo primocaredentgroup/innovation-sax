@@ -1,5 +1,6 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
+import type { Id } from './_generated/dataModel'
 import { rolesValidator, singleRoleValidator } from './schema'
 
 // Tipo per i ruoli
@@ -500,6 +501,134 @@ export const removeUserPicture = mutation({
     if (targetUser.pictureStorageId) {
       await ctx.storage.delete(targetUser.pictureStorageId)
       await ctx.db.patch(args.userId, { pictureStorageId: undefined })
+    }
+    return null
+  }
+})
+
+/**
+ * Aggiorna nome e/o dipartimento del proprio profilo (solo per se stessi).
+ */
+export const updateOwnProfile = mutation({
+  args: {
+    name: v.optional(v.string()),
+    deptId: v.optional(v.union(v.id('departments'), v.null()))
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+
+    const currentUser = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+
+    if (!currentUser) {
+      throw new Error('Utente non trovato')
+    }
+
+    const updates: Record<string, string | Id<'departments'> | undefined> = {}
+
+    if (args.name !== undefined) {
+      if (!args.name.trim()) {
+        throw new Error('Il nome non può essere vuoto')
+      }
+      updates.name = args.name.trim()
+    }
+
+    if (args.deptId !== undefined) {
+      if (args.deptId !== null) {
+        const dept = await ctx.db.get(args.deptId)
+        if (!dept) {
+          throw new Error('Dipartimento non trovato')
+        }
+        updates.deptId = args.deptId
+      } else {
+        updates.deptId = undefined
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(currentUser._id, updates)
+    }
+    return null
+  }
+})
+
+/**
+ * Genera URL per upload della propria foto profilo.
+ */
+export const generateOwnUploadUrl = mutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+    return await ctx.storage.generateUploadUrl()
+  }
+})
+
+/**
+ * Aggiorna la propria foto profilo con file da Convex storage.
+ */
+export const updateOwnPicture = mutation({
+  args: {
+    storageId: v.id('_storage')
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+
+    const currentUser = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+
+    if (!currentUser) {
+      throw new Error('Utente non trovato')
+    }
+
+    const oldStorageId = currentUser.pictureStorageId
+    if (oldStorageId) {
+      await ctx.storage.delete(oldStorageId)
+    }
+    await ctx.db.patch(currentUser._id, { pictureStorageId: args.storageId })
+    return null
+  }
+})
+
+/**
+ * Rimuove la propria foto custom e torna al fallback Auth0.
+ */
+export const removeOwnPicture = mutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error('Non autenticato')
+    }
+
+    const currentUser = await ctx.db
+      .query('users')
+      .withIndex('by_sub', (q) => q.eq('sub', identity.subject))
+      .first()
+
+    if (!currentUser) {
+      throw new Error('Utente non trovato')
+    }
+
+    if (currentUser.pictureStorageId) {
+      await ctx.storage.delete(currentUser.pictureStorageId)
+      await ctx.db.patch(currentUser._id, { pictureStorageId: undefined })
     }
     return null
   }

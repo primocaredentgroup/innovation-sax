@@ -462,6 +462,7 @@ function MilestoneForm({
             max={100}
             value={valuePercent}
             onChange={(e) => setValuePercent(Number(e.target.value))}
+            onFocus={(e) => e.target.select()}
             className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -573,6 +574,7 @@ function MilestoneRow({
               max={100}
               value={editValue}
               onChange={(e) => setEditValue(Number(e.target.value))}
+              onFocus={(e) => e.target.select()}
               className="w-16 px-2.5 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -1646,9 +1648,19 @@ export default function CoreAppDetailPage() {
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-4">Progresso</h3>
             <div className="text-center">
               {milestonesData && milestonesData.totalCount > 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                  {milestonesData.completedCount}/{milestonesData.totalCount} completate
-                </p>
+                <>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                    Valore raggiunto: <strong className="text-gray-700 dark:text-gray-300">{milestonesData.completedSum}/100</strong>
+                    {milestonesData.totalSum < 100 && (
+                      <span className="block mt-1 text-amber-600 dark:text-amber-400 text-xs">
+                        Per raggiungere il 100% mancano delle milestones (totale attuale: {milestonesData.totalSum}%)
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">
+                    {milestonesData.completedCount}/{milestonesData.totalCount} completate
+                  </p>
+                </>
               ) : null}
               {isEditingPercent &&
               (!milestonesData || milestonesData.milestones.length === 0) ? (
@@ -1704,7 +1716,7 @@ export default function CoreAppDetailPage() {
                   </div>
                 </div>
               )}
-              {milestonesData && milestonesData.totalCount > 0 && (
+              {milestonesData && milestonesData.totalCount > 0 && milestonesData.totalSum >= 100 && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">di 100%</p>
               )}
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mt-2">

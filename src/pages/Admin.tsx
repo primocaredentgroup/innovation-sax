@@ -3,7 +3,7 @@ import { api } from '../../convex/_generated/api'
 import { useState } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 
-type Tab = 'teams' | 'departments' | 'coreAppsCategories' | 'questions'
+type Tab = 'teams' | 'departments' | 'coreAppsCategories' | 'questions' | 'milestoneTemplates'
 
 export default function AdminPage() {
   const currentUser = useQuery(api.users.getCurrentUser)
@@ -29,6 +29,12 @@ export default function AdminPage() {
   const createCoreAppQuestionTemplate = useMutation(api.coreAppQuestionTemplates.create)
   const updateCoreAppQuestionTemplate = useMutation(api.coreAppQuestionTemplates.update)
   const removeCoreAppQuestionTemplate = useMutation(api.coreAppQuestionTemplates.remove)
+  const coreAppMilestoneTemplates = useQuery(api.coreAppMilestoneTemplates.list)
+  const createCoreAppMilestoneTemplate = useMutation(api.coreAppMilestoneTemplates.create)
+  const updateCoreAppMilestoneTemplate = useMutation(api.coreAppMilestoneTemplates.update)
+  const removeCoreAppMilestoneTemplate = useMutation(api.coreAppMilestoneTemplates.remove)
+  const coreAppsWithoutMilestones = useQuery(api.coreAppMilestones.listCoreAppsWithoutMilestones)
+  const applyTemplateToCoreAppsWithoutMilestones = useMutation(api.coreAppMilestones.applyTemplateToCoreAppsWithoutMilestones)
 
   const [activeTab, setActiveTab] = useState<Tab>('teams')
   const [editingTeam, setEditingTeam] = useState<Id<'teams'> | null>(null)
@@ -57,6 +63,12 @@ export default function AdminPage() {
   const [editingCoreAppQuestionTemplate, setEditingCoreAppQuestionTemplate] = useState<Id<'coreAppQuestionTemplates'> | null>(null)
   const [editCoreAppQuestionTemplateText, setEditCoreAppQuestionTemplateText] = useState('')
   const [editCoreAppQuestionTemplateActive, setEditCoreAppQuestionTemplateActive] = useState(true)
+  const [newMilestoneTemplateDesc, setNewMilestoneTemplateDesc] = useState('')
+  const [newMilestoneTemplateValuePercent, setNewMilestoneTemplateValuePercent] = useState(20)
+  const [editingMilestoneTemplate, setEditingMilestoneTemplate] = useState<Id<'coreAppMilestoneTemplates'> | null>(null)
+  const [editMilestoneTemplateDesc, setEditMilestoneTemplateDesc] = useState('')
+  const [editMilestoneTemplateValuePercent, setEditMilestoneTemplateValuePercent] = useState(20)
+  const [isApplyingTemplate, setIsApplyingTemplate] = useState(false)
 
   // Solo Admin può accedere
   if (!currentUser?.roles?.includes('Admin')) {
@@ -317,6 +329,77 @@ export default function AdminPage() {
     }
   }
 
+  // Gestione Template Milestones
+  const handleCreateMilestoneTemplate = async () => {
+    if (!newMilestoneTemplateDesc.trim()) return
+    try {
+      await createCoreAppMilestoneTemplate({
+        description: newMilestoneTemplateDesc.trim(),
+        valuePercent: Math.max(0, Math.min(100, newMilestoneTemplateValuePercent))
+      })
+      setNewMilestoneTemplateDesc('')
+      setNewMilestoneTemplateValuePercent(20)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nella creazione del template milestone')
+    }
+  }
+
+  const handleStartEditMilestoneTemplate = (
+    id: Id<'coreAppMilestoneTemplates'>,
+    description: string,
+    valuePercent: number
+  ) => {
+    setEditingMilestoneTemplate(id)
+    setEditMilestoneTemplateDesc(description)
+    setEditMilestoneTemplateValuePercent(valuePercent)
+  }
+
+  const handleCancelEditMilestoneTemplate = () => {
+    setEditingMilestoneTemplate(null)
+    setEditMilestoneTemplateDesc('')
+    setEditMilestoneTemplateValuePercent(20)
+  }
+
+  const handleUpdateMilestoneTemplate = async (id: Id<'coreAppMilestoneTemplates'>) => {
+    if (!editMilestoneTemplateDesc.trim()) return
+    try {
+      await updateCoreAppMilestoneTemplate({
+        id,
+        description: editMilestoneTemplateDesc.trim(),
+        valuePercent: Math.max(0, Math.min(100, editMilestoneTemplateValuePercent))
+      })
+      handleCancelEditMilestoneTemplate()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nell\'aggiornamento del template milestone')
+    }
+  }
+
+  const handleRemoveMilestoneTemplate = async (id: Id<'coreAppMilestoneTemplates'>) => {
+    if (!confirm('Sei sicuro di voler eliminare questo template milestone?')) return
+    try {
+      await removeCoreAppMilestoneTemplate({ id })
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nell\'eliminazione del template milestone')
+    }
+  }
+
+  const handleApplyTemplateToCoreAppsWithoutMilestones = async () => {
+    const count = coreAppsWithoutMilestones?.length ?? 0
+    if (count === 0) {
+      alert('Nessuna CoreApp senza milestones da inizializzare.')
+      return
+    }
+    if (!confirm(`Inizializzare ${count} CoreApp con le milestones del template?`)) return
+    setIsApplyingTemplate(true)
+    try {
+      const result = await applyTemplateToCoreAppsWithoutMilestones({})
+      alert(`Inizializzate ${result.updatedCount} CoreApp con le milestones del template.`)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Errore nell\'inizializzazione')
+    } finally {
+      setIsApplyingTemplate(false)
+    }
+  }
 
   return (
     <div className="w-full max-w-full">
@@ -367,6 +450,16 @@ export default function AdminPage() {
             }`}
           >
             Questions
+          </button>
+          <button
+            onClick={() => setActiveTab('milestoneTemplates')}
+            className={`py-3 lg:py-4 px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap ${
+              activeTab === 'milestoneTemplates'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Template Milestones
           </button>
         </nav>
       </div>
@@ -1086,6 +1179,154 @@ export default function AdminPage() {
               )}
             </div>
           </section>
+        </div>
+      </div>
+      )}
+
+      {activeTab === 'milestoneTemplates' && (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-gray-100">Template Milestones</h2>
+        </div>
+        <div className="p-4 lg:p-6">
+          <p className="text-xs lg:text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Queste milestone sono applicate di default a tutte le nuove CoreApp. Le CoreApp esistenti senza milestone possono essere inizializzate con il bottone qui sotto.
+          </p>
+
+          <div className="mb-6 space-y-2">
+            <input
+              type="text"
+              value={newMilestoneTemplateDesc}
+              onChange={(e) => setNewMilestoneTemplateDesc(e.target.value)}
+              placeholder="Descrizione milestone..."
+              className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+            />
+            <div className="flex flex-wrap gap-4 items-center">
+              <div>
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Valore %</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={newMilestoneTemplateValuePercent}
+                  onChange={(e) => setNewMilestoneTemplateValuePercent(Number(e.target.value))}
+                  className="w-24 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                />
+              </div>
+              <button
+                onClick={handleCreateMilestoneTemplate}
+                className="px-4 py-2 text-sm lg:text-base bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 self-end"
+              >
+                Aggiungi Template
+              </button>
+            </div>
+          </div>
+
+          {coreAppsWithoutMilestones && coreAppsWithoutMilestones.length > 0 && (
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+              <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
+                {coreAppsWithoutMilestones.length} CoreApp senza milestones: {coreAppsWithoutMilestones.map((a) => a.name).join(', ')}
+              </p>
+              <button
+                onClick={handleApplyTemplateToCoreAppsWithoutMilestones}
+                disabled={isApplyingTemplate || (coreAppMilestoneTemplates?.length ?? 0) === 0}
+                className="px-4 py-2 text-sm bg-amber-600 dark:bg-amber-700 text-white rounded-md hover:bg-amber-700 dark:hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isApplyingTemplate ? 'Inizializzazione...' : 'Inizializza CoreApp senza milestones'}
+              </button>
+            </div>
+          )}
+
+          <div className="overflow-x-auto -mx-4 lg:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Ordine</th>
+                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Descrizione</th>
+                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Valore %</th>
+                    <th className="px-3 lg:px-4 py-2 lg:py-3 text-center text-xs lg:text-sm font-semibold text-gray-900 dark:text-gray-100">Azioni</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {coreAppMilestoneTemplates?.map((template) => {
+                    const isEditing = editingMilestoneTemplate === template._id
+                    return (
+                      <tr key={template._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">
+                          {template.order}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editMilestoneTemplateDesc}
+                              onChange={(e) => setEditMilestoneTemplateDesc(e.target.value)}
+                              className="w-full px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                            />
+                          ) : (
+                            template.description
+                          )}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm text-gray-900 dark:text-gray-100">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={editMilestoneTemplateValuePercent}
+                              onChange={(e) => setEditMilestoneTemplateValuePercent(Number(e.target.value))}
+                              className="w-20 px-2 py-1 text-xs lg:text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-gray-100"
+                            />
+                          ) : (
+                            template.valuePercent
+                          )}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-center">
+                          {isEditing ? (
+                            <div className="flex gap-1 lg:gap-2 justify-center flex-wrap">
+                              <button
+                                onClick={() => handleUpdateMilestoneTemplate(template._id)}
+                                className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                              >
+                                Salva
+                              </button>
+                              <button
+                                onClick={handleCancelEditMilestoneTemplate}
+                                className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                              >
+                                Annulla
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1 lg:gap-2 justify-center flex-wrap">
+                              <button
+                                onClick={() => handleStartEditMilestoneTemplate(template._id, template.description, template.valuePercent)}
+                                className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                              >
+                                Modifica
+                              </button>
+                              <button
+                                onClick={() => handleRemoveMilestoneTemplate(template._id)}
+                                className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600"
+                              >
+                                Elimina
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {coreAppMilestoneTemplates?.length === 0 && (
+              <div className="p-6 lg:p-8 text-center text-sm lg:text-base text-gray-500 dark:text-gray-400">
+                Nessun template milestone presente. Aggiungi almeno un template per applicarlo alle nuove CoreApp.
+              </div>
+            )}
+          </div>
         </div>
       </div>
       )}
