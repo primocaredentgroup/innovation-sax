@@ -1,6 +1,7 @@
 import { query, mutation } from './_generated/server'
 import type { MutationCtx } from './_generated/server'
 import type { Id } from './_generated/dataModel'
+import { internal } from './_generated/api'
 import { v } from 'convex/values'
 
 const coreAppStatusValidator = v.union(
@@ -278,6 +279,12 @@ export const create = mutation({
         completed: false,
         targetDate,
         order: t.order
+      })
+    }
+
+    if (templates.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.coreAppOverdue.syncOverdueStatusForCoreApp, {
+        coreAppId
       })
     }
 

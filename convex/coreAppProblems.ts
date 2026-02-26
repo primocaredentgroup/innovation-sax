@@ -17,7 +17,7 @@ export const listByCoreApp = query({
   args: { coreAppId: v.id('coreApps') },
   returns: v.object({
     problemsByMilestone: v.record(
-      v.string(),
+      v.id('coreAppMilestones'),
       v.array(problemReturnValidator)
     ),
     unresolvedCount: v.number()
@@ -31,7 +31,7 @@ export const listByCoreApp = query({
       .order('asc')
       .collect()
 
-    const problemsByMilestone: Record<string, Array<{ _id: Id<'coreAppProblems'>; _creationTime: number; milestoneId: Id<'coreAppMilestones'>; description: string; status: 'NOT_RESOLVED' | 'RESOLVED' }>> = {}
+    const problemsByMilestone: Record<Id<'coreAppMilestones'>, Array<{ _id: Id<'coreAppProblems'>; _creationTime: number; milestoneId: Id<'coreAppMilestones'>; description: string; status: 'NOT_RESOLVED' | 'RESOLVED' }>> = {}
     let unresolvedCount = 0
 
     for (const m of milestones) {

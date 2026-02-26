@@ -32,8 +32,18 @@ async function syncStatusByCoreAppId(
     .collect()
 
   const nextStatus = getStatusFromMilestones(milestones, nowMs)
-  if (coreApp.status !== nextStatus) {
-    await ctx.db.patch(coreAppId, { status: nextStatus })
+  const completedSum = Math.round(
+    milestones
+      .filter((m) => m.completed)
+      .reduce((sum, m) => sum + m.valuePercent, 0)
+  )
+
+  const updates: { status?: Doc<'coreApps'>['status']; percentComplete?: number } = {}
+  if (coreApp.status !== nextStatus) updates.status = nextStatus
+  if (coreApp.percentComplete !== completedSum) updates.percentComplete = completedSum
+
+  if (Object.keys(updates).length > 0) {
+    await ctx.db.patch(coreAppId, updates)
   }
 }
 
