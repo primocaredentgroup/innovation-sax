@@ -5,15 +5,17 @@ import { X } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 
-// Componente Avatar con Tooltip - cliccabile per cambiare owner
+// Componente Avatar con Tooltip - cliccabile per cambiare owner/referente
 function OwnerAvatar({
   owner,
   size = 'sm',
-  onClick
+  onClick,
+  clickTitle
 }: {
   owner: { _id: string; name: string; picture?: string } | null | undefined
   size?: 'sm' | 'md'
   onClick?: () => void
+  clickTitle?: string
 }) {
   const [showTooltip, setShowTooltip] = useState(false)
 
@@ -50,7 +52,7 @@ function OwnerAvatar({
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         onClick={onClick}
-        title={onClick ? (owner ? `Clicca per cambiare owner - ${owner.name}` : 'Clicca per cambiare owner') : owner.name}
+        title={onClick ? (clickTitle ?? (owner ? `Clicca per cambiare owner - ${owner.name}` : 'Clicca per cambiare owner')) : (owner?.name ?? 'Nessun owner')}
       >
         {owner.picture ? (
           <img src={owner.picture} alt={owner.name} className="w-full h-full rounded-full object-cover" />
@@ -165,6 +167,103 @@ function OwnerChangeModal({
   )
 }
 
+// Modal per cambio referente business
+function BusinessRefChangeModal({
+  isOpen,
+  appName,
+  appSlug,
+  currentBusinessRef,
+  users,
+  onConfirm,
+  onCancel,
+  isLoading,
+  error
+}: {
+  isOpen: boolean
+  appName: string
+  appSlug: string
+  currentBusinessRef: { _id: string; name: string } | null | undefined
+  users: Array<{ _id: string; name: string }> | undefined
+  onConfirm: (businessRefId: Id<'users'> | undefined) => Promise<void>
+  onCancel: () => void
+  isLoading: boolean
+  error: string
+}) {
+  const [selectedBusinessRefId, setSelectedBusinessRefId] = useState<string>(() => currentBusinessRef?._id || '')
+
+  if (!isOpen) return null
+
+  const handleConfirm = async () => {
+    await onConfirm(selectedBusinessRefId ? (selectedBusinessRefId as Id<'users'>) : undefined)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={onCancel}>
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Cambia Referente Business
+        </h3>
+
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p className="text-sm text-blue-800 dark:text-blue-300">
+            <span className="font-medium">{appSlug}</span> - {appName}
+          </p>
+          {currentBusinessRef && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              Referente attuale: <span className="font-medium">{currentBusinessRef.name}</span>
+            </p>
+          )}
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Seleziona referente business
+          </label>
+          <select
+            value={selectedBusinessRefId}
+            onChange={(e) => setSelectedBusinessRefId(e.target.value)}
+            disabled={isLoading}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 disabled:opacity-50"
+          >
+            <option value="">Nessun referente</option>
+            {users?.map((user) => (
+              <option key={user._id} value={user._id}>
+                {user.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isLoading}
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isLoading}
+            className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Salvataggio...' : 'Conferma'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const statusColors: Record<string, string> = {
   Planning: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
   InProgress: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
@@ -210,7 +309,7 @@ function isRecentUpdate(weekRef: string | undefined): boolean {
   return weekRef === currentWeek || weekRef === previousWeek
 }
 
-type SortField = 'priority' | 'name' | 'category' | 'status' | 'owner' | 'weight' | 'progress' | 'lastUpdate'
+type SortField = 'priority' | 'name' | 'category' | 'status' | 'owner' | 'businessRef' | 'weight' | 'progress' | 'lastUpdate'
 type SortDirection = 'asc' | 'desc'
 type CoreAppStatus = keyof typeof statusLabels
 type StatusFilter = CoreAppStatus | 'All'
@@ -299,6 +398,23 @@ export default function CoreAppsListPage() {
   })
   const [ownerChangeLoading, setOwnerChangeLoading] = useState(false)
   const [ownerChangeError, setOwnerChangeError] = useState('')
+
+  // Stato per il modal di cambio referente business
+  const [businessRefChangeModal, setBusinessRefChangeModal] = useState<{
+    isOpen: boolean
+    coreAppId: Id<'coreApps'> | null
+    appName: string
+    appSlug: string
+    currentBusinessRefId: Id<'users'> | null | undefined
+  }>({
+    isOpen: false,
+    coreAppId: null,
+    appName: '',
+    appSlug: '',
+    currentBusinessRefId: null
+  })
+  const [businessRefChangeLoading, setBusinessRefChangeLoading] = useState(false)
+  const [businessRefChangeError, setBusinessRefChangeError] = useState('')
   
   // Stato per editing priority inline
   const [editingPriorityId, setEditingPriorityId] = useState<Id<'coreApps'> | null>(null)
@@ -389,6 +505,56 @@ export default function CoreAppsListPage() {
       currentOwnerId: null
     })
     setOwnerChangeError('')
+  }
+
+  // Handler per aprire il modal di cambio referente business
+  const handleOpenBusinessRefChangeModal = (app: { _id: Id<'coreApps'>; name: string; slug: string; businessRefId?: Id<'users'> }) => {
+    setBusinessRefChangeError('')
+    setBusinessRefChangeModal({
+      isOpen: true,
+      coreAppId: app._id,
+      appName: app.name,
+      appSlug: app.slug,
+      currentBusinessRefId: app.businessRefId
+    })
+  }
+
+  // Handler per confermare il cambio referente business
+  const handleConfirmBusinessRefChange = async (businessRefId: Id<'users'> | undefined) => {
+    if (!businessRefChangeModal.coreAppId) return
+
+    setBusinessRefChangeLoading(true)
+    setBusinessRefChangeError('')
+
+    try {
+      await updateCoreApp({
+        id: businessRefChangeModal.coreAppId,
+        businessRefId: businessRefId
+      })
+      setBusinessRefChangeModal({
+        isOpen: false,
+        coreAppId: null,
+        appName: '',
+        appSlug: '',
+        currentBusinessRefId: null
+      })
+    } catch (err) {
+      setBusinessRefChangeError(err instanceof Error ? err.message : 'Errore durante il cambio referente business')
+    } finally {
+      setBusinessRefChangeLoading(false)
+    }
+  }
+
+  // Handler per chiudere il modal di cambio referente business
+  const handleCloseBusinessRefChangeModal = () => {
+    setBusinessRefChangeModal({
+      isOpen: false,
+      coreAppId: null,
+      appName: '',
+      appSlug: '',
+      currentBusinessRefId: null
+    })
+    setBusinessRefChangeError('')
   }
 
   // Handler per avviare editing priority
@@ -490,6 +656,12 @@ export default function CoreAppsListPage() {
           const ownerA = a.ownerId ? usersMap.get(a.ownerId)?.name || 'zzz' : 'zzz'
           const ownerB = b.ownerId ? usersMap.get(b.ownerId)?.name || 'zzz' : 'zzz'
           comparison = ownerA.localeCompare(ownerB, 'it', { sensitivity: 'base' })
+          break
+        }
+        case 'businessRef': {
+          const refA = a.businessRefId ? usersMap.get(a.businessRefId)?.name || 'zzz' : 'zzz'
+          const refB = b.businessRefId ? usersMap.get(b.businessRefId)?.name || 'zzz' : 'zzz'
+          comparison = refA.localeCompare(refB, 'it', { sensitivity: 'base' })
           break
         }
         case 'weight':
@@ -887,6 +1059,19 @@ export default function CoreAppsListPage() {
                 </th>
                 <th 
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 select-none"
+                  onClick={(e) => handleSort('businessRef', e)}
+                >
+                  <div className="flex items-center gap-2">
+                    Referente Business
+                    {sortField === 'businessRef' && (
+                      <span className="text-blue-600 dark:text-blue-400">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 select-none"
                   onClick={(e) => handleSort('weight', e)}
                 >
                   <div className="flex items-center gap-2">
@@ -1034,6 +1219,21 @@ export default function CoreAppsListPage() {
                         />
                       </div>
                     </td>
+                    <td
+                      className="px-6 py-4 whitespace-nowrap"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleOpenBusinessRefChangeModal(app)
+                      }}
+                    >
+                      <div className="flex items-center justify-center cursor-pointer hover:opacity-80">
+                        <OwnerAvatar
+                          owner={app.businessRefId && usersMap.get(app.businessRefId) ? { _id: app.businessRefId, name: usersMap.get(app.businessRefId)!.name, picture: usersMap.get(app.businessRefId)?.picture } : null}
+                          onClick={() => handleOpenBusinessRefChangeModal(app)}
+                          clickTitle="Clicca per cambiare referente business"
+                        />
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {editingWeightId === app._id ? (
                         <input
@@ -1106,7 +1306,7 @@ export default function CoreAppsListPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={10} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     {searchQuery.trim()
                       ? selectedCategoryId !== null
                         ? 'Nessun risultato per la ricerca in questa categoria'
@@ -1258,6 +1458,25 @@ export default function CoreAppsListPage() {
                     Owner: {app.ownerId && usersMap.get(app.ownerId) ? usersMap.get(app.ownerId)?.name : 'Nessuno'}
                   </span>
                 </div>
+                {/* Referente Business - cliccabile per cambiare */}
+                <div
+                  className="flex items-center gap-2 mt-2 cursor-pointer hover:opacity-80"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handleOpenBusinessRefChangeModal(app)
+                  }}
+                >
+                  <OwnerAvatar
+                    owner={app.businessRefId && usersMap.get(app.businessRefId) ? { _id: app.businessRefId, name: usersMap.get(app.businessRefId)!.name, picture: usersMap.get(app.businessRefId)?.picture } : null}
+                    size="sm"
+                    onClick={() => handleOpenBusinessRefChangeModal(app)}
+                    clickTitle="Clicca per cambiare referente business"
+                  />
+                  <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                    Referente Business: {app.businessRefId && usersMap.get(app.businessRefId) ? usersMap.get(app.businessRefId)?.name : 'Nessuno'}
+                  </span>
+                </div>
                 {app.repoUrl && (
                   <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 mt-2 break-all">{app.repoUrl}</p>
                 )}
@@ -1326,6 +1545,20 @@ export default function CoreAppsListPage() {
         onCancel={handleCloseOwnerChangeModal}
         isLoading={ownerChangeLoading}
         error={ownerChangeError}
+      />
+
+      {/* Modal per cambio referente business */}
+      <BusinessRefChangeModal
+        key={businessRefChangeModal.coreAppId || 'businessref-modal'}
+        isOpen={businessRefChangeModal.isOpen}
+        appName={businessRefChangeModal.appName}
+        appSlug={businessRefChangeModal.appSlug}
+        currentBusinessRef={users?.find((u) => u._id === businessRefChangeModal.currentBusinessRefId)}
+        users={users}
+        onConfirm={handleConfirmBusinessRefChange}
+        onCancel={handleCloseBusinessRefChangeModal}
+        isLoading={businessRefChangeLoading}
+        error={businessRefChangeError}
       />
     </div>
   )

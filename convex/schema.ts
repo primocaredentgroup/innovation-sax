@@ -291,12 +291,14 @@ export default defineSchema({
       v.literal('Completed')
     ),
     ownerId: v.optional(v.id('users')), // Owner responsabile dell'app (temporaneamente opzionale per migrazione)
+    businessRefId: v.optional(v.id('users')), // Referente Business
     categoryId: v.optional(v.id('coreAppsCategories')), // Categoria di appartenenza
     notesCount: v.optional(v.number()), // Contatore delle note associate (default: 0)
     priority: v.optional(v.number()) // Priorità unica per categoria (0 = prima, usata per ordinamento)
   })
     .index('by_slug', ['slug'])
     .index('by_owner', ['ownerId'])
+    .index('by_businessRef', ['businessRefId'])
     .index('by_status', ['status'])
     .index('by_category', ['categoryId'])
     .index('by_category_and_priority', ['categoryId', 'priority']),

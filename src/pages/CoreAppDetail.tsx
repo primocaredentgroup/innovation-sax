@@ -684,6 +684,12 @@ export default function CoreAppDetailPage() {
     if (!users || !coreApp?.ownerId) return null
     return users.find(u => u._id === coreApp.ownerId) || null
   }, [users, coreApp])
+
+  // Trova il referente business dalla lista utenti
+  const businessRef = useMemo(() => {
+    if (!users || !coreApp?.businessRefId) return null
+    return users.find(u => u._id === coreApp.businessRefId) || null
+  }, [users, coreApp])
   
   // Trova la categoria della CoreApp
   const category = useMemo(() => {
@@ -747,6 +753,8 @@ export default function CoreAppDetailPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<Id<'coreAppsCategories'> | ''>('')
   const [isEditingOwner, setIsEditingOwner] = useState(false)
   const [selectedOwnerId, setSelectedOwnerId] = useState<Id<'users'> | ''>('')
+  const [isEditingBusinessRef, setIsEditingBusinessRef] = useState(false)
+  const [selectedBusinessRefId, setSelectedBusinessRefId] = useState<Id<'users'> | ''>('')
   const [isEditingPriority, setIsEditingPriority] = useState(false)
   const [tempPriority, setTempPriority] = useState<number>(0)
   const [isEditingWeight, setIsEditingWeight] = useState(false)
@@ -945,6 +953,22 @@ export default function CoreAppDetailPage() {
     })
     setIsEditingOwner(false)
   }, [coreApp, selectedOwnerId, updateCoreApp])
+
+  const startEditingBusinessRef = useCallback(() => {
+    if (coreApp) {
+      setSelectedBusinessRefId(coreApp.businessRefId || '')
+      setIsEditingBusinessRef(true)
+    }
+  }, [coreApp])
+
+  const handleSaveBusinessRef = useCallback(async () => {
+    if (!coreApp) return
+    await updateCoreApp({
+      id: coreApp._id,
+      businessRefId: selectedBusinessRefId || undefined
+    })
+    setIsEditingBusinessRef(false)
+  }, [coreApp, selectedBusinessRefId, updateCoreApp])
 
   const startEditingPriority = useCallback(() => {
     if (coreApp) {
@@ -1347,6 +1371,72 @@ export default function CoreAppDetailPage() {
                 </div>
               ) : (
                 <p className="text-gray-500 dark:text-gray-400">Nessun owner assegnato</p>
+              )}
+            </div>
+
+            {/* Referente Business */}
+            <div className="mt-4 pt-4 border-t dark:border-gray-700">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase">Referente Business</h3>
+                {!isEditingBusinessRef && (
+                  <button
+                    onClick={startEditingBusinessRef}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                  >
+                    Modifica
+                  </button>
+                )}
+              </div>
+              {isEditingBusinessRef ? (
+                <div className="space-y-2">
+                  <select
+                    value={selectedBusinessRefId}
+                    onChange={(e) => setSelectedBusinessRefId(e.target.value as Id<'users'> | '')}
+                    className="w-full px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  >
+                    <option value="">Nessun referente</option>
+                    {users?.map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveBusinessRef}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
+                    >
+                      Salva
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedBusinessRefId(coreApp.businessRefId || '')
+                        setIsEditingBusinessRef(false)
+                      }}
+                      className="px-3 py-1 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-400 dark:hover:bg-gray-500 whitespace-nowrap"
+                    >
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              ) : businessRef ? (
+                <div className="flex items-center gap-2">
+                  {(businessRef.pictureUrl ?? businessRef.picture) && (
+                    <img 
+                      src={businessRef.pictureUrl ?? businessRef.picture} 
+                      alt={businessRef.name} 
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  )}
+                  <div>
+                    <p className="text-gray-900 dark:text-gray-100 font-medium">{businessRef.name}</p>
+                    {businessRef.email && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{businessRef.email}</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-500 dark:text-gray-400">Nessun referente assegnato</p>
               )}
             </div>
             

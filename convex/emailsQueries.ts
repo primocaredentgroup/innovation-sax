@@ -211,6 +211,7 @@ export const getCoreAppWithSubscribers = internalQuery({
     }
 
     const subscribers: Array<{ _id: Id<"users">; name: string; email?: string }> = [];
+    const seenIds = new Set<Id<"users">>();
 
     // Recupera i subscribers dalla categoria
     let category = null;
@@ -226,7 +227,8 @@ export const getCoreAppWithSubscribers = internalQuery({
         const subscriberIds = categoryDoc.subscriberIds || [];
         for (const subscriberId of subscriberIds) {
           const subscriber = await ctx.db.get(subscriberId);
-          if (subscriber) {
+          if (subscriber && !seenIds.has(subscriber._id)) {
+            seenIds.add(subscriber._id);
             subscribers.push({
               _id: subscriber._id,
               name: subscriber.name,
@@ -234,6 +236,19 @@ export const getCoreAppWithSubscribers = internalQuery({
             });
           }
         }
+      }
+    }
+
+    // Aggiungi il referente business (senza duplicati se già subscriber della categoria)
+    if (coreApp.businessRefId && !seenIds.has(coreApp.businessRefId)) {
+      const businessRef = await ctx.db.get(coreApp.businessRefId);
+      if (businessRef && businessRef.email) {
+        seenIds.add(businessRef._id);
+        subscribers.push({
+          _id: businessRef._id,
+          name: businessRef.name,
+          email: businessRef.email,
+        });
       }
     }
 

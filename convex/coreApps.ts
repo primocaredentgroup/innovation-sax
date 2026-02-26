@@ -21,6 +21,7 @@ const coreAppReturnValidator = v.object({
   hubMilestonesUrl: v.optional(v.string()),
   status: coreAppStatusValidator,
   ownerId: v.optional(v.id('users')),
+  businessRefId: v.optional(v.id('users')),
   categoryId: v.optional(v.id('coreAppsCategories')),
   notesCount: v.optional(v.number()),
   priority: v.optional(v.number()),
@@ -165,6 +166,7 @@ export const create = mutation({
     description: v.optional(v.string()),
     repoUrl: v.optional(v.string()),
     ownerId: v.id('users'),
+    businessRefId: v.optional(v.id('users')),
     categoryId: v.optional(v.id('coreAppsCategories')),
     weight: v.optional(v.number())
   },
@@ -212,6 +214,7 @@ export const create = mutation({
       repoUrl: args.repoUrl,
       status: 'Planning',
       ownerId: args.ownerId,
+      businessRefId: args.businessRefId,
       categoryId: args.categoryId,
       priority
     })
@@ -232,6 +235,7 @@ export const update = mutation({
     hubMilestonesUrl: v.optional(v.string()),
     status: v.optional(coreAppStatusValidator),
     ownerId: v.optional(v.id('users')),
+    businessRefId: v.optional(v.id('users')),
     categoryId: v.optional(v.id('coreAppsCategories')),
     weight: v.optional(v.number()),
     priority: v.optional(v.number()) // Ricalcolata automaticamente quando si cambia categoria
@@ -268,6 +272,14 @@ export const update = mutation({
       const owner = await ctx.db.get(updates.ownerId)
       if (!owner) {
         throw new Error('Owner non trovato')
+      }
+    }
+
+    // Se si sta aggiornando il referente business, verifica che esista
+    if (updates.businessRefId !== undefined && updates.businessRefId !== null) {
+      const businessRef = await ctx.db.get(updates.businessRefId)
+      if (!businessRef) {
+        throw new Error('Referente business non trovato')
       }
     }
 
